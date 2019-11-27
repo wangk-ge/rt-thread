@@ -77,6 +77,56 @@ bool adc_start(int adc_channel);
 *************************************************/
 bool adc_stop(void);
 
+/*************************************************
+* Function: bme280_get_temp
+* Description: 通过bme280读取温度
+* Author: wangk
+* Returns: 温度单位,摄氏度
+* Parameter:
+* History:
+*************************************************/
+float bme280_get_temp(void);
+
+/*************************************************
+* Function: bme280_get_humi
+* Description: 通过bme280读取相对湿度
+* Author: wangk
+* Returns: 相对湿度单位,百分比
+* Parameter:
+* History:
+*************************************************/
+float bme280_get_humi(void);
+
+/*************************************************
+* Function: bme280_get_baro
+* Description: 通过bme280读取大气压
+* Author: wangk
+* Returns: 大气压单位,帕
+* Parameter:
+* History:
+*************************************************/
+float bme280_get_baro(void);
+
+/*************************************************
+* Function: sht20_get_temp
+* Description: 通过sht20读取温度
+* Author: wangk
+* Returns: 温度单位,摄氏度
+* Parameter:
+* History:
+*************************************************/
+float sht20_get_temp(void);
+
+/*************************************************
+* Function: sht20_get_humi
+* Description: 通过sht20读取相对湿度
+* Author: wangk
+* Returns: 相对湿度单位,百分比
+* Parameter:
+* History:
+*************************************************/
+float sht20_get_humi(void);
+
 /**--------------------------------------------------------------------------*
 **                         Compiler Flag                                     *
 **---------------------------------------------------------------------------*/

@@ -28,6 +28,8 @@
 #include "cmd.h"
 #include "cyclequeue.h"
 #include "at.h"
+#include "sht20.h"
+#include "sensor.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -60,6 +62,8 @@ extern   "C"
 #define TS_LED_PIN GET_PIN(E, 1)
 /* defined the BT_POWER pin: PC5 */
 #define BT_POWER_PIN GET_PIN(C, 5)
+/* SHT20传感器I2C总线名 */
+#define SHT20_I2C_BUS_NAME "i2c1"
 	
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
@@ -70,6 +74,14 @@ extern   "C"
 **----------------------------------------------------------------------------*/
 /* event for application */
 static rt_event_t app_event = RT_NULL;
+
+/* SHT20传感器设备 */
+static sht20_device_t sht20_dev = RT_NULL;
+
+/* BME280传感器设备 */
+static rt_device_t temp_bme280_dev = RT_NULL;
+static rt_device_t humi_bme280_dev = RT_NULL;
+static rt_device_t baro_bme280_dev = RT_NULL;
 
 /* SENSOR设备 */
 static rt_device_t sensor_dev = RT_NULL;
@@ -99,6 +111,97 @@ static bool s_bVcomSending = false;
 /*----------------------------------------------------------------------------*
 **                             Local Function                                 *
 **----------------------------------------------------------------------------*/
+/*************************************************
+* Function: bme280_init
+* Description: 初始化bme280
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static bool bme280_init(void)
+{
+	APP_TRACE("bme280_init()\r\n");
+	
+	/* Temperature */
+	temp_bme280_dev = rt_device_find("temp_bme280");
+	if (RT_NULL == temp_bme280_dev)
+	{
+		APP_TRACE("bme280_init() call rt_device_find(temp_bme280) failed!\r\n");
+		return false;
+	}
+	rt_err_t ret = rt_device_open(temp_bme280_dev, RT_DEVICE_FLAG_RDONLY);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("bme280_init() call rt_device_open(temp_bme280) failed!\r\n");
+		return false;
+	}
+	
+	/* Relative Humidity */
+	humi_bme280_dev = rt_device_find("humi_bme280");
+	if (RT_NULL == humi_bme280_dev)
+	{
+		APP_TRACE("bme280_init() call rt_device_find(humi_bme280) failed!\r\n");
+		return false;
+	}
+	ret = rt_device_open(humi_bme280_dev, RT_DEVICE_FLAG_RDONLY);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("bme280_init() call rt_device_open(humi_bme280) failed!\r\n");
+		return false;
+	}
+	
+	/* Barometer */
+	baro_bme280_dev = rt_device_find("baro_bme280");
+	if (RT_NULL == baro_bme280_dev)
+	{
+		APP_TRACE("bme280_init() call rt_device_find(baro_bme280) failed!\r\n");
+		return false;
+	}
+	ret = rt_device_open(baro_bme280_dev, RT_DEVICE_FLAG_RDONLY);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("bme280_init() call rt_device_open(baro_bme280) failed!\r\n");
+		return false;
+	}
+	
+	return true;
+}
+
+/*************************************************
+* Function: bme280_deinit
+* Description: bme280_init的相反操作
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static void bme280_deinit(void)
+{
+	APP_TRACE("bme280_deinit()\r\n");
+	
+	/* Temperature */
+	if (RT_NULL != temp_bme280_dev)
+	{
+		rt_device_close(temp_bme280_dev);
+		temp_bme280_dev = RT_NULL;
+	}
+	
+	/* Relative Humidity */
+	if (RT_NULL != humi_bme280_dev)
+	{
+		rt_device_close(humi_bme280_dev);
+		humi_bme280_dev = RT_NULL;
+	}
+	
+	/* Barometer */
+	if (RT_NULL != baro_bme280_dev)
+	{
+		rt_device_close(baro_bme280_dev);
+		baro_bme280_dev = RT_NULL;
+	}
+}
+	
 /*************************************************
 * Function: sensor_rx_ind
 * Description: AD7730数据收取回调函数
@@ -371,6 +474,94 @@ bool adc_stop(void)
 }
 
 /*************************************************
+* Function: bme280_get_temp
+* Description: 通过bme280读取温度
+* Author: wangk
+* Returns: 温度单位,摄氏度
+* Parameter:
+* History:
+*************************************************/
+float bme280_get_temp(void)
+{
+	struct rt_sensor_data sensor_data = {0};
+	rt_size_t read_len = rt_device_read(temp_bme280_dev, 0, &sensor_data, 1);
+	if (1 != read_len)
+	{
+		return 0.0f;
+	}
+	
+	return (float)(sensor_data.data.temp) / 10.0f;
+}
+
+/*************************************************
+* Function: bme280_get_humi
+* Description: 通过bme280读取相对湿度
+* Author: wangk
+* Returns: 相对湿度单位,百分比
+* Parameter:
+* History:
+*************************************************/
+float bme280_get_humi(void)
+{
+	struct rt_sensor_data sensor_data = {0};
+	rt_size_t read_len = rt_device_read(humi_bme280_dev, 0, &sensor_data, 1);
+	if (1 != read_len)
+	{
+		return 0.0f;
+	}
+	
+	return (float)(sensor_data.data.humi) / 10.0f;
+}
+
+/*************************************************
+* Function: bme280_get_baro
+* Description: 通过bme280读取大气压
+* Author: wangk
+* Returns: 大气压单位,帕
+* Parameter:
+* History:
+*************************************************/
+float bme280_get_baro(void)
+{
+	struct rt_sensor_data sensor_data = {0};
+	rt_size_t read_len = rt_device_read(baro_bme280_dev, 0, &sensor_data, 1);
+	if (1 != read_len)
+	{
+		return 0.0f;
+	}
+	
+	return (float)(sensor_data.data.baro);
+}
+
+/*************************************************
+* Function: sht20_get_temp
+* Description: 通过sht20读取温度
+* Author: wangk
+* Returns: 温度单位,摄氏度
+* Parameter:
+* History:
+*************************************************/
+float sht20_get_temp(void)
+{
+    float temperature = sht20_read_temperature(sht20_dev);
+	return temperature;
+}
+
+/*************************************************
+* Function: sht20_get_humi
+* Description: 通过sht20读取相对湿度
+* Author: wangk
+* Returns: 相对湿度单位,百分比
+* Parameter:
+* History:
+*************************************************/
+float sht20_get_humi(void)
+{
+	float humidity = sht20_read_humidity(sht20_dev);
+	return humidity;
+}
+
+/*************************************************
 * Function: main
 * Description: main入口函数
 * Author: wangk
@@ -405,6 +596,26 @@ int main(void)
 		APP_TRACE("create app event failed!\r\n");
 		main_ret = -RT_ERROR;
 		goto _END;
+	}
+	
+	/* 初始化SHT20传感器 */
+	sht20_dev = sht20_init(SHT20_I2C_BUS_NAME);
+	if (RT_NULL == sht20_dev)
+	{
+		APP_TRACE("call sht20_init() failed!\r\n");
+		main_ret = -RT_ERROR;
+		goto _END;
+	}
+	
+	/* 初始化BME280传感器 */
+	{ // 消除编译警告
+		bool init_ret = bme280_init();
+		if (!init_ret)
+		{
+			APP_TRACE("call bme280_init() failed!\r\n");
+			main_ret = -RT_ERROR;
+			goto _END;
+		}
 	}
 	
 #if defined(BSP_USING_RSCDRRM020NDSE3)
@@ -567,6 +778,12 @@ _END:
 		rt_event_delete(app_event);
 		app_event = RT_NULL;
 	}
+	if (RT_NULL != sht20_dev)
+	{
+		sht20_deinit(sht20_dev);
+		sht20_dev = RT_NULL;
+	}
+	bme280_deinit();
 	if (RT_NULL != sensor_dev)
 	{
 		rt_device_close(sensor_dev);

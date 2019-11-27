@@ -94,12 +94,22 @@ static void _CMD_HandlerBUILD(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_START(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_STOP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerBME280_TEMP(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerBME280_HUMI(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerSHT20_TEMP(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerSHT20_HUMI(const StrConstRef_T* pctStrRefParam);
 const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("VER"), _CMD_HandlerVER },
 	{ STR_ITEM("BUILD"), _CMD_HandlerBUILD },
 	{ STR_ITEM("ADC_START"), _CMD_HandlerADC_START },
 	{ STR_ITEM("ADC_STOP"), _CMD_HandlerADC_STOP },
 	{ STR_ITEM("ADC_CAL"), _CMD_HandlerADC_CAL },
+	{ STR_ITEM("BME280_TEMP"), _CMD_HandlerBME280_TEMP },
+	{ STR_ITEM("BME280_HUMI"), _CMD_HandlerBME280_HUMI },
+	{ STR_ITEM("BME280_BARO"), _CMD_HandlerBME280_BARO },
+	{ STR_ITEM("SHT20_TEMP"), _CMD_HandlerSHT20_TEMP },
+	{ STR_ITEM("SHT20_HUMI"), _CMD_HandlerSHT20_HUMI },
 };
 
 /*----------------------------------------------------------------------------*
@@ -437,6 +447,116 @@ static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam)
 		{
 			_CMD_Response("[ERR]");
 		}
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerBME280_TEMP
+* Description: BME280_TEMP命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerBME280_TEMP(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		float temperature = bme280_get_temp();
+		_CMD_Response("[BME280_TEMP=%d.%d]", (int)temperature, (int)(temperature * 10) % 10);
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerBME280_HUMI
+* Description: BME280_HUMI命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerBME280_HUMI(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		float humidity = bme280_get_humi();
+		_CMD_Response("[BME280_HUMI=%d.%d]", (int)humidity, (int)(humidity * 10) % 10);
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerBME280_BARO
+* Description: BME280_BARO命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		float baro = bme280_get_baro();
+		_CMD_Response("[BME280_BARO=%d.%d]", (int)baro, (int)(baro * 10) % 10);
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerSHT20_TEMP
+* Description: SHT20_TEMP命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerSHT20_TEMP(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		float temperature = sht20_get_temp();
+		_CMD_Response("[SHT20_TEMP=%d.%d]", (int)temperature, (int)(temperature * 10) % 10);
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerSHT20_HUMI
+* Description: SHT20_HUMI命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerSHT20_HUMI(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		float humidity = sht20_get_humi();
+		_CMD_Response("[SHT20_HUMI=%d.%d]", (int)humidity, (int)(humidity * 10) % 10);
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
 	}
 }
 
