@@ -138,18 +138,14 @@ menu "On-chip Peripheral Drivers"
                 default 25
         endif
 		
-	config BSP_USING_USBD_FS
-        bool "Enable USB FS device"
-        select RT_USING_USB_DEVICE
-        default y
-		if BSP_USING_USBD_FS
-            config BSP_USING_USBD
-                bool "Enable USB device"
-				select BSP_USBD_TYPE_FS
-                default y
-        endif
 
- source "../libraries/HAL_Drivers/Kconfig"
+	config BSP_USING_USBD
+		bool "Enable OTGFS as USB device"
+		select RT_USING_USB_DEVICE
+		select BSP_USBD_TYPE_FS
+		default y
+
+	source "../libraries/HAL_Drivers/Kconfig"
 endmenu
 
 menu "Board extended module Drivers"
