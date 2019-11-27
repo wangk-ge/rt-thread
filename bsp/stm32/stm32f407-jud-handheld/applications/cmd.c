@@ -115,7 +115,6 @@ const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
 **----------------------------------------------------------------------------*/
-extern void nfc_mfclassic_test(void);
 
 /*----------------------------------------------------------------------------*
 **                             Local Function                                 *
@@ -191,7 +190,13 @@ static void _CMD_Response(const char* pcszFmt, ...)
 	{
 		szCmdRspBuf[iCmdRspLen++] = '\r';
 		szCmdRspBuf[iCmdRspLen++] = '\n';
-		vcom_send_data((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
+		/* 优先尝试使用BT发送 */
+		uint32_t send_len = bt_send_data((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
+		if (send_len != (uint32_t)iCmdRspLen)
+		{ // BT发送失败
+			/* 尝试用VCOM发送 */
+			vcom_send_data((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
+		}
 	}
 }
 

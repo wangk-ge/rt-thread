@@ -48,6 +48,16 @@ extern   "C"
 uint32_t vcom_send_data(const uint8_t* data, uint32_t len);
 
 /*************************************************
+* Function: bt_send_data
+* Description: 通过BT输出数据
+* Author: wangk
+* Returns: 返回实际输出的字节数
+* Parameter:
+* History:
+*************************************************/
+uint32_t bt_send_data(const uint8_t* data, uint32_t len);
+
+/*************************************************
 * Function: adc_calibration
 * Description: 执行ADC通道校准
 * Author: wangk

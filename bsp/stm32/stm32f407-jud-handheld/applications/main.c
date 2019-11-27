@@ -56,14 +56,33 @@ extern   "C"
 #define SENSOR_EVENT_RX_IND 0x00000001
 #define VCOM_EVENT_RX_IND 0x00000002
 #define VCOM_EVENT_TX_DONE 0x00000004
+#define BT_EVENT_RX_IND 0x00000008
+#define BT_EVENT_TX_DONE 0x00000010
+
 /* Vcom发送缓冲区长度 */
 #define VCOM_SEND_BUF_SIZE 128
+/* BT发送缓冲区长度 */
+#define BT_SEND_BUF_SIZE 128
+
+/* Vcom设备名 */
+#define VCOM_DEVICE_NAME "vcom"
+/* BT串口设备名 */
+#define BT_UART_NAME "uart2"
+/* SHT20传感器I2C总线名 */
+#define SHT20_I2C_BUS_NAME "i2c1"
+
 /* defined the TS_LED pin: PE1 */
 #define TS_LED_PIN GET_PIN(E, 1)
 /* defined the BT_POWER pin: PC5 */
 #define BT_POWER_PIN GET_PIN(C, 5)
-/* SHT20传感器I2C总线名 */
-#define SHT20_I2C_BUS_NAME "i2c1"
+/* defined the BT_TRANS pin: PA4 */
+#define BT_TRANS_PIN GET_PIN(A, 4)
+/* defined the BT_DISCON pin: PA5 */
+#define BT_DISCON_PIN GET_PIN(A, 5)
+/* defined the BT_RESET pin: PA6 */
+#define BT_RESET_PIN GET_PIN(A, 6)
+/* defined the BT_STATUS pin: PA7 */
+#define BT_STATUS_PIN GET_PIN(A, 7)
 	
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
@@ -103,6 +122,24 @@ static uint8_t s_pu8VcomSendBuf[VCOM_SEND_BUF_SIZE] = {0};
 
 /* Vcom是否正在发送状态 */
 static bool s_bVcomSending = false;
+
+/* BT串口设备 */
+static rt_device_t bt_dev = RT_NULL;
+
+/* BT接收缓冲区 */
+static uint8_t bt_data_buf[128] = {0};
+
+/* BT数据发送队列 */
+static CycleQueue_T s_tBTSendQ = {NULL};
+
+/* BT发送队列缓冲区 */
+static uint8_t s_pu8BTSendQueBuf[BT_SEND_BUF_SIZE * 4] = {0};
+
+/* BT发送缓冲区 */
+static uint8_t s_pu8BTSendBuf[BT_SEND_BUF_SIZE] = {0};
+
+/* BT是否正在发送状态 */
+static bool s_bBTSending = false;
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -239,7 +276,7 @@ static rt_err_t vcom_rx_ind(rt_device_t dev, rt_size_t size)
 }
 
 /*************************************************
-* Function: vcom_tx_complete
+* Function: vcom_tx_done
 * Description: VCOM数据发送完成回调函数
 * Author: wangk
 * Returns: 
@@ -253,40 +290,92 @@ static rt_err_t vcom_tx_done(rt_device_t dev, void *buffer)
 	return RT_EOK;
 }
 
+/*************************************************
+* Function: bt_rx_ind
+* Description: BT数据收取回调函数
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static rt_err_t bt_rx_ind(rt_device_t dev, rt_size_t size)
+{
+	if (size > 0)
+	{
+		rt_event_send(app_event, BT_EVENT_RX_IND);
+	}
+	
+	return RT_EOK;
+}
+
+/*************************************************
+* Function: bt_tx_done
+* Description: BT数据发送完成回调函数
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static rt_err_t bt_tx_done(rt_device_t dev, void *buffer)
+{
+	rt_event_send(app_event, BT_EVENT_TX_DONE);
+	
+	return RT_EOK;
+}
 
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 /*************************************************
-* Function: vcom_send_wave
-* Description: 通过VCOM发送波形数据帧
+* Function: send_wave
+* Description: 发送波形数据帧
 * Author: wangk
 * Returns: 返回实际发送的字节数
 * Parameter:
 * History:
 *************************************************/
-static rt_size_t vcom_send_wave(float val)
+static rt_size_t send_wave(float val)
 {
-	//APP_TRACE("vcom_send_wave() val=%f\r\n", val);
+	//APP_TRACE("send_wave() val=%f\r\n", val);
 	
 	char buf[16] = {0};
+	
 	char len = ws_point_float(buf, CH1, val);
-	return vcom_send_data((const uint8_t*)buf, (uint32_t)len);
+	
+	/* 优先尝试使用BT发送 */
+	uint32_t send_len = bt_send_data((const uint8_t*)buf, (uint32_t)len);
+	if (send_len != (uint32_t)len)
+	{ // BT发送失败
+		/* 尝试用VCOM发送 */
+		send_len = vcom_send_data((const uint8_t*)buf, (uint32_t)len);
+	}
+	
+	return (rt_size_t)send_len;
 }
 #elif defined(BSP_USING_AD7730)
 /*************************************************
-* Function: vcom_send_wave
-* Description: 通过VCOM发送波形数据帧
+* Function: send_wave
+* Description: 发送波形数据帧
 * Author: wangk
 * Returns: 返回实际发送的字节数
 * Parameter:
 * History:
 *************************************************/
-static rt_size_t vcom_send_wave(int32_t val)
+static rt_size_t send_wave(int32_t val)
 {
-	//APP_TRACE("vcom_send_wave() val=%d\r\n", val);
+	//APP_TRACE("send_wave() val=%d\r\n", val);
 	
 	char buf[16] = {0};
+	
 	char len = ws_point_int32(buf, CH1, val);
-	return vcom_send_data((const uint8_t*)buf, (uint32_t)len);
+	
+	/* 优先尝试使用BT发送 */
+	uint32_t send_len = bt_send_data((const uint8_t*)buf, (uint32_t)len);
+	if (send_len != (uint32_t)len)
+	{ // BT发送失败
+		/* 尝试用VCOM发送 */
+		send_len = vcom_send_data((const uint8_t*)buf, (uint32_t)len);
+	}
+	
+	return (rt_size_t)send_len;
 }
 #endif
 
@@ -302,7 +391,7 @@ static rt_size_t vcom_send_wave(int32_t val)
 * History:
 *************************************************/
 uint32_t vcom_send_data(const uint8_t* data, uint32_t len)
-{
+{	
 	if (RT_NULL == vcom_dev)
 	{
 		return 0;
@@ -326,6 +415,50 @@ uint32_t vcom_send_data(const uint8_t* data, uint32_t len)
 			s_bVcomSending = true;
 			/* 请求发送缓冲区中的数据 */
 			rt_device_write(vcom_dev, 0, pu8SendBuf, (rt_size_t)u32DataLen);
+		}
+	}
+	
+	return u32SendLen;
+}
+
+/*************************************************
+* Function: bt_send_data
+* Description: 通过BT输出数据
+* Author: wangk
+* Returns: 返回实际输出的字节数
+* Parameter:
+* History:
+*************************************************/
+uint32_t bt_send_data(const uint8_t* data, uint32_t len)
+{
+	if (PIN_LOW == rt_pin_read(BT_STATUS_PIN))
+	{ // BT Disconnected
+		return 0;
+	}
+	
+	if (RT_NULL == bt_dev)
+	{
+		return 0;
+	}
+	
+	/* 数据插入发送缓冲队列 */
+	uint32_t u32SendLen = CycleQueue_Insert(&s_tBTSendQ, data, len);
+	
+	if (s_bBTSending)
+	{ // 正在发送状态
+		/* 将会自动发送缓冲区中的数据 */
+	}
+	else
+	{ // 已停止发送
+		/* 启动发送 */
+		uint8_t* pu8SendBuf = s_pu8BTSendBuf;
+		uint32_t u32DataLen = CycleQueue_Delete(&s_tBTSendQ, pu8SendBuf, BT_SEND_BUF_SIZE, NULL);
+		if (u32DataLen > 0)
+		{
+			/* 设置正在发送状态 */
+			s_bBTSending = true;
+			/* 请求发送缓冲区中的数据 */
+			rt_device_write(bt_dev, 0, pu8SendBuf, (rt_size_t)u32DataLen);
 		}
 	}
 	
@@ -577,6 +710,8 @@ int main(void)
 	
 	/* 创建Vcom发送循环队列 */
 	CycleQueue_Create(&s_tVcomSendQ, s_pu8VcomSendQueBuf, sizeof(s_pu8VcomSendQueBuf));
+	/* 创建BT发送循环队列 */
+	CycleQueue_Create(&s_tBTSendQ, s_pu8BTSendQueBuf, sizeof(s_pu8BTSendQueBuf));
 	
 	/* 初始化CMD模块 */
 	CMD_Init();
@@ -588,6 +723,13 @@ int main(void)
 	/* set BT_POWER pin mode to output */
     rt_pin_mode(BT_POWER_PIN, PIN_MODE_OUTPUT);
 	rt_pin_write(BT_POWER_PIN, PIN_LOW);
+	
+	/* set BT_TRANS pin mode to output */
+    rt_pin_mode(BT_TRANS_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(BT_TRANS_PIN, PIN_LOW); // L=透传模式,H=指令模式
+	
+	/* set BT_STATUS pin mode to input */
+    rt_pin_mode(BT_STATUS_PIN, PIN_MODE_INPUT); // L=Disconnected,H=Connected
 	
 	/* 创建EVENT */
 	app_event = rt_event_create("app_event", RT_IPC_FLAG_FIFO);
@@ -658,10 +800,10 @@ int main(void)
 	}
 	
 	/* 打开VCOM设备 */
-	vcom_dev = rt_device_find("vcom");
+	vcom_dev = rt_device_find(VCOM_DEVICE_NAME);
 	if (RT_NULL == vcom_dev)
 	{
-		APP_TRACE("vcom device is not found!\r\n");
+		APP_TRACE("main() call rt_device_find(%s) failed!\r\n", VCOM_DEVICE_NAME);
 		main_ret = -RT_ERROR;
 		goto _END;
 	}
@@ -669,7 +811,7 @@ int main(void)
 	ret = rt_device_open(vcom_dev, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_DMA_TX);
 	if (RT_EOK != ret)
 	{
-		APP_TRACE("open vcom device failed(%d)!\r\n", ret);
+		APP_TRACE("main() call rt_device_open(vcom_dev) failed, error(%d)!\r\n", ret);
 		main_ret = ret;
 		goto _END;
 	}
@@ -677,7 +819,7 @@ int main(void)
 	ret = rt_device_set_rx_indicate(vcom_dev, vcom_rx_ind);
 	if (RT_EOK != ret)
 	{
-		APP_TRACE("set vcom rx indicate failed(%d)!\r\n", ret);
+		APP_TRACE("main() call rt_device_set_rx_indicate(vcom_dev) failed, error(%d)!\r\n", ret);
 		main_ret = ret;
 		goto _END;
 	}
@@ -685,7 +827,7 @@ int main(void)
 	ret = rt_device_set_tx_complete(vcom_dev, vcom_tx_done);
 	if (RT_EOK != ret)
 	{
-		APP_TRACE("main() call rt_device_set_tx_complete failed(%d)!\r\n", ret);
+		APP_TRACE("main() call rt_device_set_tx_complete(vcom_dev) failed, error(%d)!\r\n", ret);
 		main_ret = ret;
 		goto _END;
 	}
@@ -693,10 +835,35 @@ int main(void)
 	/* 开启蓝牙模块电源 */
 	rt_pin_write(BT_POWER_PIN, PIN_HIGH);
 	
-	ret = at_client_init("uart2", 128);
+	/* 打开BT串口设备 */
+	bt_dev = rt_device_find(BT_UART_NAME);
+	if (RT_NULL == vcom_dev)
+	{
+		APP_TRACE("main() call rt_device_find(%s) failed!\r\n", BT_UART_NAME);
+		main_ret = -RT_ERROR;
+		goto _END;
+	}
+	
+	ret = rt_device_open(bt_dev, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_DMA_TX);
 	if (RT_EOK != ret)
 	{
-		APP_TRACE("main() call at_client_init(uart2) failed(%d)!\r\n", ret);
+		APP_TRACE("main() call rt_device_open(bt_dev) failed, error(%d)!\r\n", ret);
+		main_ret = ret;
+		goto _END;
+	}
+	
+	ret = rt_device_set_rx_indicate(bt_dev, bt_rx_ind);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("main() call rt_device_set_rx_indicate(bt_dev) failed, error(%d)!\r\n", ret);
+		main_ret = ret;
+		goto _END;
+	}
+	
+	ret = rt_device_set_tx_complete(bt_dev, bt_tx_done);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("main() call rt_device_set_tx_complete(bt_dev) failed, error(%d)!\r\n", ret);
 		main_ret = ret;
 		goto _END;
 	}
@@ -706,7 +873,7 @@ int main(void)
 	{
 		
 		rt_uint32_t event_recved = 0;
-		ret = rt_event_recv(app_event, (SENSOR_EVENT_RX_IND | VCOM_EVENT_RX_IND | VCOM_EVENT_TX_DONE),
+		ret = rt_event_recv(app_event, (SENSOR_EVENT_RX_IND | VCOM_EVENT_RX_IND | VCOM_EVENT_TX_DONE | BT_EVENT_RX_IND | BT_EVENT_TX_DONE),
 						  (RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR),
 						  RT_WAITING_FOREVER, &event_recved);
 		if (RT_EOK != ret)
@@ -722,14 +889,14 @@ int main(void)
 			float sensor_val = 0;
 			rt_size_t read_len = rt_device_read(sensor_dev, 0, &sensor_val, sizeof(sensor_val));
 			//APP_TRACE("sensor_val=%f\r\n", sensor_val);
-			/* 通过VCOM发送波形数据帧 */
-			vcom_send_wave(sensor_val);
+			/* 发送波形数据帧 */
+			send_wave(sensor_val);
 		#elif defined(BSP_USING_AD7730)
 			int32_t sensor_val = 0;
 			rt_size_t read_len = rt_device_read(sensor_dev, 0, &sensor_val, sizeof(sensor_val));
 			//APP_TRACE("sensor_val=%d\r\n", sensor_val);
-			/* 通过VCOM发送波形数据帧 */
-			vcom_send_wave(sensor_val);
+			/* 发送波形数据帧 */
+			send_wave(sensor_val);
 		#endif
 		}
 		
@@ -769,6 +936,43 @@ int main(void)
 				s_bVcomSending = false;
 			}
 		}
+		
+		if (event_recved & BT_EVENT_RX_IND)
+		{ // 收到BT数据
+			/* 收取所有数据 */
+			while (1)
+			{
+				rt_size_t read_len = rt_device_read(bt_dev, 0, bt_data_buf, sizeof(bt_data_buf));
+				if (read_len > 0)
+				{ // 收取到数据
+					//APP_TRACE("bt read_len=%d\r\n", read_len);
+					
+					/* 数据输入到CMD模块 */
+					CMD_OnRecvData(bt_data_buf, (uint32_t)read_len);
+				}
+				else
+				{ // 数据已收取完毕
+					break;
+				}
+			}
+		}
+		
+		if (event_recved & BT_EVENT_TX_DONE)
+		{ // BT数据已发送完毕
+			/* 读取数据到BT发送缓冲区 */
+			uint8_t* pu8SendBuf = s_pu8BTSendBuf;
+			uint32_t u32DataLen = CycleQueue_Delete(&s_tBTSendQ, pu8SendBuf, BT_SEND_BUF_SIZE, NULL);
+			if (u32DataLen > 0)
+			{ // 有数据需要发送
+				/* 请求发送缓冲区中的数据 */
+				rt_device_write(bt_dev, 0, pu8SendBuf, (rt_size_t)u32DataLen);
+			}
+			else
+			{ // 队列中的数据已发送完毕
+				/* 清除正在发送状态 */
+				s_bBTSending = false;
+			}
+		}
     }
 	
 _END:
@@ -793,6 +997,11 @@ _END:
 	{
 		rt_device_close(vcom_dev);
 		vcom_dev = RT_NULL;
+	}
+	if (RT_NULL != bt_dev)
+	{
+		rt_device_close(bt_dev);
+		bt_dev = RT_NULL;
 	}
 	
     return main_ret;
