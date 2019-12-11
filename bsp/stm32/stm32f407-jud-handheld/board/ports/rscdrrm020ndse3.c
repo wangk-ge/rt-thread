@@ -462,7 +462,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 					if (PRESSURE_VALID == result.CompStatus)
 					{ // 得到有效补偿结果
 						/* 保存补偿结果压力值 */
-						rscdrrm020ndse3->pressure_comp = result.f32PressureOutput;
+						rscdrrm020ndse3->pressure_comp = result.f32PressureOutput * (1000 * 1000 * 10); // 放大10^7倍
 						
 						/* invoke callback */
 						if (rscdrrm020ndse3->parent.rx_indicate != RT_NULL)
