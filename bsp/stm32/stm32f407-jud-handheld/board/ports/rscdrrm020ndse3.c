@@ -259,7 +259,7 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 		be set to 1.
 	*/
 	{ // Ïû³ý±àÒë¾¯¸æ
-		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_NORMAL;
+		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE;
 		ret = rscdrrm020ndse3_spi_write_adc_reg(0x01, &mode, 1);
 		if (RT_EOK != ret)
 		{
