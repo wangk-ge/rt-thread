@@ -18,6 +18,8 @@
 
 #define RSCDRRM020NDSE3_DEBUG
 
+//#define USE_FILTER
+
 #ifdef RSCDRRM020NDSE3_DEBUG
     #define RSCDRRM020NDSE3_TRACE	rt_kprintf
 #else
@@ -60,14 +62,21 @@
 #define RSCDRRM020NDSE3_ADC_PRESSURE 0x04 // 压力
 
 /* 使用的频率和模式 */
+#ifdef USE_FILTER
 #define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_1000HZ 
 #define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_NORMAL
+#else
+#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_330HZ 
+#define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_FAST
+#endif
 
 /* EVENT定义 */
 #define RSCDRRM020NDSE3_EVENT_DATA_READY 0x00000001
 
+#ifdef USE_FILTER
 /* 滤波器采集次数 */
-#define RSCDRRM020NDSE3_FILTER_N (9) // 9次压力采集+1次温度采集,数据输出率=采样率/10
+#define RSCDRRM020NDSE3_FILTER_N (4)
+#endif
 
 #define rscdrrm020ndse3_lock(dev)      rt_mutex_take(&((struct rscdrrm020ndse3_device*)dev)->lock, RT_WAITING_FOREVER);
 #define rscdrrm020ndse3_unlock(dev)    rt_mutex_release(&((struct rscdrrm020ndse3_device*)dev)->lock);
@@ -80,11 +89,13 @@ static struct rt_thread* rscdrrm020ndse3_thread = RT_NULL;
 
 static rt_event_t rscdrrm020ndse3_event = RT_NULL;
 
+#ifdef USE_FILTER
 /* 滤波器相关变量 */
-static uint32_t rscdrrm020ndse3_filter_min_val = 0; // 样本中的最小值
-static uint32_t rscdrrm020ndse3_filter_max_val = 0xFFFFFFFF; // 样本中的最大值
+static uint32_t rscdrrm020ndse3_filter_min_val = 0xFFFFFFFF; // 样本中的最小值
+static uint32_t rscdrrm020ndse3_filter_max_val = 0; // 样本中的最大值
 static uint32_t rscdrrm020ndse3_filter_sum = 0; // 样本累加和(用于计算均值)
 static uint32_t rscdrrm020ndse3_filter_sample_cnt = 0; // 当前已采集的样本数
+#endif
 
 /* 开启传感器电源 */
 static void rscdrrm020ndse3_power_on(rt_device_t dev)
@@ -429,7 +440,9 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 			rscdrrm020ndse3_lock(rscdrrm020ndse3);
 			if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode) // pressure
 			{
+#ifdef USE_FILTER
 				if ((rscdrrm020ndse3_filter_sample_cnt + 1) >= RSCDRRM020NDSE3_FILTER_N)
+#endif
 				{ // 采集的样本数已达到要求
 					rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE; // 切换模式
 				}
@@ -460,6 +473,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 						| (((uint32_t)recv_buf[1] << 8) & 0x0000FF00) 
 						| ((uint32_t)recv_buf[2] & 0x000000FF);
 					
+#ifdef USE_FILTER
 					/* 统计样本的最小值、最大值、累加和、个数 */
 					if (pressure < rscdrrm020ndse3_filter_min_val)
 					{
@@ -473,18 +487,25 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 					rscdrrm020ndse3_filter_sample_cnt++;
 					
 					if (rscdrrm020ndse3_filter_sample_cnt >= RSCDRRM020NDSE3_FILTER_N)
+#endif
 					{ // 采集的样本数已达到要求
 						
+#ifdef USE_FILTER
 						/* 去掉最大值和最小值,计算均值 */
 						uint32_t avg_pressure = (rscdrrm020ndse3_filter_sum - rscdrrm020ndse3_filter_min_val - rscdrrm020ndse3_filter_max_val) / (rscdrrm020ndse3_filter_sample_cnt - 2);
+#else
+						uint32_t avg_pressure = pressure;
+#endif
 						
 						rscdrrm020ndse3_lock(rscdrrm020ndse3);
 						
+#ifdef USE_FILTER
 						/* 重新初始化滤波器变量 */
 						rscdrrm020ndse3_filter_sum = 0;
 						rscdrrm020ndse3_filter_sample_cnt = 0;
-						rscdrrm020ndse3_filter_min_val = 0;
-						rscdrrm020ndse3_filter_max_val = 0xFFFFFFFF;
+						rscdrrm020ndse3_filter_min_val = 0xFFFFFFFF;
+						rscdrrm020ndse3_filter_max_val = 0;
+#endif
 						
 						/* 处理自动归零请求 */
 						if (rscdrrm020ndse3->auto_zero)
