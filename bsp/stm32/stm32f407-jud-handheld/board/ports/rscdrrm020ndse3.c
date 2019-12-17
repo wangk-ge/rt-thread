@@ -60,11 +60,14 @@
 #define RSCDRRM020NDSE3_ADC_PRESSURE 0x04 // 压力
 
 /* 使用的频率和模式 */
-#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_330HZ 
-#define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_FAST
+#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_1000HZ 
+#define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_NORMAL
 
 /* EVENT定义 */
 #define RSCDRRM020NDSE3_EVENT_DATA_READY 0x00000001
+
+/* 滤波器采集次数 */
+#define RSCDRRM020NDSE3_FILTER_N (9) // 9次压力采集+1次温度采集,数据输出率=采样率/10
 
 #define rscdrrm020ndse3_lock(dev)      rt_mutex_take(&((struct rscdrrm020ndse3_device*)dev)->lock, RT_WAITING_FOREVER);
 #define rscdrrm020ndse3_unlock(dev)    rt_mutex_release(&((struct rscdrrm020ndse3_device*)dev)->lock);
@@ -76,6 +79,12 @@ static struct rscdrrm020ndse3_device rscdrrm020ndse3_dev;
 static struct rt_thread* rscdrrm020ndse3_thread = RT_NULL;
 
 static rt_event_t rscdrrm020ndse3_event = RT_NULL;
+
+/* 滤波器相关变量 */
+static uint32_t rscdrrm020ndse3_filter_min_val = 0; // 样本中的最小值
+static uint32_t rscdrrm020ndse3_filter_max_val = 0xFFFFFFFF; // 样本中的最大值
+static uint32_t rscdrrm020ndse3_filter_sum = 0; // 样本累加和(用于计算均值)
+static uint32_t rscdrrm020ndse3_filter_sample_cnt = 0; // 当前已采集的样本数
 
 /* 开启传感器电源 */
 static void rscdrrm020ndse3_power_on(rt_device_t dev)
@@ -420,7 +429,10 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 			rscdrrm020ndse3_lock(rscdrrm020ndse3);
 			if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode) // pressure
 			{
-				rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE; // 切换模式
+				if ((rscdrrm020ndse3_filter_sample_cnt + 1) >= RSCDRRM020NDSE3_FILTER_N)
+				{ // 采集的样本数已达到要求
+					rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE; // 切换模式
+				}
 				rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 				
 				/* 读取传感器压力数据并切换为温度采集模式 */
@@ -428,7 +440,14 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				uint8_t recv_buf[4] = {0};
 				send_buf[0] = 0xFF;
 				send_buf[1] = 0x40 | ((0x01 & 0x03) << 2) | ((1 - 1) & 0x03); // WREG command [0100 RRNN],
-				send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE; // mode
+				if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode)
+				{ // 下次采集温度
+					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE; // mode
+				}
+				else // if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode)
+				{ // 下次采集压力
+					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE; // mode
+				}
 				send_buf[3] = 0xFF;
 				ret = rscdrrm020ndse3_spi_adc_transfer(send_buf, recv_buf, sizeof(send_buf));
 				if (RT_EOK == ret)
@@ -441,33 +460,59 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 						| (((uint32_t)recv_buf[1] << 8) & 0x0000FF00) 
 						| ((uint32_t)recv_buf[2] & 0x000000FF);
 					
-					rscdrrm020ndse3_lock(rscdrrm020ndse3);
-					/* 处理自动归零请求 */
-					if (rscdrrm020ndse3->auto_zero)
+					/* 统计样本的最小值、最大值、累加和、个数 */
+					if (pressure < rscdrrm020ndse3_filter_min_val)
 					{
-						/* 清除自动归零请求标志 */
-						rscdrrm020ndse3->auto_zero = false;
-						rscdrrm020ndse3_unlock(rscdrrm020ndse3);
-						
-						/* 设置归零参数 */
-						AutoZero_Pressure(pressure, temperature);
+						rscdrrm020ndse3_filter_min_val = pressure;
 					}
-					else
+					else if (pressure > rscdrrm020ndse3_filter_max_val)
 					{
-						rscdrrm020ndse3_unlock(rscdrrm020ndse3);
+						rscdrrm020ndse3_filter_max_val = pressure;
 					}
+					rscdrrm020ndse3_filter_sum += pressure;
+					rscdrrm020ndse3_filter_sample_cnt++;
 					
-					/* 执行温度补偿并输出结果 */
-					CompReturn_Struct result = Compensate_Pressure(pressure, temperature);
-					if (PRESSURE_VALID == result.CompStatus)
-					{ // 得到有效补偿结果
-						/* 保存补偿结果压力值 */
-						rscdrrm020ndse3->pressure_comp = result.f32PressureOutput * (1000 * 1000 * 10); // 放大10^7倍
+					if (rscdrrm020ndse3_filter_sample_cnt >= RSCDRRM020NDSE3_FILTER_N)
+					{ // 采集的样本数已达到要求
 						
-						/* invoke callback */
-						if (rscdrrm020ndse3->parent.rx_indicate != RT_NULL)
+						/* 去掉最大值和最小值,计算均值 */
+						uint32_t avg_pressure = (rscdrrm020ndse3_filter_sum - rscdrrm020ndse3_filter_min_val - rscdrrm020ndse3_filter_max_val) / (rscdrrm020ndse3_filter_sample_cnt - 2);
+						
+						rscdrrm020ndse3_lock(rscdrrm020ndse3);
+						
+						/* 重新初始化滤波器变量 */
+						rscdrrm020ndse3_filter_sum = 0;
+						rscdrrm020ndse3_filter_sample_cnt = 0;
+						rscdrrm020ndse3_filter_min_val = 0;
+						rscdrrm020ndse3_filter_max_val = 0xFFFFFFFF;
+						
+						/* 处理自动归零请求 */
+						if (rscdrrm020ndse3->auto_zero)
 						{
-							rscdrrm020ndse3->parent.rx_indicate(&rscdrrm020ndse3->parent, 4);
+							/* 清除自动归零请求标志 */
+							rscdrrm020ndse3->auto_zero = false;
+							rscdrrm020ndse3_unlock(rscdrrm020ndse3);
+							
+							/* 设置归零参数 */
+							AutoZero_Pressure(avg_pressure, temperature);
+						}
+						else
+						{
+							rscdrrm020ndse3_unlock(rscdrrm020ndse3);
+						}
+						
+						/* 执行温度补偿并输出结果 */
+						CompReturn_Struct result = Compensate_Pressure(avg_pressure, temperature);
+						if (PRESSURE_VALID == result.CompStatus)
+						{ // 得到有效补偿结果
+							/* 保存补偿结果压力值 */
+							rscdrrm020ndse3->pressure_comp = result.f32PressureOutput * (1000 * 1000 * 10); // 放大10^7倍
+							
+							/* invoke callback */
+							if (rscdrrm020ndse3->parent.rx_indicate != RT_NULL)
+							{
+								rscdrrm020ndse3->parent.rx_indicate(&rscdrrm020ndse3->parent, 4);
+							}
 						}
 					}
 				}
