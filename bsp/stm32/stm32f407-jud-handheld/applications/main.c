@@ -61,9 +61,9 @@ extern   "C"
 #define SENSOR_AUTO_ZERO_DONE 0x00000020
 
 /* Vcom发送缓冲区长度 */
-#define VCOM_SEND_BUF_SIZE 128
+#define VCOM_SEND_BUF_SIZE (1024)
 /* BT发送缓冲区长度 */
-#define BT_SEND_BUF_SIZE 128
+#define BT_SEND_BUF_SIZE (1024)
 
 /* Vcom设备名 */
 #define VCOM_DEVICE_NAME "vcom"
@@ -952,7 +952,7 @@ int main(void)
 	{
 		
 		rt_uint32_t event_recved = 0;
-		ret = rt_event_recv(app_event, (SENSOR_EVENT_RX_IND | VCOM_EVENT_RX_IND | VCOM_EVENT_TX_DONE | BT_EVENT_RX_IND | BT_EVENT_TX_DONE),
+		ret = rt_event_recv(app_event, (SENSOR_EVENT_RX_IND | VCOM_EVENT_RX_IND | VCOM_EVENT_TX_DONE | BT_EVENT_RX_IND | BT_EVENT_TX_DONE | SENSOR_AUTO_ZERO_DONE),
 						  (RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR),
 						  RT_WAITING_FOREVER, &event_recved);
 		if (RT_EOK != ret)
