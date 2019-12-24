@@ -94,6 +94,7 @@ static void _CMD_HandlerBUILD(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_START(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_STOP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerADC_FREQ(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_TEMP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_HUMI(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam);
@@ -105,6 +106,7 @@ const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("ADC_START"), _CMD_HandlerADC_START },
 	{ STR_ITEM("ADC_STOP"), _CMD_HandlerADC_STOP },
 	{ STR_ITEM("ADC_CAL"), _CMD_HandlerADC_CAL },
+	{ STR_ITEM("ADC_FREQ"), _CMD_HandlerADC_FREQ },
 	{ STR_ITEM("BME280_TEMP"), _CMD_HandlerBME280_TEMP },
 	{ STR_ITEM("BME280_HUMI"), _CMD_HandlerBME280_HUMI },
 	{ STR_ITEM("BME280_BARO"), _CMD_HandlerBME280_BARO },
@@ -457,6 +459,48 @@ static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam)
 			{
 				//_CMD_Response("[OK]");
 				/* 在异步回调函数响应 */
+			}
+			else
+			{
+				_CMD_Response("[ERR]");
+			}
+		}
+		else
+		{
+			_CMD_Response("[ERR]");
+		}
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerADC_FREQ
+* Description: ADC_FREQ命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerADC_FREQ(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		uint32_t u32FreqIndex = adc_get_freq();
+		_CMD_Response("[ADC_FREQ=%u]", u32FreqIndex);
+	}
+	else
+	{ // 设置
+		if (STRREF_IsInteger(pctStrRefParam))
+		{
+			int32_t sFreqIndex = STRREF_ToInt(pctStrRefParam);
+			if (sFreqIndex < 0)
+			{
+				_CMD_Response("[ERR]");
+				return;
+			}
+			bool bRet = adc_set_freq((uint32_t)sFreqIndex);
+			if (bRet)
+			{
+				_CMD_Response("[OK]");
 			}
 			else
 			{

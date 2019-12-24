@@ -536,6 +536,59 @@ bool adc_calibration(int adc_channel, CAL_CPL_FUNC pfnCalCompleted)
 }
 
 /*************************************************
+* Function: adc_get_freq
+* Description: 读取ADC采样率
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+uint32_t adc_get_freq(void)
+{
+	APP_TRACE("adc_get_freq()\r\n");
+
+	uint32_t u32FreqIndex = 0xFFFFFFFF;
+	
+#if defined(BSP_USING_RSCDRRM020NDSE3)
+	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_GET_FREQ, &u32FreqIndex);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("adc_get_freq() failed, rt_device_control(RSCDRRM020NDSE3_GET_FREQ) error(%d)!\r\n", ret);
+		return 0xFFFFFFFF;
+	}
+#endif
+	
+	return u32FreqIndex;
+}
+
+/*************************************************
+* Function: adc_set_freq
+* Description: 设置ADC采样率
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool adc_set_freq(uint32_t u32FreqIndex)
+{
+	APP_TRACE("adc_set_freq() u32FreqIndex=%u\r\n", u32FreqIndex);
+
+	bool bRet = false;
+	
+#if defined(BSP_USING_RSCDRRM020NDSE3)
+	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_SET_FREQ, (void*)u32FreqIndex);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("adc_set_freq() failed, rt_device_control(RSCDRRM020NDSE3_SET_FREQ) error(%d)!\r\n", ret);
+		return false;
+	}
+	bRet = true;
+#endif
+	
+	return bRet;
+}
+
+/*************************************************
 * Function: adc_start
 * Description: 启动ADC采集
 * Author: wangk

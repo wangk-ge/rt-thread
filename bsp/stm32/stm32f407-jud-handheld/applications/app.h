@@ -70,6 +70,26 @@ uint32_t bt_send_data(const uint8_t* data, uint32_t len);
 bool adc_calibration(int adc_channel, CAL_CPL_FUNC pfnCalCompleted);
 
 /*************************************************
+* Function: adc_get_freq
+* Description: 读取ADC采样率
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+uint32_t adc_get_freq(void);
+
+/*************************************************
+* Function: adc_set_freq
+* Description: 设置ADC采样率
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool adc_set_freq(uint32_t u32FreqIndex);
+
+/*************************************************
 * Function: adc_start
 * Description: 启动ADC采集
 * Author: wangk

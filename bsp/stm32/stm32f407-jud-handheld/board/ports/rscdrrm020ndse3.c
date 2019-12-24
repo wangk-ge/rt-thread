@@ -26,6 +26,10 @@
     #define RSCDRRM020NDSE3_TRACE(...)
 #endif /* RSCDRRM020NDSE3_DEBUG */
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
 /* SPI总线名 */
 #define RSCDRRM020NDSE3_SPI_BUS_NAME "spi2"
 /* EEPROM SPI设备名 */
@@ -61,15 +65,6 @@
 #define RSCDRRM020NDSE3_ADC_TEMPERATURE 0x06 // 温度
 #define RSCDRRM020NDSE3_ADC_PRESSURE 0x04 // 压力
 
-/* 使用的频率和模式 */
-#ifdef USE_FILTER
-#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_1000HZ 
-#define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_NORMAL
-#else
-#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_600HZ
-#define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_FAST
-#endif
-
 /* EVENT定义 */
 #define RSCDRRM020NDSE3_EVENT_DATA_READY 0x00000001
 
@@ -99,6 +94,28 @@ static uint32_t rscdrrm020ndse3_filter_sample_cnt = 0; // 当前已采集的样本数
 
 /* 自动归零完成回调函数 */
 static ATUO_ZERO_CPL_FUNC s_pfnAutoZeroCompleted = NULL;
+
+/* 工作模式频率表(通过下标索引) */
+typedef struct
+{
+	uint8_t mode; // 工作模式
+	uint8_t freq; // 工作频率
+} WorkModeFreq_T;
+static WorkModeFreq_T s_tModeFreqTbl[] = {
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_20HZ}, 	// 0=20HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_20HZ}, 		// 1=40HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_45HZ}, 	// 2=45HZ 
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_90HZ}, 	// 3=90HZ // {RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_45HZ},
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_175HZ},	// 4=175HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_90HZ}, 		// 5=180HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_330HZ}, 	// 6=330HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_175HZ}, 		// 7=350HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_600HZ}, 	// 8=600HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_330HZ}, 		// 9=660HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_1000HZ}, 	// 10=1000HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_600HZ}, 		// 11=1200HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_1000HZ}, 	// 12=2000HZ
+};
 
 /* 开启传感器电源 */
 static void rscdrrm020ndse3_power_on(rt_device_t dev)
@@ -282,7 +299,8 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 		be set to 1.
 	*/
 	{ // 消除编译警告
-		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE;
+		const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
+		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
 		ret = rscdrrm020ndse3_spi_write_adc_reg(0x01, &mode, 1);
 		if (RT_EOK != ret)
 		{
@@ -393,7 +411,8 @@ static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev, ATUO_ZERO_CPL_FUNC pf
 	if (!rscdrrm020ndse3->start)
 	{ // 未启动
 		rscdrrm020ndse3_unlock(dev);
-		return RT_ERROR;
+		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_auto_zero() failed, not in start state!\r\n");
+		return -RT_ERROR;
 	}
 	
 	/* 设置自动归零请求标志 */
@@ -403,6 +422,45 @@ static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev, ATUO_ZERO_CPL_FUNC pf
 	s_pfnAutoZeroCompleted = pfnAutoZeroCompleted;
 	
 	rscdrrm020ndse3_unlock(dev);
+	
+	return RT_EOK;
+}
+
+/* 设置采样率 */
+static rt_err_t rscdrrm020ndse3_set_freq(rt_device_t dev, uint32_t u32FreqIndex)
+{
+	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
+	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_set_freq() u32FreqIndex=%u\r\n", u32FreqIndex);
+	
+	/* 参数范围检查 */
+	if (u32FreqIndex >= ARRAY_SIZE(s_tModeFreqTbl))
+	{
+		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_set_freq() failed, freq_index must < (%u)!\r\n", ARRAY_SIZE(s_tModeFreqTbl));
+		return -RT_ERROR;
+	}
+	
+	rscdrrm020ndse3_lock(dev);
+	
+	rscdrrm020ndse3->freq_index = u32FreqIndex;
+	
+	rscdrrm020ndse3_unlock(dev);
+	
+	return RT_EOK;
+}
+
+/* 读取采样率 */
+static rt_err_t rscdrrm020ndse3_get_freq(rt_device_t dev, uint32_t* pu32FreqIndex)
+{
+	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
+	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_get_freq() pu32FreqIndex=0x%x\r\n", pu32FreqIndex);
+	
+	//rscdrrm020ndse3_lock(dev);
+	if (pu32FreqIndex)
+	{
+		*pu32FreqIndex = rscdrrm020ndse3->freq_index;
+	}
+	
+	//rscdrrm020ndse3_unlock(dev);
 	
 	return RT_EOK;
 }
@@ -459,13 +517,14 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				uint8_t recv_buf[4] = {0};
 				send_buf[0] = 0xFF;
 				send_buf[1] = 0x40 | ((0x01 & 0x03) << 2) | ((1 - 1) & 0x03); // WREG command [0100 RRNN],
+				const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
 				if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode)
 				{ // 下次采集温度
-					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE; // mode
+					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
 				}
 				else // if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode)
 				{ // 下次采集压力
-					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE; // mode
+					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
 				}
 				send_buf[3] = 0xFF;
 				ret = rscdrrm020ndse3_spi_adc_transfer(send_buf, recv_buf, sizeof(send_buf));
@@ -565,7 +624,8 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				uint8_t recv_buf[4] = {0};
 				send_buf[0] = 0xFF;
 				send_buf[1] = 0x40 | ((0x01 & 0x03) << 2) | ((1 - 1) & 0x03); // WREG command [0100 RRNN],
-				send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | RSCDRRM020NDSE3_ADC_FREQ | RSCDRRM020NDSE3_ADC_MODE; // mode
+				const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
+				send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
 				send_buf[3] = 0xFF;
 				ret = rscdrrm020ndse3_spi_adc_transfer(send_buf, recv_buf, sizeof(send_buf));
 				if (RT_EOK == ret)
@@ -702,6 +762,20 @@ static rt_err_t rscdrrm020ndse3_control(rt_device_t dev, int cmd, void *args)
 			ret = rscdrrm020ndse3_auto_zero(dev, pfnAutoZeroCompleted);
 			break;
 		}
+		case RSCDRRM020NDSE3_SET_FREQ:
+		{
+			uint32_t u32FreqIndex = (uint32_t)args;
+			/* 设置采样率 */
+			ret = rscdrrm020ndse3_set_freq(dev, u32FreqIndex);
+			break;
+		}
+		case RSCDRRM020NDSE3_GET_FREQ:
+		{
+			uint32_t* pu32FreqIndex = (uint32_t*)args;
+			/* 读取采样率 */
+			ret = rscdrrm020ndse3_get_freq(dev, pu32FreqIndex);
+			break;
+		}
 		default:
 		{
 			ret = -RT_ERROR;
@@ -746,6 +820,13 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 	
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
+	
+	/* 采样率(索引) */
+#ifdef USE_FILTER
+	rscdrrm020ndse3->freq_index = 10; // 默认1000HZ(实际只有500HZ[温度采集会占用半周期])
+#else
+	rscdrrm020ndse3->freq_index = 9; // 默认660HZ(实际只有330HZ[温度采集会占用半周期])
+#endif
 	
 	rscdrrm020ndse3_unlock(dev);
 	
