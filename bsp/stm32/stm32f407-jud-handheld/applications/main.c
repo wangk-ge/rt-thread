@@ -58,6 +58,7 @@ extern   "C"
 #define VCOM_EVENT_TX_DONE 0x00000004
 #define BT_EVENT_RX_IND 0x00000008
 #define BT_EVENT_TX_DONE 0x00000010
+#define SENSOR_AUTO_ZERO_DONE 0x00000020
 
 /* Vcom发送缓冲区长度 */
 #define VCOM_SEND_BUF_SIZE 128
@@ -140,6 +141,9 @@ static uint8_t s_pu8BTSendBuf[BT_SEND_BUF_SIZE] = {0};
 
 /* BT是否正在发送状态 */
 static bool s_bBTSending = false;
+
+/* 校准完成回调函数 */
+static CAL_CPL_FUNC s_pfnCalCompleted = NULL;
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -379,6 +383,21 @@ static rt_size_t send_wave(int32_t val)
 }
 #endif
 
+#if defined(BSP_USING_RSCDRRM020NDSE3)
+/*************************************************
+* Function: on_auto_zero_completed
+* Description: 自动归零完成回调函数
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static void on_auto_zero_completed(void)
+{
+	rt_event_send(app_event, SENSOR_AUTO_ZERO_DONE);
+}
+#endif
+
 /*----------------------------------------------------------------------------*
 **                             Public Function                                *
 **----------------------------------------------------------------------------*/
@@ -473,7 +492,7 @@ uint32_t bt_send_data(const uint8_t* data, uint32_t len)
 * Parameter:
 * History:
 *************************************************/
-bool adc_calibration(int adc_channel)
+bool adc_calibration(int adc_channel, CAL_CPL_FUNC pfnCalCompleted)
 {
 	APP_TRACE("adc_calibration() adc_channel=%d\r\n", adc_channel);
 
@@ -484,10 +503,13 @@ bool adc_calibration(int adc_channel)
 		return false;
 	}
 	
-	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_AUTO_ZERO, RT_NULL);
+	s_pfnCalCompleted = pfnCalCompleted;
+	
+	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_AUTO_ZERO, on_auto_zero_completed);
 	if (RT_EOK != ret)
 	{
 		APP_TRACE("adc_calibration() failed, rt_device_control(RSCDRRM020NDSE3_AUTO_ZERO) error(%d)!\r\n", ret);
+		s_pfnCalCompleted = NULL;
 		return false;
 	}
 #elif defined(BSP_USING_AD7730)
@@ -503,6 +525,10 @@ bool adc_calibration(int adc_channel)
 	{
 		APP_TRACE("adc_calibration() failed, rt_device_control(AD7730_DO_CALIBRATION) error(%d)!\r\n", ret);
 		return false;
+	}
+	if (pfnCalCompleted)
+	{
+		pfnCalCompleted();
 	}
 #endif
 	
@@ -971,6 +997,15 @@ int main(void)
 			{ // 队列中的数据已发送完毕
 				/* 清除正在发送状态 */
 				s_bBTSending = false;
+			}
+		}
+		
+		if (event_recved & SENSOR_AUTO_ZERO_DONE)
+		{ // 传感器自动归零完毕
+			if (s_pfnCalCompleted)
+			{
+				s_pfnCalCompleted();
+				s_pfnCalCompleted = NULL;
 			}
 		}
     }

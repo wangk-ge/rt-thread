@@ -66,7 +66,7 @@
 #define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_1000HZ 
 #define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_NORMAL
 #else
-#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_330HZ 
+#define RSCDRRM020NDSE3_ADC_FREQ RSCDRRM020NDSE3_ADC_600HZ
 #define RSCDRRM020NDSE3_ADC_MODE RSCDRRM020NDSE3_ADC_FAST
 #endif
 
@@ -96,6 +96,9 @@ static uint32_t rscdrrm020ndse3_filter_max_val = 0; // 样本中的最大值
 static uint32_t rscdrrm020ndse3_filter_sum = 0; // 样本累加和(用于计算均值)
 static uint32_t rscdrrm020ndse3_filter_sample_cnt = 0; // 当前已采集的样本数
 #endif
+
+/* 自动归零完成回调函数 */
+static ATUO_ZERO_CPL_FUNC s_pfnAutoZeroCompleted = NULL;
 
 /* 开启传感器电源 */
 static void rscdrrm020ndse3_power_on(rt_device_t dev)
@@ -379,7 +382,7 @@ _EXIT:
 }
 
 /* 自动归零 */
-static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev)
+static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev, ATUO_ZERO_CPL_FUNC pfnAutoZeroCompleted)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_auto_zero()\r\n");
@@ -395,6 +398,9 @@ static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev)
 	
 	/* 设置自动归零请求标志 */
 	rscdrrm020ndse3->auto_zero = true;
+	
+	/* 安装完成回调函数 */
+	s_pfnAutoZeroCompleted = pfnAutoZeroCompleted;
 	
 	rscdrrm020ndse3_unlock(dev);
 	
@@ -512,10 +518,21 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 						{
 							/* 清除自动归零请求标志 */
 							rscdrrm020ndse3->auto_zero = false;
+							/* 临时保存回调函数指针 */
+							ATUO_ZERO_CPL_FUNC pfnAutoZeroCompleted = s_pfnAutoZeroCompleted;
+							/* 清空回调函数指针 */
+							s_pfnAutoZeroCompleted = NULL;
 							rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 							
 							/* 设置归零参数 */
 							AutoZero_Pressure(avg_pressure, temperature);
+							
+							/* 如果设置了回调函数 */
+							if (pfnAutoZeroCompleted)
+							{
+								/* 调用回调函数 */
+								pfnAutoZeroCompleted();
+							}
 						}
 						else
 						{
@@ -680,8 +697,9 @@ static rt_err_t rscdrrm020ndse3_control(rt_device_t dev, int cmd, void *args)
 		}
 		case RSCDRRM020NDSE3_AUTO_ZERO:
 		{
+			ATUO_ZERO_CPL_FUNC pfnAutoZeroCompleted = (ATUO_ZERO_CPL_FUNC)args;
 			/* 请求自动归零 */
-			ret = rscdrrm020ndse3_auto_zero(dev);
+			ret = rscdrrm020ndse3_auto_zero(dev, pfnAutoZeroCompleted);
 			break;
 		}
 		default:

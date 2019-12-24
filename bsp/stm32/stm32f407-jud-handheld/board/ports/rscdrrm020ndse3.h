@@ -39,6 +39,9 @@ struct rscdrrm020ndse3_device
 	struct rt_mutex lock;
 };
 
+/* 自动归零完成回调函数类型定义 */
+typedef void (*ATUO_ZERO_CPL_FUNC)(void);
+
 /* 传感器设备名 */
 #define RSCDRRM020NDSE3_DEVICE_NAME "rscm020"
 

@@ -407,6 +407,19 @@ static void _CMD_HandlerADC_STOP(const StrConstRef_T* pctStrRefParam)
 }
 
 /*************************************************
+* Function: _CMD_OnADCCalCompleted
+* Description: ADC校准完成回调函数(在主线程环境)
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_OnADCCalCompleted()
+{
+	_CMD_Response("[OK]");
+}
+
+/*************************************************
 * Function: _CMD_HandlerADC_CAL
 * Description: ADC_CAL命令处理函数
 * Author: wangk
@@ -418,10 +431,11 @@ static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam)
 {
 	if (NULL == pctStrRefParam)
 	{ // 执行
-		bool bRet = adc_calibration(0);
+		bool bRet = adc_calibration(0, _CMD_OnADCCalCompleted);
 		if (bRet)
 		{
-			_CMD_Response("[OK]");
+			//_CMD_Response("[OK]");
+			/* 在异步回调函数响应 */
 		}
 		else
 		{
@@ -438,10 +452,11 @@ static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam)
 				_CMD_Response("[ERR]");
 				return;
 			}
-			bool bRet = adc_calibration(sChannel);
+			bool bRet = adc_calibration(sChannel, _CMD_OnADCCalCompleted);
 			if (bRet)
 			{
-				_CMD_Response("[OK]");
+				//_CMD_Response("[OK]");
+				/* 在异步回调函数响应 */
 			}
 			else
 			{
