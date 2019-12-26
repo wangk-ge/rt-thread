@@ -28,7 +28,7 @@ extern   "C"
 **                             Mcaro Definitions                              *
 **----------------------------------------------------------------------------*/
 #define BUILD (__DATE__ " " __TIME__)
-#define VERSION ("H3S3")
+#define VERSION ("H4S3")
 	
 #if !defined(MAX)
 #define MAX(a,b)	(((a) > (b)) ? (a) : (b))
