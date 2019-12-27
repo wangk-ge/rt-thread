@@ -16,7 +16,7 @@
 
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 
-#define RSCDRRM020NDSE3_DEBUG
+//#define RSCDRRM020NDSE3_DEBUG
 
 #ifdef RSCDRRM020NDSE3_DEBUG
     #define RSCDRRM020NDSE3_TRACE	rt_kprintf
@@ -592,6 +592,11 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 								/* 调用回调函数 */
 								pfnAutoZeroCompleted();
 							}
+						}
+						else
+						{
+							/* UNLOCK */
+							rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 						}
 					}
 					else
