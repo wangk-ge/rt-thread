@@ -91,6 +91,7 @@ static CmdPacketBuf_T s_tCmdPacketBuf = {CMD_PACKET_EMPTY};
 */
 static void _CMD_HandlerVER(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBUILD(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerCOM_MODE(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_START(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_STOP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerADC_CAL(const StrConstRef_T* pctStrRefParam);
@@ -103,6 +104,7 @@ static void _CMD_HandlerSHT20_HUMI(const StrConstRef_T* pctStrRefParam);
 const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("VER"), _CMD_HandlerVER },
 	{ STR_ITEM("BUILD"), _CMD_HandlerBUILD },
+	{ STR_ITEM("COM_MODE"), _CMD_HandlerCOM_MODE },
 	{ STR_ITEM("ADC_START"), _CMD_HandlerADC_START },
 	{ STR_ITEM("ADC_STOP"), _CMD_HandlerADC_STOP },
 	{ STR_ITEM("ADC_CAL"), _CMD_HandlerADC_CAL },
@@ -192,13 +194,8 @@ static void _CMD_Response(const char* pcszFmt, ...)
 	{
 		szCmdRspBuf[iCmdRspLen++] = '\r';
 		szCmdRspBuf[iCmdRspLen++] = '\n';
-		/* 优先尝试使用BT发送 */
-		uint32_t send_len = bt_send_data((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
-		if (send_len != (uint32_t)iCmdRspLen)
-		{ // BT发送失败
-			/* 尝试用VCOM发送 */
-			vcom_send_data((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
-		}
+		/* 通过配置选择的通道(BT/VCOM)尝试输出数据 */
+		com_send_data((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
 	}
 }
 
@@ -328,6 +325,48 @@ static void _CMD_HandlerBUILD(const StrConstRef_T* pctStrRefParam)
 	{ // 设置
 		// 只读属性,不允许设置
 		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerCOM_MODE
+* Description: COM_MODE命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerCOM_MODE(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 读取
+		COM_MODE_E eComMode = get_com_mode();
+		_CMD_Response("[COM_MODE=%u]", eComMode);
+	}
+	else
+	{ // 设置
+		if (STRREF_IsInteger(pctStrRefParam))
+		{
+			int32_t sComMode = STRREF_ToInt(pctStrRefParam);
+			if (sComMode < 0)
+			{
+				_CMD_Response("[ERR]");
+				return;
+			}
+			bool bRet = set_com_mode((COM_MODE_E)sComMode);
+			if (bRet)
+			{
+				_CMD_Response("[OK]");
+			}
+			else
+			{
+				_CMD_Response("[ERR]");
+			}
+		}
+		else
+		{
+			_CMD_Response("[ERR]");
+		}
 	}
 }
 

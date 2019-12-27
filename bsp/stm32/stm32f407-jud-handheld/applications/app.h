@@ -34,11 +34,47 @@ extern   "C"
 **----------------------------------------------------------------------------*/
 /* 校准完成回调函数类型定义 */
 typedef void (*CAL_CPL_FUNC)(void);
-	
+
+/* 通信模式 */
+typedef enum
+{
+	COM_MODE_VCOM = 0, // VCOM优先
+	COM_MODE_BT // BT优先
+} COM_MODE_E;
+
 /*----------------------------------------------------------------------------*
 **                             Function Define                                *
 **----------------------------------------------------------------------------*/
+/*************************************************
+* Function: com_send_data
+* Description: 通过配置选择的通道(BT/VCOM)尝试输出数据
+* Author: wangk
+* Returns: 返回实际输出的字节数
+* Parameter:
+* History:
+*************************************************/
+uint32_t com_send_data(const uint8_t* data, uint32_t len);
 
+/*************************************************
+* Function: set_com_mode
+* Description: 配置通信模式(BT优先/VCOM优先)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool set_com_mode(COM_MODE_E mode);
+
+/*************************************************
+* Function: get_com_mode
+* Description: 读取通信模式(BT优先/VCOM优先)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+COM_MODE_E get_com_mode(void);
+	
 /*************************************************
 * Function: vcom_send_data
 * Description: 通过VCOM输出数据

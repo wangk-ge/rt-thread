@@ -88,7 +88,7 @@ extern   "C"
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
 **----------------------------------------------------------------------------*/
-	
+
 /*----------------------------------------------------------------------------*
 **                             Local Vars                                     *
 **----------------------------------------------------------------------------*/
@@ -144,6 +144,12 @@ static bool s_bBTSending = false;
 
 /* 校准完成回调函数 */
 static CAL_CPL_FUNC s_pfnCalCompleted = NULL;
+
+/* 是否已启动ADC采集 */
+static bool adc_started = false;
+
+/* 通信模式 */
+static COM_MODE_E com_mode = COM_MODE_VCOM; // 默认VCOM优先
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -344,15 +350,10 @@ static rt_size_t send_wave(float val)
 	
 	char len = ws_point_float(buf, CH1, val);
 	
-	/* 优先尝试使用BT发送 */
-	uint32_t send_len = bt_send_data((const uint8_t*)buf, (uint32_t)len);
-	if (send_len != (uint32_t)len)
-	{ // BT发送失败
-		/* 尝试用VCOM发送 */
-		send_len = vcom_send_data((const uint8_t*)buf, (uint32_t)len);
-	}
+	/* 通过配置选择的通道(BT/VCOM)尝试输出数据 */
+	uint32_t sent_len = com_send_data((const uint8_t*)buf, (uint32_t)len);
 	
-	return (rt_size_t)send_len;
+	return (rt_size_t)sent_len;
 }
 #elif defined(BSP_USING_AD7730)
 /*************************************************
@@ -371,15 +372,10 @@ static rt_size_t send_wave(int32_t val)
 	
 	char len = ws_point_int32(buf, CH1, val);
 	
-	/* 优先尝试使用BT发送 */
-	uint32_t send_len = bt_send_data((const uint8_t*)buf, (uint32_t)len);
-	if (send_len != (uint32_t)len)
-	{ // BT发送失败
-		/* 尝试用VCOM发送 */
-		send_len = vcom_send_data((const uint8_t*)buf, (uint32_t)len);
-	}
+	/* 通过配置选择的通道(BT/VCOM)尝试输出数据 */
+	uint32_t sent_len = com_send_data((const uint8_t*)buf, (uint32_t)len);
 	
-	return (rt_size_t)send_len;
+	return (rt_size_t)sent_len;
 }
 #endif
 
@@ -401,6 +397,86 @@ static void on_auto_zero_completed(void)
 /*----------------------------------------------------------------------------*
 **                             Public Function                                *
 **----------------------------------------------------------------------------*/
+/*************************************************
+* Function: com_send_data
+* Description: 通过配置选择的通道(BT/VCOM)尝试输出数据
+* Author: wangk
+* Returns: 返回实际输出的字节数
+* Parameter:
+* History:
+*************************************************/
+uint32_t com_send_data(const uint8_t* data, uint32_t len)
+{
+	uint32_t sent_len = 0;
+	
+	switch (com_mode)
+	{
+		case COM_MODE_VCOM:
+		{
+			/* 优先尝试VCOM发送 */
+			sent_len = vcom_send_data(data, len);
+			if (0 == sent_len)
+			{ // 发送失败
+				/* 再尝试BT发送 */
+				sent_len = bt_send_data(data, len);
+			}
+			break;
+		}
+		case COM_MODE_BT:
+		{
+			/* 优先尝试BT发送 */
+			sent_len = bt_send_data(data, len);
+			if (0 == sent_len)
+			{ // 发送失败
+				/* 再尝试VCOM发送 */
+				sent_len = vcom_send_data(data, len);
+			}
+			break;
+		}
+		default:
+			break;
+	}
+	
+	return sent_len;
+}
+
+/*************************************************
+* Function: set_com_mode
+* Description: 配置通信模式(BT优先/VCOM优先)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool set_com_mode(COM_MODE_E mode)
+{
+	APP_TRACE("set_com_mode() mode=%d\r\n", mode);
+	if ((COM_MODE_BT != mode) 
+		&& (COM_MODE_VCOM != mode))
+	{ // 模式无效
+		APP_TRACE("set_com_mode() failed, invalid mode(%d)!\r\n", mode);
+		return false;
+	}
+	
+	/* 设置当前模式 */
+	com_mode = mode;
+	
+	return true;
+}
+
+/*************************************************
+* Function: get_com_mode
+* Description: 读取通信模式(BT优先/VCOM优先)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+COM_MODE_E get_com_mode(void)
+{
+	return com_mode;
+}
+
 /*************************************************
 * Function: vcom_send_data
 * Description: 通过VCOM输出数据
@@ -646,6 +722,9 @@ bool adc_start(int adc_channel)
 	/* 开启TS_LED */
 	rt_pin_write(TS_LED_PIN, PIN_HIGH);
 	
+	/* 设置ADC采集已启动标志 */
+	adc_started = true;
+	
 	return true;
 }
 
@@ -681,6 +760,9 @@ bool adc_stop(void)
 	
 	/* 关闭TS_LED */
 	rt_pin_write(TS_LED_PIN, PIN_LOW);
+	
+	/* 清除ADC采集已启动标志 */
+	adc_started = false;
 	
 	return true;
 }
@@ -964,19 +1046,22 @@ int main(void)
 		
 		if (event_recved & SENSOR_EVENT_RX_IND)
 		{ // 收到SENSOR数据
-		#if defined(BSP_USING_RSCDRRM020NDSE3)
-			float sensor_val = 0;
-			rt_size_t read_len = rt_device_read(sensor_dev, 0, &sensor_val, sizeof(sensor_val));
-			//APP_TRACE("sensor_val=%f\r\n", sensor_val);
-			/* 发送波形数据帧 */
-			send_wave(sensor_val);
-		#elif defined(BSP_USING_AD7730)
-			int32_t sensor_val = 0;
-			rt_size_t read_len = rt_device_read(sensor_dev, 0, &sensor_val, sizeof(sensor_val));
-			//APP_TRACE("sensor_val=%d\r\n", sensor_val);
-			/* 发送波形数据帧 */
-			send_wave(sensor_val);
-		#endif
+			if (adc_started)
+			{ // ADC采集已启动
+			#if defined(BSP_USING_RSCDRRM020NDSE3)
+				float sensor_val = 0;
+				rt_size_t read_len = rt_device_read(sensor_dev, 0, &sensor_val, sizeof(sensor_val));
+				//APP_TRACE("sensor_val=%f\r\n", sensor_val);
+				/* 发送波形数据帧 */
+				send_wave(sensor_val);
+			#elif defined(BSP_USING_AD7730)
+				int32_t sensor_val = 0;
+				rt_size_t read_len = rt_device_read(sensor_dev, 0, &sensor_val, sizeof(sensor_val));
+				//APP_TRACE("sensor_val=%d\r\n", sensor_val);
+				/* 发送波形数据帧 */
+				send_wave(sensor_val);
+			#endif
+			} // 否则丢弃数据
 		}
 		
 		if (event_recved & VCOM_EVENT_RX_IND)
