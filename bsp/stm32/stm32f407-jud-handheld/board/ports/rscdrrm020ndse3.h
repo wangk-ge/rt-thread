@@ -37,7 +37,7 @@ struct rscdrrm020ndse3_device
 	uint32_t temperature;
 	/* 自动归零请求标志 */
 	bool auto_zero;
-	/* 采样率(索引)[0=10HZ 1=20HZ 2=22.5HZ 3=45HZ 4=87.5HZ 5=90HZ 6=165HZ 7=175HZ 8=300HZ 9=330HZ 10=500HZ 11=600HZ 12=1000HZ]*/
+	/* 采样率(索引)[0=20HZ 1=40HZ 2=45HZ 3=90HZ 4=175HZ 5=180HZ 6=330HZ 7=350HZ 8=600HZ 9=660HZ 10=1000HZ 11=1200HZ 12=2000HZ]*/
 	uint32_t freq_index;
 	/* lock */
 	struct rt_mutex lock;
