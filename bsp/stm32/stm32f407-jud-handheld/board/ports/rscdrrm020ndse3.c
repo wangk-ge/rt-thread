@@ -676,7 +676,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 	}
 }
 
-/* initialize the interface */
+/* initialize the device */
 static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
@@ -767,7 +767,7 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
     return RT_EOK;
 }
 
-/* control the interface */
+/* control the device */
 static rt_err_t rscdrrm020ndse3_control(rt_device_t dev, int cmd, void *args)
 {
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_control() cmd=0x%x\r\n", cmd);
@@ -827,7 +827,7 @@ static rt_err_t rscdrrm020ndse3_control(rt_device_t dev, int cmd, void *args)
     return ret;
 }
 
-/* Open the ethernet interface */
+/* Open the rscdrrm020ndse3 device */
 static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 {
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_open() oflag=0x%x\r\n", oflag);
@@ -870,7 +870,7 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
     return RT_EOK;
 }
 
-/* Close the interface */
+/* Close the device */
 static rt_err_t rscdrrm020ndse3_close(rt_device_t dev)
 {
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_close()\r\n");
