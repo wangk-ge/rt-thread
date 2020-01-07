@@ -665,6 +665,32 @@ bool adc_set_freq(uint32_t u32FreqIndex)
 }
 
 /*************************************************
+* Function: adc_get_temperature
+* Description: 读取ADC温度
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+float adc_get_temperature(void)
+{
+	APP_TRACE("adc_get_temperature()\r\n");
+
+	float fTemperature = 0.0f;
+	
+#if defined(BSP_USING_RSCDRRM020NDSE3)
+	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_GET_TEMP, &fTemperature);
+	if (RT_EOK != ret)
+	{
+		APP_TRACE("adc_get_temperature() failed, rt_device_control(RSCDRRM020NDSE3_GET_TEMP) error(%d)!\r\n", ret);
+		return 0.0f;
+	}
+#endif
+	
+	return fTemperature;
+}
+
+/*************************************************
 * Function: adc_start
 * Description: 启动ADC采集
 * Author: wangk

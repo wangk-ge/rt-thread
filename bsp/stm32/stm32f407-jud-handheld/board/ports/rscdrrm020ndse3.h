@@ -33,6 +33,8 @@ struct rscdrrm020ndse3_device
 	enum rscdrrm020ndse3_mode mode;
 	/* 压力值(已补偿) */
 	float pressure_comp;
+	/* 温度ADC值 */
+	uint32_t temperature;
 	/* 自动归零请求标志 */
 	bool auto_zero;
 	/* 采样率(索引)[0=10HZ 1=20HZ 2=22.5HZ 3=45HZ 4=87.5HZ 5=90HZ 6=165HZ 7=175HZ 8=300HZ 9=330HZ 10=500HZ 11=600HZ 12=1000HZ]*/
@@ -53,6 +55,7 @@ typedef void (*ATUO_ZERO_CPL_FUNC)(void);
 #define RSCDRRM020NDSE3_AUTO_ZERO (0x03) // 自动归零
 #define RSCDRRM020NDSE3_SET_FREQ (0x04) // 设置采样率
 #define RSCDRRM020NDSE3_GET_FREQ (0x05) // 读取采样率
+#define RSCDRRM020NDSE3_GET_TEMP (0x06) // 读取温度(单位: 摄氏度)
 
 #ifdef __cplusplus
 }

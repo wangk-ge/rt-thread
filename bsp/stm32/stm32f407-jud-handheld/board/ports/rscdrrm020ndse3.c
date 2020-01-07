@@ -332,6 +332,7 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
+	rscdrrm020ndse3->temperature = 0;
 	
 	/* 当前为温度采集模式 */
 	rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE;
@@ -387,6 +388,7 @@ static rt_err_t rscdrrm020ndse3_stop(rt_device_t dev)
 	
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
+	rscdrrm020ndse3->temperature = 0;
 	
 	rscdrrm020ndse3_unlock(dev);
 	
@@ -469,6 +471,29 @@ static rt_err_t rscdrrm020ndse3_get_freq(rt_device_t dev, uint32_t* pu32FreqInde
 	if (pu32FreqIndex)
 	{
 		*pu32FreqIndex = rscdrrm020ndse3->freq_index;
+	}
+	
+	//rscdrrm020ndse3_unlock(dev);
+	
+	return RT_EOK;
+}
+
+/* 读取采样率 */
+static rt_err_t rscdrrm020ndse3_get_temperature(rt_device_t dev, float* pfTemperature)
+{
+	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
+	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_get_temperature() pfTemperature=0x%x\r\n", pfTemperature);
+	
+	//rscdrrm020ndse3_lock(dev);
+	if (pfTemperature)
+	{
+		/*
+			To convert the digital value to a Celsius temperature, first check if the MSB is 0 or 1. 
+			If the MSB = 0, simply multiply the decimal code by 0.03125°C to obtain the result. 
+			If the MSB = 1, subtract 1 from the result and complement all bits, multiply the result by -0.03125°C.
+		*/
+		int temperature = (int)((rscdrrm020ndse3->temperature & 0x00002000) ? (rscdrrm020ndse3->temperature | 0xFFFFC000) : rscdrrm020ndse3->temperature); // 14 bits
+		*pfTemperature = (float)temperature * 0.03125f;
 	}
 	
 	//rscdrrm020ndse3_unlock(dev);
@@ -644,6 +669,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 					*/
 					temperature = ((((uint32_t)recv_buf[0] << 8) & 0x0000FF00)
 						| (((uint32_t)recv_buf[1]) & 0x000000FF)) >> 2;
+					rscdrrm020ndse3->temperature = temperature;
 				}
 			}
 		}
@@ -736,6 +762,7 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
 	
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
+	rscdrrm020ndse3->temperature = 0;
 	
     return RT_EOK;
 }
@@ -782,6 +809,13 @@ static rt_err_t rscdrrm020ndse3_control(rt_device_t dev, int cmd, void *args)
 			ret = rscdrrm020ndse3_get_freq(dev, pu32FreqIndex);
 			break;
 		}
+		case RSCDRRM020NDSE3_GET_TEMP:
+		{
+			float* pfTemperature = (float*)args;
+			/* 读取温度值(单位: 摄氏度) */
+			ret = rscdrrm020ndse3_get_temperature(dev, pfTemperature);
+			break;
+		}
 		default:
 		{
 			ret = -RT_ERROR;
@@ -826,6 +860,7 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 	
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
+	rscdrrm020ndse3->temperature = 0;
 	
 	/* 采样率(索引) */
 	rscdrrm020ndse3->freq_index = RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX;
@@ -846,8 +881,10 @@ static rt_err_t rscdrrm020ndse3_close(rt_device_t dev)
 	
 	/* 进入停止状态 */
 	rscdrrm020ndse3->start = false;
+	
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
+	rscdrrm020ndse3->temperature = 0;
 	
 	rscdrrm020ndse3_unlock(dev);
 	
@@ -995,6 +1032,7 @@ int rscdrrm020ndse3_hw_init(void)
 	
 	/* 清除结果 */
 	rscdrrm020ndse3_dev.pressure_comp = 0.0;
+	rscdrrm020ndse3_dev.temperature = 0;
 	
 	/* init lock */
 	rt_mutex_init(&(rscdrrm020ndse3_dev.lock), "rscdrrm020ndse3", RT_IPC_FLAG_FIFO);

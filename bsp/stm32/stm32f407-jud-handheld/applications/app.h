@@ -126,6 +126,16 @@ uint32_t adc_get_freq(void);
 bool adc_set_freq(uint32_t u32FreqIndex);
 
 /*************************************************
+* Function: adc_get_temperature
+* Description: 读取ADC温度
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+float adc_get_temperature(void);
+
+/*************************************************
 * Function: adc_start
 * Description: 启动ADC采集
 * Author: wangk
