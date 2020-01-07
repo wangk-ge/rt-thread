@@ -64,7 +64,11 @@
 #define RSCDRRM020NDSE3_ADC_PRESSURE 0x04 // 压力
 
 /* ADC默认采样率配置 */
-#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX 9 // 9=660HZ(实际只有330HZ[温度采集会占用半周期])
+#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX 6 // 默认采样率索引,6=330HZ(实际温度采集会占用少量周期)
+#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ 330 // 默认采样率实际值
+
+/* ADC温度采集周期(ms) */
+#define RSCDRRM020NDSE3_ADC_TEMP_INTERVAL 100
 
 /* EVENT定义 */
 #define RSCDRRM020NDSE3_EVENT_DATA_READY 0x00000001
@@ -90,26 +94,31 @@ static uint32_t rscdrrm020ndse3_filter_n = (10 * RSCDRRM020NDSE3_ADC_DEFAUT_FREQ
 /* 自动归零完成回调函数 */
 static ATUO_ZERO_CPL_FUNC s_pfnAutoZeroCompleted = NULL;
 
+/* 控制连续采集压力的次数(连续采集之间会插入温度采集) */
+static uint32_t pressure_continuous_cnt = 0; // 当前已连续采集次数
+static uint32_t pressure_continuous_n = ((RSCDRRM020NDSE3_ADC_TEMP_INTERVAL * RSCDRRM020NDSE3_ADC_DEFAUT_FREQ) / 1000); // 连续采集压力的总次数
+
 /* 工作模式频率表(通过下标索引) */
 typedef struct
 {
 	uint8_t mode; // 工作模式
-	uint8_t freq; // 工作频率
+	uint8_t freq_cfg; // 采样率(配置值)
+	uint16_t freq_val; // 采样率(实际值)
 } WorkModeFreq_T;
 static WorkModeFreq_T s_tModeFreqTbl[] = {
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_20HZ}, 	// 0=20HZ
-	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_20HZ}, 		// 1=40HZ
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_45HZ}, 	// 2=45HZ 
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_90HZ}, 	// 3=90HZ // {RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_45HZ},
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_175HZ},	// 4=175HZ
-	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_90HZ}, 		// 5=180HZ
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_330HZ}, 	// 6=330HZ
-	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_175HZ}, 		// 7=350HZ
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_600HZ}, 	// 8=600HZ
-	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_330HZ}, 		// 9=660HZ
-	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_1000HZ}, 	// 10=1000HZ
-	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_600HZ}, 		// 11=1200HZ
-	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_1000HZ}, 	// 12=2000HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_20HZ, 20}, 	// 0=20HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_20HZ, 40}, 		// 1=40HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_45HZ, 45}, 	// 2=45HZ 
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_90HZ, 90}, 	// 3=90HZ // {RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_45HZ},
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_175HZ, 175},	// 4=175HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_90HZ, 180}, 		// 5=180HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_330HZ, 330}, 	// 6=330HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_175HZ, 350}, 	// 7=350HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_600HZ, 600}, 	// 8=600HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_330HZ, 660}, 	// 9=660HZ
+	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_1000HZ, 1000}, // 10=1000HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_600HZ, 1200}, 	// 11=1200HZ
+	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_1000HZ, 2000}, 	// 12=2000HZ
 };
 
 /* 开启传感器电源 */
@@ -294,8 +303,9 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 		be set to 1.
 	*/
 	{ // 消除编译警告
-		const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
-		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
+		//const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
+		//uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | pctWorkModeFreq->freq_cfg | pctWorkModeFreq->mode;
+		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // 用最快速度采集温度,避免过度干扰压力采集时序
 		ret = rscdrrm020ndse3_spi_write_adc_reg(0x01, &mode, 1);
 		if (RT_EOK != ret)
 		{
@@ -333,6 +343,9 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
+	
+	/* 复位压力连续采集次数 */
+	pressure_continuous_cnt = 0;
 	
 	/* 当前为温度采集模式 */
 	rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE;
@@ -389,6 +402,9 @@ static rt_err_t rscdrrm020ndse3_stop(rt_device_t dev)
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
+	
+	/* 复位压力连续采集次数 */
+	pressure_continuous_cnt = 0;
 	
 	rscdrrm020ndse3_unlock(dev);
 	
@@ -456,6 +472,10 @@ static rt_err_t rscdrrm020ndse3_set_freq(rt_device_t dev, uint32_t u32FreqIndex)
 	/* 由于采样率变化,需要重新计算滤波器总共需要的采集次数(用于自动归零) */
 	rscdrrm020ndse3_filter_n = (10 * u32FreqIndex + 10);
 	
+	/* 由于采样率变化,需要重新计算压力值连续采集总次数(确保温度采集约100ms进行一次) */
+	const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[u32FreqIndex]);
+	pressure_continuous_n = ((RSCDRRM020NDSE3_ADC_TEMP_INTERVAL * pctWorkModeFreq->freq_val) / 1000); // (RSCDRRM020NDSE3_ADC_TEMP_INTERVAL / (1000 / pctWorkModeFreq->freq_val))
+	
 	rscdrrm020ndse3_unlock(dev);
 	
 	return RT_EOK;
@@ -501,6 +521,37 @@ static rt_err_t rscdrrm020ndse3_get_temperature(rt_device_t dev, float* pfTemper
 	return RT_EOK;
 }
 
+/* 取得即将切换到的采集模式(封装压力/温度交替采集策略) */
+static enum rscdrrm020ndse3_mode rscdrrm020ndse3_next_mode(struct rscdrrm020ndse3_device* rscdrrm020ndse3)
+{
+	enum rscdrrm020ndse3_mode next_mode = RSCDRRM020NDSE3_PRESSURE;
+	
+	if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode) // pressure
+	{ // 当前为压力采集模式
+		if (pressure_continuous_cnt < pressure_continuous_n)
+		{ // 还没有达到连续采集次数
+			/* 连续压力采集 */
+			next_mode = RSCDRRM020NDSE3_PRESSURE;
+			/* 递增计数器 */
+			++pressure_continuous_cnt;
+		}
+		else
+		{ // 达到连续采集次数
+			/* 切换到温度采集 */
+			next_mode = RSCDRRM020NDSE3_TEMPERATURE;
+		}
+	}
+	else //if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode) // temperature
+	{ // 当前为温度采集模式
+		/* 切换到压力采集模式 */
+		next_mode = RSCDRRM020NDSE3_PRESSURE;
+		/* 复位计数器 */
+		pressure_continuous_cnt = 0;
+	}
+	
+	return next_mode;
+}
+
 /* 传感器线程 */
 static void rscdrrm020ndse3_thread_entry(void* param)
 {
@@ -540,7 +591,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 			rscdrrm020ndse3_lock(rscdrrm020ndse3);
 			if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode) // pressure
 			{
-				rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE; // 切换模式
+				rscdrrm020ndse3->mode = rscdrrm020ndse3_next_mode(rscdrrm020ndse3); // 切换模式
 				rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 				
 				/* 读取传感器压力数据并切换为温度采集模式 */
@@ -551,11 +602,11 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
 				if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode)
 				{ // 下次采集温度
-					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
+					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // 用最快速度采集温度,避免过度干扰压力采集时序
 				}
 				else // if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode)
 				{ // 下次采集压力
-					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
+					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq_cfg | pctWorkModeFreq->mode;
 				}
 				send_buf[3] = 0xFF;
 				ret = rscdrrm020ndse3_spi_adc_transfer(send_buf, recv_buf, sizeof(send_buf));
@@ -647,7 +698,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 			}
 			else //if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode) // temperature
 			{
-				rscdrrm020ndse3->mode = RSCDRRM020NDSE3_PRESSURE; // 切换模式
+				rscdrrm020ndse3->mode = rscdrrm020ndse3_next_mode(rscdrrm020ndse3); // 切换模式
 				rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 				
 				/* 读取传感器温度数据并切换为压力采集模式 */
@@ -656,7 +707,14 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				send_buf[0] = 0xFF;
 				send_buf[1] = 0x40 | ((0x01 & 0x03) << 2) | ((1 - 1) & 0x03); // WREG command [0100 RRNN],
 				const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
-				send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq | pctWorkModeFreq->mode;
+				if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode)
+				{ // 下次采集温度
+					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // 用最快速度采集温度,避免过度干扰压力采集时序
+				}
+				else // if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode)
+				{ // 下次采集压力
+					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq_cfg | pctWorkModeFreq->mode;
+				}
 				send_buf[3] = 0xFF;
 				ret = rscdrrm020ndse3_spi_adc_transfer(send_buf, recv_buf, sizeof(send_buf));
 				if (RT_EOK == ret)
@@ -764,6 +822,9 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
+	/* 复位压力连续采集次数 */
+	pressure_continuous_cnt = 0;
+	
     return RT_EOK;
 }
 
@@ -862,6 +923,9 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
+	/* 复位压力连续采集次数 */
+	pressure_continuous_cnt = 0;
+	
 	/* 采样率(索引) */
 	rscdrrm020ndse3->freq_index = RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX;
 	
@@ -885,6 +949,9 @@ static rt_err_t rscdrrm020ndse3_close(rt_device_t dev)
 	/* 清除结果 */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
+	
+	/* 复位压力连续采集次数 */
+	pressure_continuous_cnt = 0;
 	
 	rscdrrm020ndse3_unlock(dev);
 	
@@ -1033,6 +1100,9 @@ int rscdrrm020ndse3_hw_init(void)
 	/* 清除结果 */
 	rscdrrm020ndse3_dev.pressure_comp = 0.0;
 	rscdrrm020ndse3_dev.temperature = 0;
+	
+	/* 复位压力连续采集次数 */
+	pressure_continuous_cnt = 0;
 	
 	/* init lock */
 	rt_mutex_init(&(rscdrrm020ndse3_dev.lock), "rscdrrm020ndse3", RT_IPC_FLAG_FIFO);
