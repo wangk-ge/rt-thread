@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <rtthread.h>
 
 /**---------------------------------------------------------------------------*
 **                             Compiler Flag                                  *
@@ -74,6 +75,16 @@ bool set_com_mode(COM_MODE_E mode);
 * History:
 *************************************************/
 COM_MODE_E get_com_mode(void);
+
+/*************************************************
+* Function: get_com_device
+* Description: 当前的通信设备(BT/VCOM)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+rt_device_t get_com_device(void);
 	
 /*************************************************
 * Function: vcom_send_data

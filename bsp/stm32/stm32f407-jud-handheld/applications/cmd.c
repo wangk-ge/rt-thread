@@ -26,6 +26,7 @@
 #include "common.h"
 #include "util.h"
 #include "app.h"
+#include "ota.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -102,6 +103,8 @@ static void _CMD_HandlerBME280_HUMI(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerSHT20_TEMP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerSHT20_HUMI(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerOTA_DOWNLOAD(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerOTA_REBOOT(const StrConstRef_T* pctStrRefParam);
 const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("VER"), _CMD_HandlerVER },
 	{ STR_ITEM("BUILD"), _CMD_HandlerBUILD },
@@ -116,6 +119,8 @@ const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("BME280_BARO"), _CMD_HandlerBME280_BARO },
 	{ STR_ITEM("SHT20_TEMP"), _CMD_HandlerSHT20_TEMP },
 	{ STR_ITEM("SHT20_HUMI"), _CMD_HandlerSHT20_HUMI },
+	{ STR_ITEM("OTA_DOWNLOAD"), _CMD_HandlerOTA_DOWNLOAD },
+	{ STR_ITEM("OTA_REBOOT"), _CMD_HandlerOTA_REBOOT },
 };
 
 /*----------------------------------------------------------------------------*
@@ -322,6 +327,32 @@ static void _CMD_HandlerBUILD(const StrConstRef_T* pctStrRefParam)
 	if (NULL == pctStrRefParam)
 	{ // 读取
 		_CMD_Response("[BUILD=%s]", BUILD);
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerOTA_REBOOT
+* Description: OTA_REBOOT命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerOTA_REBOOT(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 执行
+		_CMD_Response("[OK]");
+		
+		/* wait some time for response finish */
+        rt_thread_delay(rt_tick_from_millisecond(2000));
+		
+		OTA_Reboot();
 	}
 	else
 	{ // 设置
@@ -660,6 +691,34 @@ static void _CMD_HandlerSHT20_TEMP(const StrConstRef_T* pctStrRefParam)
 	else
 	{ // 设置
 		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerOTA_DOWNLOAD
+* Description: OTA_DOWNLOAD命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerOTA_DOWNLOAD(const StrConstRef_T* pctStrRefParam)
+{
+	if (NULL == pctStrRefParam)
+	{ // 执行
+		/* 先发送命令响应 */
+		_CMD_Response("[OK]");
+		
+		/* 启动下载固件(阻塞) */
+		rt_device_t ptDevice = get_com_device();
+		OTA_Download(ptDevice);
+		
+		/* 通过传输协议检测成功/失败 */
+	}
+	else
+	{ // 设置
+		// 不允许设置
 		_CMD_Response("[ERR]");
 	}
 }

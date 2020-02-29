@@ -18,6 +18,7 @@
 #include <board.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "fal.h"
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 #include "rscdrrm020ndse3.h"
 #elif defined(BSP_USING_AD7730)
@@ -478,6 +479,37 @@ COM_MODE_E get_com_mode(void)
 }
 
 /*************************************************
+* Function: get_com_device
+* Description: 当前的通信设备(BT/VCOM)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+rt_device_t get_com_device(void)
+{
+	rt_device_t device = RT_NULL;
+	
+	switch (com_mode)
+	{
+		case COM_MODE_VCOM:
+		{
+			device = vcom_dev;
+			break;
+		}
+		case COM_MODE_BT:
+		{
+			device = bt_dev;
+			break;
+		}
+		default:
+			break;
+	}
+	
+	return device;
+}
+
+/*************************************************
 * Function: vcom_send_data
 * Description: 通过VCOM输出数据
 * Author: wangk
@@ -892,8 +924,9 @@ float sht20_get_humi(void)
 int main(void)
 {
 	int main_ret = 0;
-	
 	rt_err_t ret = RT_EOK;
+	
+	fal_init();
 	
 	/* 创建Vcom发送循环队列 */
 	CycleQueue_Create(&s_tVcomSendQ, s_pu8VcomSendQueBuf, sizeof(s_pu8VcomSendQueBuf));
@@ -1205,6 +1238,20 @@ _END:
 	
     return main_ret;
 }
+
+/**
+ * Function    ota_app_vtor_reconfig
+ * Description Set Vector Table base location to the start addr of app(RT_APP_PART_ADDR).
+*/
+static int ota_app_vtor_reconfig(void)
+{
+	#define NVIC_VTOR_MASK    0x3FFFFF80
+	/* Set the Vector Table base location by user application firmware definition */
+	SCB->VTOR = RT_APP_PART_ADDR & NVIC_VTOR_MASK;
+	
+	return 0;
+}
+INIT_BOARD_EXPORT(ota_app_vtor_reconfig);
 
 /**---------------------------------------------------------------------------*
  **                         Compiler Flag                                     *
