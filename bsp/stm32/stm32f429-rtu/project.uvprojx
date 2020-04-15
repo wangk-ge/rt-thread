@@ -334,7 +334,7 @@
               <MiscControls />
               <Define>USE_HAL_DRIVER, STM32F429xx</Define>
               <Undefine />
-              <IncludePath>.;..\..\..\include;applications;.;board;board\CubeMX_Config\Inc;board\ports;..\libraries\HAL_Drivers;..\libraries\HAL_Drivers\config;..\..\..\libcpu\arm\common;..\..\..\libcpu\arm\cortex-m4;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\finsh;..\..\..\components\libc\compilers\common;..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Inc;..\libraries\STM32F4xx_HAL\CMSIS\Device\ST\STM32F4xx\Include;..\libraries\STM32F4xx_HAL\CMSIS\Include</IncludePath>
+              <IncludePath>.;..\..\..\include;applications;.;board;board\CubeMX_Config\Inc;board\ports;..\libraries\HAL_Drivers;..\libraries\HAL_Drivers\config;..\..\..\libcpu\arm\common;..\..\..\libcpu\arm\cortex-m4;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\finsh;..\..\..\components\libc\compilers\common;..\..\..\components\net\at\include;..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Inc;..\libraries\STM32F4xx_HAL\CMSIS\Device\ST\STM32F4xx\Include;..\libraries\STM32F4xx_HAL\CMSIS\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -389,13 +389,6 @@
               <FileName>components.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\src\components.c</FilePath>
-            </File>
-          </Files>
-          <Files>
-            <File>
-              <FileName>cpu.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\src\cpu.c</FilePath>
             </File>
           </Files>
           <Files>
@@ -663,6 +656,40 @@
               <FileName>msh.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\components\finsh\msh.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>libc</GroupName>
+          <Files>
+            <File>
+              <FileName>time.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\libc\compilers\common\time.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>AT</GroupName>
+          <Files>
+            <File>
+              <FileName>at_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\net\at\src\at_utils.c</FilePath>
+            </File>
+          </Files>
+          <Files>
+            <File>
+              <FileName>at_cli.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\net\at\src\at_cli.c</FilePath>
+            </File>
+          </Files>
+          <Files>
+            <File>
+              <FileName>at_client.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\net\at\src\at_client.c</FilePath>
             </File>
           </Files>
         </Group>

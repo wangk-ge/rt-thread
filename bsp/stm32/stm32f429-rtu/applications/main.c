@@ -13,8 +13,8 @@
 #include <rtdevice.h>
 #include <board.h>
 
-/* defined the LED0 pin: PH10 */
-#define LED0_PIN    GET_PIN(H, 10)
+/* defined the LED1 pin: PD14 */
+#define LED0_PIN    GET_PIN(D, 14)
 
 int main(void)
 {
