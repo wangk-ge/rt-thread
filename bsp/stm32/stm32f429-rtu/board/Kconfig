@@ -22,7 +22,36 @@ menu "Onboard Peripheral Drivers"
         select RT_USING_SFUD
         select RT_SFUD_USING_SFDP
         default n
+    
+    # TB22 AT device configuration
+    menuconfig AT_DEVICE_USING_TB22
+        bool "CETC TB22"
+        default n
 
+    if AT_DEVICE_USING_TB22
+
+        config AT_DEVICE_TB22_INIT_ASYN
+            bool "Enable initialize by thread"
+            default n
+
+        config TB22_POWER_PIN
+            int "Power pin"
+            default -1
+
+        config TB22_STATUS_PIN
+            int "Power status pin"
+            default -1
+
+        config TB22_CLIENT_NAME
+            string "AT client device name"
+            default "uart3"
+
+        config TB22_RECV_BUFF_LEN
+            int "The maximum length of receive line buffer"
+            default 512
+
+    endif
+    
 endmenu
 
 menu "On-chip Peripheral Drivers"
@@ -54,8 +83,8 @@ menu "On-chip Peripheral Drivers"
                 bool "Enable UART3 RX DMA"
                 depends on BSP_USING_UART3 && RT_SERIAL_USING_DMA
                 default n
-				
-			config BSP_USING_UART5
+                
+            config BSP_USING_UART5
                 bool "Enable UART5"
                 default n
 
