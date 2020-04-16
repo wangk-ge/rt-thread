@@ -74,6 +74,12 @@
 
 /* Device virtual file system */
 
+#define RT_USING_DFS
+#define DFS_USING_WORKDIR
+#define DFS_FILESYSTEMS_MAX 2
+#define DFS_FILESYSTEM_TYPES_MAX 2
+#define DFS_FD_MAX 16
+#define RT_USING_DFS_DEVFS
 
 /* Device Drivers */
 
@@ -92,7 +98,8 @@
 
 /* POSIX layer and C standard library */
 
-#define RT_LIBC_USING_TIME
+#define RT_USING_LIBC
+#define RT_USING_POSIX
 
 /* Network */
 
@@ -103,7 +110,7 @@
 /* protocol stack implement */
 
 #define SAL_USING_AT
-#define SAL_SOCKETS_NUM 16
+#define SAL_USING_POSIX
 
 /* Network interface device */
 
@@ -121,12 +128,13 @@
 /* AT commands */
 
 #define RT_USING_AT
+#define AT_DEBUG
 #define AT_USING_CLIENT
 #define AT_CLIENT_NUM_MAX 1
 #define AT_USING_SOCKET
 #define AT_USING_CLI
 #define AT_PRINT_RAW_CMD
-#define AT_CMD_MAX_LEN 128
+#define AT_CMD_MAX_LEN 2048
 #define AT_SW_VERSION_NUM 0x10300
 
 /* VBUS(Virtual Software BUS) */
@@ -139,6 +147,11 @@
 
 /* IoT - internet of things */
 
+#define MQTT_DEBUG
+#define PKG_USING_MYMQTT
+#define PKG_USING_MYMQTT_LATEST_VERSION
+#define PKG_USING_MYMQTT_EXAMPLE
+#define MQTT_MAX_MESSAGE_HANDLERS 1
 
 /* Wi-Fi */
 
@@ -192,7 +205,7 @@
 #define TB22_POWER_PIN 33
 #define TB22_STATUS_PIN -1
 #define TB22_CLIENT_NAME "uart3"
-#define TB22_RECV_BUFF_LEN 512
+#define TB22_RECV_BUFF_LEN 2048
 
 /* On-chip Peripheral Drivers */
 

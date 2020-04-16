@@ -548,7 +548,7 @@ static void tb22_init_thread_entry(void *parameter)
     struct at_device *device = (struct at_device *) parameter;
     struct at_client *client = device->client;
 
-    resp = at_create_resp(128, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
+    resp = at_create_resp(256, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
     if (resp == RT_NULL)
     {
         LOG_E("no memory for resp create.");
@@ -578,6 +578,7 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
 
+        #if 0
         /* disable auto register(禁用IoT平台的注册功能) */
         if (at_obj_exec_cmd(device->client, resp, "AT+QREGSWT=2") != RT_EOK)
         {
@@ -585,6 +586,7 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+QREGSWT=2");
             goto __exit;
         }
+        #endif
         
         /* disable auto connect */
         if (at_obj_exec_cmd(device->client, resp, "AT+NCONFIG=AUTOCONNECT,FALSE") != RT_EOK)
@@ -643,6 +645,7 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
 
+        #if 0
         /* auto report recv from tcp */
         if (at_obj_exec_cmd(device->client, resp, "AT+NSONMI=2") != RT_EOK)
         {
@@ -650,6 +653,7 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+NSONMI=2");
             goto __exit;
         }
+        #endif
 
         /* disable eDRX mode  */
         if (at_obj_exec_cmd(device->client, resp, "AT+CEDRXS=0,5") != RT_EOK)

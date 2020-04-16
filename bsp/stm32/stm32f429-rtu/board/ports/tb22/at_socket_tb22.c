@@ -56,18 +56,35 @@
 /* 发送数据缓冲区大小(字节数) */
 #define TB22_SEND_BUF_SIZE             (TB22_MODULE_SEND_MAX_SIZE * 2)
 
+/* Socket数据接收线程参数 */
+#define TB22_SOCKET_RECV_THREAD_STACK_SIZE  2048
+#define TB22_SOCKET_RECV_THREAD_PRIORITY    (RT_THREAD_PRIORITY_MAX/2)
+#define TB22_SOCKET_RECV_MB_SIZE            8
+
+/* TB22设备Socket信息 */
 struct tb22_sock_t {
     int index;
     int device_socket;
+    uint8_t sequence;
+};
+
+/* Socket接收信息 */
+struct tb22_sock_recv_info_t {
+    struct at_device *device;
+    int device_socket;
+    rt_size_t data_len;
 };
 
 static at_evt_cb_t at_evt_cb_set[] = {
-        [AT_SOCKET_EVT_RECV] = NULL,
-        [AT_SOCKET_EVT_CLOSED] = NULL,
+    [AT_SOCKET_EVT_RECV] = NULL,
+    [AT_SOCKET_EVT_CLOSED] = NULL,
 };
 
 /* 发送数据缓冲区 */
 static char at_send_buf[TB22_SEND_BUF_SIZE] = "";
+
+/* Socket接收线程邮箱 */
+static rt_mailbox_t at_recv_thread_mb = RT_NULL;
 
 static int tb22_socket_event_send(struct at_device *device, uint32_t event)
 {
@@ -88,6 +105,21 @@ static int tb22_socket_event_recv(struct at_device *device, uint32_t event, uint
     return recved;
 }
 
+static int tb22_socket_recv_info_send_mail(struct at_device *device, int device_socket, rt_size_t data_len)
+{
+    struct tb22_sock_recv_info_t *recv_info = (struct tb22_sock_recv_info_t*)rt_malloc(sizeof(struct tb22_sock_recv_info_t));
+    if (recv_info == RT_NULL)
+    {
+        return -RT_ENOMEM;
+    }
+    
+    recv_info->device = device;
+    recv_info->device_socket = device_socket;
+    recv_info->data_len = data_len;
+    
+    return (int)rt_mb_send(at_recv_thread_mb, (rt_ubase_t)recv_info);
+}
+
 /**
  * close socket by AT commands.
  *
@@ -102,10 +134,16 @@ static int tb22_socket_close(struct at_socket *socket)
 {
     int result = RT_EOK;
     at_response_t resp = RT_NULL;
+    struct at_device *device = (struct at_device *) socket->device;
+    
+    if (socket->type != AT_SOCKET_TCP)
+    {
+        return -RT_ERROR;
+    }
+    
     struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
     int socket_index = tb22_sock->index;
     int device_socket = tb22_sock->device_socket;
-    struct at_device *device = (struct at_device *) socket->device;
 
     resp = at_create_resp(64, 0, rt_tick_from_millisecond(300));
     if (resp == RT_NULL)
@@ -175,21 +213,25 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     result = at_obj_exec_cmd(device->client, resp, "AT+NSOCR=STREAM,6,0,1");
     if (result < 0)
     {
-        return -RT_ERROR;
+        result = -RT_ERROR;
+        goto __exit;
     }
     
-    if (at_resp_parse_line_args(resp, 1, "%d", &device_socket) <= 0)
+    if (at_resp_parse_line_args(resp, 2, "%d", &device_socket) <= 0)
     {
-        return -RT_ERROR;
+        result = -RT_ERROR;
+        goto __exit;
     }
     
     tb22_sock = (struct tb22_sock_t*)rt_malloc(sizeof(struct tb22_sock_t));
     if (tb22_sock == RT_NULL)
     {
-        return -RT_ENOMEM;
+        result = -RT_ERROR;
+        goto __exit;
     }
     tb22_sock->index = socket_index;
     tb22_sock->device_socket = device_socket;
+        tb22_sock->sequence = 1;
     socket->user_data = (void*)tb22_sock;
     
     /* 设置连接超时时间(60s) */
@@ -219,6 +261,7 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
         result = -RT_ERROR;
     }
     
+__exit:
     if (resp)
     {
         at_delete_resp(resp);
@@ -341,6 +384,26 @@ static uint32_t tb22_from_hex_str(const char* hex_str, size_t str_len,
 }
 
 /**
+ * update the sequence value for AT+NSOSD
+ *
+ * @param socket current socket
+ *
+ */
+static void tb22_update_sequence(struct at_socket *socket)
+{
+    struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
+    
+    if (tb22_sock->sequence >= 255)
+    {
+        tb22_sock->sequence = 1;
+    }
+    else
+    {
+        tb22_sock->sequence++;
+    }
+}
+
+/**
  * send data to server or client by AT commands.
  *
  * @param socket current socket
@@ -368,7 +431,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
 
     RT_ASSERT(buff);
 
-    resp = at_create_resp(128, 2, rt_tick_from_millisecond(300));
+    resp = at_create_resp(128, 2, rt_tick_from_millisecond(10000));
     if (resp == RT_NULL)
     {
         LOG_E("no memory for resp create.");
@@ -399,14 +462,14 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         cur_pkt_size = tb22_to_hex_str((const uint8_t*)buff + sent_size, cur_pkt_size, at_send_buf, sizeof(at_send_buf));
     
         /* send the "AT+NSOSD" commands to AT server. */
-        if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s", device_socket, (int)cur_pkt_size, at_send_buf) < 0)
+        if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_send_buf, tb22_sock->sequence) < 0)
         {
             result = -RT_ERROR;
             goto __exit;
         }
         
         int sock = 0, len = 0;
-        if (at_resp_parse_line_args(resp, 1, "%d,%d,%d", &sock, &len) <= 0)
+        if (at_resp_parse_line_args(resp, 2, "%d,%d,%d", &sock, &len) <= 0)
         {
             result = -RT_ERROR;
             goto __exit;
@@ -416,7 +479,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         
         /* waiting OK or failed result */
         event = TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL;
-        event_result = tb22_socket_event_recv(device, event, 1 * RT_TICK_PER_SECOND, RT_EVENT_FLAG_OR);
+        event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(10 * 1000), RT_EVENT_FLAG_OR);
         if (event_result < 0)
         {
             LOG_E("%s device socket(%d) wait sned OK|FAIL timeout.", device->name, device_socket);
@@ -430,6 +493,9 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
             result = -RT_ERROR;
             goto __exit;
         }
+        
+        /* update sequence */
+        tb22_update_sequence(socket);
 
         sent_size += cur_pkt_size;
     }
@@ -442,7 +508,7 @@ __exit:
         at_delete_resp(resp);
     }
 
-    return result > 0 ? sent_size : result;
+    return (result >= 0) ? sent_size : result;
 }
 
 /**
@@ -489,7 +555,7 @@ int tb22_domain_resolve(const char *name, char ip[16])
     tb22 = (struct at_device_tb22 *) device->user_data;
     tb22->socket_data = ip;
 
-    if (at_obj_exec_cmd(device->client, resp, "AT+QDNS=0,%s", name) != RT_EOK)
+    if (at_obj_exec_cmd(device->client, resp, "AT+MDNS=0,%s", name) != RT_EOK)
     {
         result = -RT_ERROR;
         goto __exit;
@@ -498,7 +564,7 @@ int tb22_domain_resolve(const char *name, char ip[16])
     for(i = 0; i < RESOLVE_RETRY; i++)
     {
         /* waiting result event from AT URC, the device default connection timeout is 30 seconds.*/
-        if (tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, 10 * RT_TICK_PER_SECOND, RT_EVENT_FLAG_OR) < 0)
+        if (tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, rt_tick_from_millisecond(10 * 1000), RT_EVENT_FLAG_OR) < 0)
         {
             result = -RT_ETIMEOUT;
             continue;
@@ -652,12 +718,10 @@ static void urc_close_func(struct at_client *client, const char *data, rt_size_t
 static void urc_recv_func(struct at_client *client, const char *data, rt_size_t size)
 {
     int device_socket = 0;
-    rt_size_t bfsz = 0;
-    char *recv_buf = RT_NULL;
-    struct at_socket *socket = RT_NULL;
+    rt_size_t data_len = 0;
     struct at_device *device = RT_NULL;
     char *client_name = client->device->parent.name;
-    at_response_t resp = RT_NULL;
+    int ret = 0;
 
     RT_ASSERT(data && size);
 
@@ -669,82 +733,19 @@ static void urc_recv_func(struct at_client *client, const char *data, rt_size_t 
     }
 
     /* get the current socket and receive buffer size by receive data */
-    sscanf(data, "+NSONMI:%d,%d", &device_socket, (int*)&bfsz);
+    sscanf(data, "+NSONMI:%d,%d", &device_socket, (int*)&data_len);
 
-    if (device_socket < 0 || bfsz == 0)
+    if ((device_socket < 0) 
+        || (data_len <= 0))
     {
+        LOG_E("invalid device_socket(%d) or data_len(%d).", device_socket, data_len);
         return;
     }
     
-    /* get at socket object by device socket descriptor */
-    socket = at_get_socket_by_device_socket(device, device_socket);
-    if (socket == RT_NULL)
+    ret = tb22_socket_recv_info_send_mail(device, device_socket, data_len);
+    if (ret < 0)
     {
-        LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
-        return;
-    }
-
-    int rem_len = bfsz; // 剩余数据长度
-    while (rem_len > 0)
-    { // 收取所有数据
-        recv_buf = (char *) rt_calloc(1, rem_len);
-        if (recv_buf == RT_NULL)
-        {
-            LOG_E("no memory for URC receive buffer(%d).", rem_len);
-            /* read and clean the coming data */
-            at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
-            break;
-        }
-
-        resp = at_create_resp((rem_len * 2) + 64, 0, rt_tick_from_millisecond(300));
-        if (recv_buf == RT_NULL)
-        {
-            LOG_E("no memory for resp create.");
-            /* read and clean the coming data */
-            at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
-            break;
-        }
-    
-        if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, rem_len) != RT_EOK)
-        {
-            /* read and clean the coming data */
-            at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
-            break;
-        }
-        
-        int sock = 0, port = 0, len = 0;
-        char ip[32] = "";
-        if (at_resp_parse_line_args(resp, 1, "%d,%s,%d,%d,%s,%d", &sock, ip, &port, &len, recv_buf, &rem_len) <= 0)
-        {
-            break;
-        }
-        RT_ASSERT(device_socket == sock);
-        if (len <= 0)
-        {
-            break;
-        }
-        
-        at_delete_resp(resp);
-        resp = RT_NULL;
-        
-        /* Hex字符串转换二进制数据(就地转换) */
-        uint8_t *data_buf = (uint8_t*)recv_buf;
-        uint32_t buf_len = (uint32_t)bfsz;
-        uint32_t data_len = tb22_from_hex_str(recv_buf, (uint32_t)len, data_buf, buf_len);
-
-        if (socket != RT_NULL)
-        {
-            /* notice the receive buffer and buffer size */
-            if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
-            {
-                at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)data_buf, data_len);
-            }
-        }
-    }
-    
-    if (resp != RT_NULL)
-    {
-        at_delete_resp(resp);
+        LOG_E("tb22_socket_recv_info_send_mail error(%d).", ret);
     }
 }
 
@@ -771,7 +772,7 @@ static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_
         return;
     }
 
-    sscanf(data, "+QDNS:%s", recv_ip);
+    sscanf(data, "+MDNS:%s", recv_ip);
     recv_ip[15] = '\0';
 
     rt_memcpy(tb22->socket_data, recv_ip, sizeof(recv_ip));
@@ -779,12 +780,131 @@ static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_
     tb22_socket_event_send(device, TB22_EVENT_DOMAIN_OK);
 }
 
+/**
+ * socket recv thread entry
+ *
+ */
+static void tb22_socket_recv_thread_entry(void *parameter)
+{
+    int device_socket = 0;
+    rt_size_t recv_len = 0;
+    char *recv_buf = RT_NULL;
+    struct at_socket *socket = RT_NULL;
+    struct at_device *device = RT_NULL;
+    at_response_t resp = RT_NULL;
+
+    while (1)
+    {
+        struct tb22_sock_recv_info_t *recv_info = RT_NULL;
+        /* 处理Socket接收任务 */
+        if (rt_mb_recv(at_recv_thread_mb, (rt_ubase_t*)&recv_info, RT_WAITING_FOREVER) == RT_EOK)
+        {
+            if (recv_info == RT_NULL)
+            {
+                continue;
+            }
+            
+            device = recv_info->device;
+            device_socket = recv_info->device_socket;
+            recv_len = recv_info->data_len;
+            rt_free(recv_info);
+            recv_info = RT_NULL;
+            
+            /* get at socket object by device socket descriptor */
+            socket = at_get_socket_by_device_socket(device, device_socket);
+            if (socket == RT_NULL)
+            {
+                LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
+                continue;
+            }
+
+            int rem_len = recv_len; // 剩余数据长度
+            while (rem_len > 0)
+            { // 收取所有数据
+                int buf_len = (rem_len * 2) + 1; // 每个HEX占两个字节再加上字符串结尾'\0'
+                recv_buf = (char *)rt_calloc(1, buf_len);
+                if (recv_buf == RT_NULL)
+                {
+                    LOG_E("no memory for URC receive buffer(%d).", rem_len);
+                    /* read and clean the coming data */
+                    at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+                    break;
+                }
+
+                resp = at_create_resp((rem_len * 2) + 128, 0, rt_tick_from_millisecond(1000));
+                if (resp == RT_NULL)
+                {
+                    LOG_E("no memory for resp create.");
+                    
+                    rt_free(recv_buf);
+                    recv_buf = RT_NULL;
+                    
+                    /* read and clean the coming data */
+                    at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+                    break;
+                }
+            
+                if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, rem_len) != RT_EOK)
+                {
+                    rt_free(recv_buf);
+                    recv_buf = RT_NULL;
+                    
+                    /* read and clean the coming data */
+                    at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+                    break;
+                }
+                
+                int sock = 0, port = 0, bytes_len = 0;
+                char ip[32] = "";
+                if (at_resp_parse_line_args(resp, 2, "%d,%[^,],%d,%d,%[^,],%d", &sock, ip, &port, &bytes_len, recv_buf, &rem_len) <= 0)
+                {
+                    rt_free(recv_buf);
+                    recv_buf = RT_NULL;
+                    
+                    break;
+                }
+                RT_ASSERT(device_socket == sock);
+                if (bytes_len <= 0)
+                {
+                    rt_free(recv_buf);
+                    recv_buf = RT_NULL;
+                    
+                    break;
+                }
+                
+                at_delete_resp(resp);
+                resp = RT_NULL;
+                
+                /* Hex字符串转换二进制数据(就地转换) */
+                int hex_str_len = bytes_len * 2; // 每个HEX占两个字节
+                uint8_t *data_buf = (uint8_t*)recv_buf;
+                uint32_t data_len = tb22_from_hex_str(recv_buf, (uint32_t)hex_str_len, data_buf, (uint32_t)buf_len);
+
+                if (socket != RT_NULL)
+                {
+                    /* notice the receive buffer and buffer size */
+                    if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
+                    {
+                        at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)data_buf, data_len);
+                    }
+                }
+            }
+            
+            if (resp != RT_NULL)
+            {
+                at_delete_resp(resp);
+                resp = RT_NULL;
+            }
+        }
+    }
+}
+
 static const struct at_urc urc_table[] =
 {
     {"+NSOSTR:",    "\r\n",                 urc_send_func},
     {"+NSOCLI",     "\r\n",                 urc_close_func},
     {"+NSONMI",     "\r\n",                 urc_recv_func},
-    {"+QDNS:",      "\r\n",                 urc_dnsqip_func},
+    {"+MDNS:",      "\r\n",                 urc_dnsqip_func},
 };
 
 static const struct at_socket_ops tb22_socket_ops =
@@ -812,6 +932,29 @@ int tb22_socket_class_register(struct at_device_class *class)
 
     class->socket_num = AT_DEVICE_TB22_SOCKETS_NUM;
     class->socket_ops = &tb22_socket_ops;
+    
+    /* 创建Scoket接收线程邮箱 */
+    at_recv_thread_mb = rt_mb_create("tb22_socket_recv", TB22_SOCKET_RECV_MB_SIZE, RT_IPC_FLAG_FIFO);
+    if (at_recv_thread_mb == RT_NULL)
+    {
+        LOG_E("create tb22_socket recv thread mailbox failed.");
+        return -RT_ERROR;
+    }
+    
+    /* 创建Scoket接收线程 */
+    rt_thread_t tid = rt_thread_create("tb22_socket_recv", tb22_socket_recv_thread_entry, RT_NULL,
+                           TB22_SOCKET_RECV_THREAD_STACK_SIZE, TB22_SOCKET_RECV_THREAD_PRIORITY, 20);
+    if (tid == RT_NULL)
+    {
+        rt_mb_delete(at_recv_thread_mb);
+        at_recv_thread_mb = RT_NULL;
+        
+        LOG_E("create tb22_socket recv thread failed.");
+        return -RT_ERROR;
+    }
+    
+    /* 启动Socket接收线程 */
+    rt_thread_startup(tid);
 
     return RT_EOK;
 }
