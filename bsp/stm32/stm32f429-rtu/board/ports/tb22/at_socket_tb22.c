@@ -543,6 +543,9 @@ static struct at_socket *at_get_socket_by_device_socket(struct at_device *device
 {
     int i = 0;
     struct at_socket *socket = RT_NULL;
+	
+	rt_base_t level = rt_hw_interrupt_disable();
+	
     for (i = 0; i < device->class->socket_num; ++i)
     {
         struct at_socket *sock = &(device->sockets[i]);
@@ -560,6 +563,8 @@ static struct at_socket *at_get_socket_by_device_socket(struct at_device *device
             }
         }
     }
+	
+	rt_hw_interrupt_enable(level);
     
     return socket;
 }

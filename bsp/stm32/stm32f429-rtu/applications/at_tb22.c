@@ -24,7 +24,7 @@
 
 #include <at_device_tb22.h>
 
-#define LOG_TAG                        "at.tb22"
+#define LOG_TAG                 "at.tb22"
 #include <at_log.h>
 
 #define TB22_DEIVCE_NAME        "tb22"
