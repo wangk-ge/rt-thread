@@ -41,6 +41,31 @@ static struct at_device_tb22 _dev =
 
 static int tb22_device_register(void)
 {
+    /* set baud rate to 9600 */
+    struct serial_configure uart_cfg = {
+        BAUD_RATE_9600,   /* 9600 bits/s */
+        DATA_BITS_8,      /* 8 databits */
+        STOP_BITS_1,      /* 1 stopbit */
+        PARITY_NONE,      /* No parity  */
+        BIT_ORDER_LSB,    /* LSB first sent */
+        NRZ_NORMAL,       /* Normal mode */
+        RT_SERIAL_RB_BUFSZ, /* Buffer size */
+        0
+    };
+    rt_device_t at_client_dev = rt_device_find(TB22_CLIENT_NAME);
+    if (at_client_dev == RT_NULL)
+    {
+        rt_kprintf("rt_device_find(%s) failed!", TB22_CLIENT_NAME);
+        return -RT_ERROR;
+    }
+    
+    rt_err_t ret = rt_device_control(at_client_dev, RT_DEVICE_CTRL_CONFIG, &uart_cfg);
+    if (ret != RT_EOK)
+    {
+        rt_kprintf("rt_device_control(%s) error(%d)!", TB22_CLIENT_NAME, ret);
+        return ret;
+    }
+    
     struct at_device_tb22 *tb22 = &_dev;
 
     return at_device_register(&(tb22->device),

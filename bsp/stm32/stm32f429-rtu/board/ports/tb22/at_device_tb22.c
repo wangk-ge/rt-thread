@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <drv_gpio.h>
 
 #include <at_device_tb22.h>
 
@@ -35,6 +36,7 @@
 #define TB22_WAIT_CONNECT_TIME          5000
 #define TB22_THREAD_STACK_SIZE          2048
 #define TB22_THREAD_PRIORITY            (RT_THREAD_PRIORITY_MAX/2)
+#define TB22_NET_LED_PIN                GET_PIN(D, 14) // 网络连接状态指示LED控制GPIO(低电平点亮)
 
 static int tb22_reset(struct at_device *device)
 {
@@ -266,6 +268,9 @@ static void tb22_check_link_status_entry(void *parameter)
         is_link_up = (tb22_check_link_status(device) == RT_EOK);
 
         netdev_low_level_set_link_status(netdev, is_link_up);
+        
+        /* 控制连接指示灯(低电平点亮) */
+        rt_pin_write(TB22_NET_LED_PIN, is_link_up ? PIN_LOW : PIN_HIGH);
 
         rt_thread_delay(TB22_LINK_DELAY_TIME);
     }
@@ -885,6 +890,8 @@ static int tb22_init(struct at_device *device)
         rt_pin_mode(tb22->power_pin, PIN_MODE_OUTPUT);
         rt_pin_write(tb22->power_pin, PIN_LOW);
     }
+    rt_pin_mode(TB22_NET_LED_PIN, PIN_MODE_OUTPUT);
+    rt_pin_write(TB22_NET_LED_PIN, PIN_HIGH);
 
     /* initialize tb22 device network */
     return tb22_netdev_set_up(device->netdev);
@@ -893,6 +900,9 @@ static int tb22_init(struct at_device *device)
 static int tb22_deinit(struct at_device *device)
 {
     RT_ASSERT(device);
+    
+    /* 关闭连接指示灯 */
+    rt_pin_write(TB22_NET_LED_PIN, PIN_HIGH);
     
     return tb22_netdev_set_down(device->netdev);
 }
