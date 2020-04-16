@@ -32,10 +32,17 @@
 
 #if defined(AT_DEVICE_USING_TB22) && defined(AT_USING_SOCKET)
 
-#define TB22_MODULE_SEND_MAX_SIZE       1024
+#define TB22_MODULE_SEND_MAX_SIZE       1358 // AT+NSOSD最大传输1358字节
 
 /* set real event by current socket and current state */
-#define SET_EVENT(socket, event)       (((socket + 1) << 16) | (event))
+#define SET_EVENT(socket_index, event)       (((socket_index + 1) << 16) | (event))
+
+#if !defined(MIN)
+#define MIN(a,b)    (((a) < (b)) ? (a) : (b))
+#endif
+
+/* 半字节转换为HEX字符 */
+#define TO_HEX_CHAR(b) (((b) <= 0x09) ? ((b) + (uint8_t)'0') : (((b) - 0x0A) + (uint8_t)'A'))
 
 /* AT socket event type */
 #define TB22_EVENT_CONN_OK             (1L << 0)
@@ -46,46 +53,21 @@
 #define TB22_EVENT_SEND_FAIL           (1L << 5)
 #define TB22_EVENT_DOMAIN_OK           (1L << 6)
 
+/* 发送数据缓冲区大小(字节数) */
+#define TB22_SEND_BUF_SIZE             (TB22_MODULE_SEND_MAX_SIZE * 2)
+
+struct tb22_sock_t {
+    int index;
+    int device_socket;
+};
+
 static at_evt_cb_t at_evt_cb_set[] = {
         [AT_SOCKET_EVT_RECV] = NULL,
         [AT_SOCKET_EVT_CLOSED] = NULL,
 };
 
-static void at_tcp_ip_errcode_parse(int result)//TCP/IP_QIGETERROR
-{
-    switch(result)
-    {
-    case 0   : LOG_D("%d : Operation successful",         result); break;
-    case 550 : LOG_E("%d : Unknown error",                result); break;
-    case 551 : LOG_E("%d : Operation blocked",            result); break;
-    case 552 : LOG_E("%d : Invalid parameters",           result); break;
-    case 553 : LOG_E("%d : Memory not enough",            result); break;
-    case 554 : LOG_E("%d : Create socket failed",         result); break;
-    case 555 : LOG_E("%d : Operation not supported",      result); break;
-    case 556 : LOG_E("%d : Socket bind failed",           result); break;
-    case 557 : LOG_E("%d : Socket listen failed",         result); break;
-    case 558 : LOG_E("%d : Socket write failed",          result); break;
-    case 559 : LOG_E("%d : Socket read failed",           result); break;
-    case 560 : LOG_E("%d : Socket accept failed",         result); break;
-    case 561 : LOG_E("%d : Open PDP context failed",      result); break;
-    case 562 : LOG_E("%d : Close PDP context failed",     result); break;
-    case 563 : LOG_W("%d : Socket identity has been used", result); break;
-    case 564 : LOG_E("%d : DNS busy",                     result); break;
-    case 565 : LOG_E("%d : DNS parse failed",             result); break;
-    case 566 : LOG_E("%d : Socket connect failed",        result); break;
-    // case 567 : LOG_W("%d : Socket has been closed",       result); break;
-    case 567 : break;
-    case 568 : LOG_E("%d : Operation busy",               result); break;
-    case 569 : LOG_E("%d : Operation timeout",            result); break;
-    case 570 : LOG_E("%d : PDP context broken down",      result); break;
-    case 571 : LOG_E("%d : Cancel send",                  result); break;
-    case 572 : LOG_E("%d : Operation not allowed",        result); break;
-    case 573 : LOG_E("%d : APN not configured",           result); break;
-    case 574 : LOG_E("%d : Port busy",                    result); break;
-    default  : LOG_E("%d : Unknown err code",             result); break;
-    }
-}
-
+/* 发送数据缓冲区 */
+static char at_send_buf[TB22_SEND_BUF_SIZE] = "";
 
 static int tb22_socket_event_send(struct at_device *device, uint32_t event)
 {
@@ -120,7 +102,9 @@ static int tb22_socket_close(struct at_socket *socket)
 {
     int result = RT_EOK;
     at_response_t resp = RT_NULL;
-    int device_socket = (int) socket->user_data;
+    struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
+    int socket_index = tb22_sock->index;
+    int device_socket = tb22_sock->device_socket;
     struct at_device *device = (struct at_device *) socket->device;
 
     resp = at_create_resp(64, 0, rt_tick_from_millisecond(300));
@@ -133,6 +117,9 @@ static int tb22_socket_close(struct at_socket *socket)
     result = at_obj_exec_cmd(device->client, resp, "AT+NSOCL=%d", device_socket);
 
     at_delete_resp(resp);
+    
+    rt_free(socket->user_data);
+    socket->user_data = (void*)socket_index;
 
     return result;
 }
@@ -157,11 +144,12 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
 #define CONN_RETRY  2
 
     int i = 0;
-    uint32_t event = 0;
     at_response_t resp = RT_NULL;
-    int result = 0, event_result = 0;
-    int device_socket = (int) socket->user_data;
+    int result = 0;
+    int device_socket = 0;
+    int socket_index = (int) socket->user_data;
     struct at_device *device = (struct at_device *) socket->device;
+    struct tb22_sock_t *tb22_sock = RT_NULL;
 
     RT_ASSERT(ip);
     RT_ASSERT(port >= 0);
@@ -182,69 +170,52 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
         LOG_E("no memory for resp create.");
         return -RT_ENOMEM;
     }
-		
-		/* create socket */
-		result = at_obj_exec_cmd(device->client, resp, "AT+NSOCR=STREAM,6,0,1");
-		if (result < 0)
-		{
-		    return -RT_ERROR;
-		}
-		
-		if (at_resp_parse_line_args(resp, 2, "%d", &device_socket) <= 0)
+        
+    /* create socket */
+    result = at_obj_exec_cmd(device->client, resp, "AT+NSOCR=STREAM,6,0,1");
+    if (result < 0)
     {
         return -RT_ERROR;
     }
-		socket->user_data = (void*)device_socket;
-
-    for(i=0; i<CONN_RETRY; i++)
+    
+    if (at_resp_parse_line_args(resp, 1, "%d", &device_socket) <= 0)
     {
-        /* clear socket connect event */
-        event = SET_EVENT(device_socket, TB22_EVENT_CONN_OK | TB22_EVENT_CONN_FAIL);
-        tb22_socket_event_recv(device, event, 0, RT_EVENT_FLAG_OR);
-
-        if (at_obj_exec_cmd(device->client, resp, "AT+NSOCO=%d,%s,%d", 
-                            device_socket, ip, port) < 0)
+        return -RT_ERROR;
+    }
+    
+    tb22_sock = (struct tb22_sock_t*)rt_malloc(sizeof(struct tb22_sock_t));
+    if (tb22_sock == RT_NULL)
+    {
+        return -RT_ENOMEM;
+    }
+    tb22_sock->index = socket_index;
+    tb22_sock->device_socket = device_socket;
+    socket->user_data = (void*)tb22_sock;
+    
+    /* 设置连接超时时间(60s) */
+    resp->timeout = rt_tick_from_millisecond(60 * 1000);
+    
+    /* 建立TCP连接 */
+    for(i = 0; i<CONN_RETRY; i++)
+    {
+        result = at_obj_exec_cmd(device->client, resp, "AT+NSOCO=%d,%s,%d", 
+                            device_socket, ip, port);
+        if (result == RT_EOK)
         {
-            result = -RT_ERROR;
             break;
         }
 
-        /* waiting result event from AT URC, the device default connection timeout is 60 seconds*/
-        if (tb22_socket_event_recv(device, SET_EVENT(device_socket, 0), 
-                                    60 * RT_TICK_PER_SECOND, RT_EVENT_FLAG_OR) < 0)
-        {
-            LOG_E("%s device socket(%d) wait connect result timeout.", device->name, device_socket);
-            result = -RT_ETIMEOUT;
-            break;
-        }
-        /* waiting OK or failed result */
-        event_result = tb22_socket_event_recv(device, TB22_EVENT_CONN_OK | TB22_EVENT_CONN_FAIL, 
-                                                1 * RT_TICK_PER_SECOND, RT_EVENT_FLAG_OR);
-        if (event_result < 0)
-        {
-            LOG_E("%s device socket(%d) wait connect OK|FAIL timeout.", device->name, device_socket);
-            result = -RT_ETIMEOUT;
-            break;
-        }
-        /* check result */
-        if (event_result & TB22_EVENT_CONN_OK)
-        {
-            result = RT_EOK;
-            break;
-        }
-        
-        LOG_D("%s device socket(%d) connect failed, the socket was not be closed and now will connect retry.",
-                    device->name, device_socket);
-        if (tb22_socket_close(socket) < 0)
-        {
-            result = -RT_ERROR;
-            break;
-        }
+        rt_thread_mdelay(1000);
+        /* 重试 */
     }
 
     if (i == CONN_RETRY)
     {
         LOG_E("%s device socket(%d) connect failed.", device->name, device_socket);
+        
+        rt_free(socket->user_data);
+        socket->user_data = (void*)socket_index;
+        
         result = -RT_ERROR;
     }
     
@@ -256,59 +227,117 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     return result;
 }
 
-static int at_get_send_size(struct at_socket *socket, size_t *size, size_t *acked, size_t *nacked)
+/**
+ * convert data to hex string
+ *
+ * @param data data to convert
+ * @param data_len data length (in bytes)
+ * @param hex_str_buf buffer to hex string
+ * @param buf_len buffer length (in bytes)
+ *
+ * @return the data length of convert success
+ */
+static uint32_t tb22_to_hex_str(const uint8_t* data, size_t data_len, 
+    char* hex_str_buf, size_t buf_len)
 {
-    int result = 0;
-    at_response_t resp = RT_NULL;
-    int device_socket = (int) socket->user_data;
-    struct at_device *device = (struct at_device *) socket->device;
-
-    resp = at_create_resp(128, 0, rt_tick_from_millisecond(300));
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create.", device->name);
-        return -RT_ENOMEM;
+    if ((NULL == hex_str_buf)
+        || (buf_len <=0 ))
+    { // 缓冲区无效
+        return 0;
+    }
+    
+    /* 清空缓冲区为"" */
+    hex_str_buf[0] = '\0';
+    
+    if ((NULL == data)
+        || (data_len <=0 ))
+    { // 数据为空
+        return 0;
     }
 
-    if (at_obj_exec_cmd(device->client, resp, "AT+QISEND=%d,0", device_socket) < 0)
+    /* 最大可转换长度为: ((buf_len - 1) / 2) */
+    uint32_t convert_len = MIN(data_len, ((buf_len - 1) / 2));
+    uint32_t i = 0;
+    uint32_t j = 0;
+    for (i = 0; i < convert_len; ++i)
     {
-        result = -RT_ERROR;
-        goto __exit;
+        uint8_t data_byte = data[i];
+        uint8_t high = (data_byte >> 4) & 0x0F;
+        uint8_t low = data_byte & 0x0F;
+        hex_str_buf[j++] = TO_HEX_CHAR(high);
+        hex_str_buf[j++] = TO_HEX_CHAR(low);
     }
+    hex_str_buf[j] = '\0';
 
-    if (at_resp_parse_line_args_by_kw(resp, "+QISEND:", "+QISEND: %d,%d,%d", size, acked, nacked) <= 0)
-    {
-        result = -RT_ERROR;
-        goto __exit;
-    }
-
-__exit:
-    if (resp)
-    {
-        at_delete_resp(resp);
-    }
-
-    return result;
+    /* 返回实际转换的数据长度 */
+    return convert_len;
 }
 
-static int at_wait_send_finish(struct at_socket *socket, size_t settings_size)
+/**
+ * convert hex char to byte data(Example: '0'->0x00,'A'->0x0A)
+ *
+ * @param hex_char hex char
+ *
+ * @return the byte data
+ */
+rt_inline uint8_t tb22_hex_char_to_byte(char hex_char)
 {
-    /* get the timeout by the input data size */
-    rt_tick_t timeout = rt_tick_from_millisecond(settings_size);
-    rt_tick_t last_time = rt_tick_get();
-    size_t size = 0, acked = 0, nacked = 0xFFFF;
-
-    while (rt_tick_get() - last_time <= timeout)
+    uint8_t byte_val = 0;
+    
+    if ((hex_char >= '0') && (hex_char <= '9'))
     {
-        at_get_send_size(socket, &size, &acked, &nacked);
-        if (nacked == 0)
-        {
-            return RT_EOK;
-        }
-        rt_thread_mdelay(100);
+        byte_val = hex_char - '0';
     }
+    else if ((hex_char >= 'a') && (hex_char <= 'f'))
+    {
+        byte_val = 0x0A + (hex_char - 'a');
+    }
+    else if ((hex_char >= 'A') && (hex_char <= 'F'))
+    {
+        byte_val = 0x0A + (hex_char - 'A');
+    } // else 非法字符
+    
+    return byte_val;
+}
 
-    return -RT_ETIMEOUT;
+/**
+ * convert hex string to byte data(can be convert in place)
+ *
+ * @param hex_str hex string to convert
+ * @param str_len string length (in bytes)
+ * @param data_buf buffer to byte data
+ * @param buf_len buffer length (in bytes)
+ *
+ * @return the byte data length of convert success
+ */
+static uint32_t tb22_from_hex_str(const char* hex_str, size_t str_len, 
+    uint8_t* data_buf, size_t buf_len)
+{
+    if ((NULL == data_buf)
+        || (buf_len <=0 ))
+    { // 缓冲区无效
+        return 0;
+    }
+    
+    if ((NULL == hex_str)
+        || (str_len <=0 ))
+    { // 数据为空
+        return 0;
+    }
+    
+    uint32_t convert_len = MIN(buf_len, (str_len / 2));
+    uint32_t i = 0;
+    uint32_t j = 0;
+    for (i = 0; i < convert_len; ++i)
+    {
+        char hight_char = hex_str[j++];
+        char low_char = hex_str[j++];
+        uint8_t high_byte = tb22_hex_char_to_byte(hight_char);
+        uint8_t low_byte = tb22_hex_char_to_byte(low_char);
+        data_buf[i] = (high_byte << 4) | low_byte;
+    }
+    
+    return convert_len;
 }
 
 /**
@@ -330,7 +359,9 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     int result = 0, event_result = 0;
     size_t cur_pkt_size = 0, sent_size = 0;
     at_response_t resp = RT_NULL;
-    int device_socket = (int) socket->user_data;
+    struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
+    int socket_index = tb22_sock->index;
+    int device_socket = tb22_sock->device_socket;
     struct at_device *device = (struct at_device *) socket->device;
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *) device->user_data;
     rt_mutex_t lock = device->client->lock;
@@ -347,14 +378,11 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     rt_mutex_take(lock, RT_WAITING_FOREVER);
 
     /* set current socket for send URC event */
-    tb22->user_data = (void *) device_socket;
+    tb22->user_data = (void *) tb22_sock;
 
     /* clear socket send event */
-    event = SET_EVENT(device_socket, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL);
+    event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL);
     tb22_socket_event_recv(device, event, 0, RT_EVENT_FLAG_OR);
-
-    /* set AT client end sign to deal with '>' sign.*/
-    at_obj_set_end_sign(device->client, '>');
 
     while (sent_size < bfsz)
     {
@@ -366,33 +394,26 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         {
             cur_pkt_size = TB22_MODULE_SEND_MAX_SIZE;
         }
-
-        /* send the "AT+QISEND" commands to AT server than receive the '>' response on the first line. */
-        if (at_obj_exec_cmd(device->client, resp, "AT+QISEND=%d,%d", device_socket, (int)cur_pkt_size) < 0)
+        
+        /* 数据转换成hex字符串 */
+        cur_pkt_size = tb22_to_hex_str((const uint8_t*)buff + sent_size, cur_pkt_size, at_send_buf, sizeof(at_send_buf));
+    
+        /* send the "AT+NSOSD" commands to AT server. */
+        if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s", device_socket, (int)cur_pkt_size, at_send_buf) < 0)
         {
             result = -RT_ERROR;
             goto __exit;
         }
         
-        rt_thread_mdelay(5);//delay at least 4ms
-        
-        /* send the real data to server or client */
-        result = (int) at_client_obj_send(device->client, buff + sent_size, cur_pkt_size);
-        if (result == 0)
+        int sock = 0, len = 0;
+        if (at_resp_parse_line_args(resp, 1, "%d,%d,%d", &sock, &len) <= 0)
         {
             result = -RT_ERROR;
             goto __exit;
         }
-
-        /* waiting result event from AT URC */
-        event = SET_EVENT(device_socket, 0);
-        event_result = tb22_socket_event_recv(device, event, 10 * RT_TICK_PER_SECOND, RT_EVENT_FLAG_OR);
-        if (event_result < 0)
-        {
-            LOG_E("%s device socket(%d) wait event timeout.", device->name, device_socket);
-            result = -RT_ETIMEOUT;
-            goto __exit;
-        }
+        RT_ASSERT(device_socket == sock);
+        cur_pkt_size = len;
+        
         /* waiting OK or failed result */
         event = TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL;
         event_result = tb22_socket_event_recv(device, event, 1 * RT_TICK_PER_SECOND, RT_EVENT_FLAG_OR);
@@ -410,18 +431,10 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
             goto __exit;
         }
 
-        if (type == AT_SOCKET_TCP)
-        {
-            at_wait_send_finish(socket, 2*cur_pkt_size);
-        }
-
         sent_size += cur_pkt_size;
     }
 
 __exit:
-    /* reset the end sign for data conflict */
-    at_obj_set_end_sign(device->client, 0);
-
     rt_mutex_release(lock);
 
     if (resp)
@@ -519,6 +532,39 @@ int tb22_domain_resolve(const char *name, char ip[16])
 }
 
 /**
+ * get at socket object by device socket descriptor
+ *
+ * @param device at device object
+ * @param device_socket device socket descriptor
+ *
+ * @return  device socket descriptor or RT_NULL
+ */
+static struct at_socket *at_get_socket_by_device_socket(struct at_device *device, int device_socket)
+{
+    int i = 0;
+    struct at_socket *socket = RT_NULL;
+    for (i = 0; i < device->class->socket_num; ++i)
+    {
+        struct at_socket *sock = &(device->sockets[i]);
+        if (sock->magic == AT_SOCKET_MAGIC)
+        {
+            struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(sock->user_data);
+            if (tb22_sock != RT_NULL)
+            {
+                if((device_socket == tb22_sock->device_socket)
+                    && (i == tb22_sock->index))
+                {
+                    socket = sock;
+                    break;
+                }
+            }
+        }
+    }
+    
+    return socket;
+}
+
+/**
  * set AT socket event notice callback
  *
  * @param event notice event
@@ -532,39 +578,13 @@ static void tb22_socket_set_event_cb(at_socket_evt_t event, at_evt_cb_t cb)
     }
 }
 
-static void urc_connect_func(struct at_client *client, const char *data, rt_size_t size)
-{
-    int device_socket = 0, result = 0;
-    struct at_device *device = RT_NULL;
-    char *client_name = client->device->parent.name;
-
-    RT_ASSERT(data && size);
-
-    device = at_device_get_by_name(AT_DEVICE_NAMETYPE_CLIENT, client_name);
-    if (device == RT_NULL)
-    {
-        LOG_E("get device(%s) failed.", client_name);
-        return;
-    }
-
-    sscanf(data, "+QIOPEN: %d,%d", &device_socket , &result);
-
-    if (result == 0)
-    {
-        tb22_socket_event_send(device, SET_EVENT(device_socket, TB22_EVENT_CONN_OK));
-    }
-    else
-    {
-        at_tcp_ip_errcode_parse(result);
-        tb22_socket_event_send(device, SET_EVENT(device_socket, TB22_EVENT_CONN_FAIL));
-    }
-}
-
 static void urc_send_func(struct at_client *client, const char *data, rt_size_t size)
 {
-    int device_socket = 0;
+    int device_socket = 0, sequence = 0, status = 0;
+    int socket_index = 0;
     struct at_device *device = RT_NULL;
     struct at_device_tb22 *tb22 = RT_NULL;
+    struct tb22_sock_t *tb22_sock = RT_NULL;
     char *client_name = client->device->parent.name;
 
     RT_ASSERT(data && size);
@@ -577,15 +597,20 @@ static void urc_send_func(struct at_client *client, const char *data, rt_size_t 
     }
     
     tb22 = (struct at_device_tb22 *) device->user_data;
-    device_socket = (int) tb22->user_data;
+    tb22_sock = (struct tb22_sock_t*)(tb22->user_data);
+    socket_index = tb22_sock->index;
 
-    if (rt_strstr(data, "SEND OK"))
+    sscanf(data, "+NSOSTR:%d,%d,%d", &device_socket, &sequence, &status);
+    if (device_socket == tb22_sock->device_socket)
     {
-        tb22_socket_event_send(device, SET_EVENT(device_socket, TB22_EVENT_SEND_OK));
-    }
-    else if (rt_strstr(data, "SEND FAIL"))
-    {
-        tb22_socket_event_send(device, SET_EVENT(device_socket, TB22_EVENT_SEND_FAIL));
+        if (1 == status)
+        {
+            tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SEND_OK));
+        }
+        else if (0 == status)
+        {
+            tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SEND_FAIL));
+        }
     }
 }
 
@@ -605,26 +630,29 @@ static void urc_close_func(struct at_client *client, const char *data, rt_size_t
         return;
     }
 
-    sscanf(data, "+QIURC: \"closed\",%d", &device_socket);
+    sscanf(data, "+NSOCLI:%d", &device_socket);
+    
     /* get at socket object by device socket descriptor */
-    socket = &(device->sockets[device_socket]);
-
-    /* notice the socket is disconnect by remote */
-    if (at_evt_cb_set[AT_SOCKET_EVT_CLOSED])
+    socket = at_get_socket_by_device_socket(device, device_socket);
+    if (socket != RT_NULL)
     {
-        at_evt_cb_set[AT_SOCKET_EVT_CLOSED](socket, AT_SOCKET_EVT_CLOSED, NULL, 0);
+        /* notice the socket is disconnect by remote */
+        if (at_evt_cb_set[AT_SOCKET_EVT_CLOSED])
+        {
+            at_evt_cb_set[AT_SOCKET_EVT_CLOSED](socket, AT_SOCKET_EVT_CLOSED, NULL, 0);
+        }
     }
 }
 
 static void urc_recv_func(struct at_client *client, const char *data, rt_size_t size)
 {
     int device_socket = 0;
-    rt_int32_t timeout;
-    rt_size_t bfsz = 0, temp_size = 0;
-    char *recv_buf = RT_NULL, temp[8] = {0};
+    rt_size_t bfsz = 0;
+    char *recv_buf = RT_NULL;
     struct at_socket *socket = RT_NULL;
     struct at_device *device = RT_NULL;
     char *client_name = client->device->parent.name;
+    at_response_t resp = RT_NULL;
 
     RT_ASSERT(data && size);
 
@@ -636,50 +664,82 @@ static void urc_recv_func(struct at_client *client, const char *data, rt_size_t 
     }
 
     /* get the current socket and receive buffer size by receive data */
-    sscanf(data, "+QIURC: \"recv\",%d,%d", &device_socket, (int *) &bfsz);
-    /* set receive timeout by receive buffer length, not less than 10 ms */
-    timeout = bfsz > 10 ? bfsz : 10;
+    sscanf(data, "+NSONMI:%d,%d", &device_socket, (int*)&bfsz);
 
     if (device_socket < 0 || bfsz == 0)
     {
         return;
     }
-
-    recv_buf = (char *) rt_calloc(1, bfsz);
-    if (recv_buf == RT_NULL)
-    {
-        LOG_E("no memory for URC receive buffer(%d).", bfsz);
-        /* read and clean the coming data */
-        while (temp_size < bfsz)
-        {
-            if (bfsz - temp_size > sizeof(temp))
-            {
-                at_client_obj_recv(client, temp, sizeof(temp), timeout);
-            }
-            else
-            {
-                at_client_obj_recv(client, temp, bfsz - temp_size, timeout);
-            }
-            temp_size += sizeof(temp);
-        }
-        return;
-    }
-
-    /* sync receive data */
-    if (at_client_obj_recv(client, recv_buf, bfsz, timeout) != bfsz)
-    {
-        LOG_E("%s device receive size(%d) data failed.", device->name, bfsz);
-        rt_free(recv_buf);
-        return;
-    }
-
+    
     /* get at socket object by device socket descriptor */
-    socket = &(device->sockets[device_socket]);
-
-    /* notice the receive buffer and buffer size */
-    if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
+    socket = at_get_socket_by_device_socket(device, device_socket);
+    if (socket == RT_NULL)
     {
-        at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, recv_buf, bfsz);
+        LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
+        return;
+    }
+
+    int rem_len = bfsz; // 剩余数据长度
+    while (rem_len > 0)
+    { // 收取所有数据
+        recv_buf = (char *) rt_calloc(1, rem_len);
+        if (recv_buf == RT_NULL)
+        {
+            LOG_E("no memory for URC receive buffer(%d).", rem_len);
+            /* read and clean the coming data */
+            at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+            break;
+        }
+
+        resp = at_create_resp((rem_len * 2) + 64, 0, rt_tick_from_millisecond(300));
+        if (recv_buf == RT_NULL)
+        {
+            LOG_E("no memory for resp create.");
+            /* read and clean the coming data */
+            at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+            break;
+        }
+    
+        if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, rem_len) != RT_EOK)
+        {
+            /* read and clean the coming data */
+            at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+            break;
+        }
+        
+        int sock = 0, port = 0, len = 0;
+        char ip[32] = "";
+        if (at_resp_parse_line_args(resp, 1, "%d,%s,%d,%d,%s,%d", &sock, ip, &port, &len, recv_buf, &rem_len) <= 0)
+        {
+            break;
+        }
+        RT_ASSERT(device_socket == sock);
+        if (len <= 0)
+        {
+            break;
+        }
+        
+        at_delete_resp(resp);
+        resp = RT_NULL;
+        
+        /* Hex字符串转换二进制数据(就地转换) */
+        uint8_t *data_buf = (uint8_t*)recv_buf;
+        uint32_t buf_len = (uint32_t)bfsz;
+        uint32_t data_len = tb22_from_hex_str(recv_buf, (uint32_t)len, data_buf, buf_len);
+
+        if (socket != RT_NULL)
+        {
+            /* notice the receive buffer and buffer size */
+            if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
+            {
+                at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)data_buf, data_len);
+            }
+        }
+    }
+    
+    if (resp != RT_NULL)
+    {
+        at_delete_resp(resp);
     }
 }
 
@@ -714,40 +774,12 @@ static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_
     tb22_socket_event_send(device, TB22_EVENT_DOMAIN_OK);
 }
 
-static void urc_func(struct at_client *client, const char *data, rt_size_t size)
-{
-    RT_ASSERT(data);
-
-    LOG_I("URC data : %.*s", size, data);
-}
-
-static void urc_dns_func(struct at_client *client, const char *data, rt_size_t size)
-{
-    RT_ASSERT(data && size);
-
-    urc_dnsqip_func(client, data, size);
-}
-
-static void urc_qiurc_func(struct at_client *client, const char *data, rt_size_t size)
-{
-    RT_ASSERT(data && size);
-
-    switch(*(data + 9))
-    {
-    case 'c' : urc_close_func(client, data, size); break;//+QIURC: "closed"
-    case 'r' : urc_recv_func(client, data, size); break;//+QIURC: "recv"
-    case 'd' : urc_dnsqip_func(client, data, size); break;//+QIURC: "dnsgip"
-    default  : urc_func(client, data, size);      break;
-    }
-}
-
 static const struct at_urc urc_table[] =
 {
-    {"SEND OK",     "\r\n",                 urc_send_func},
-    {"SEND FAIL",   "\r\n",                 urc_send_func},
-    {"+QIOPEN:",    "\r\n",                 urc_connect_func},
-    {"+QIURC:",     "\r\n",                 urc_qiurc_func},
-    {"+QDNS:",      "\r\n",                 urc_dns_func},
+    {"+NSOSTR:",    "\r\n",                 urc_send_func},
+    {"+NSOCLI",     "\r\n",                 urc_close_func},
+    {"+NSONMI",     "\r\n",                 urc_recv_func},
+    {"+QDNS:",      "\r\n",                 urc_dnsqip_func},
 };
 
 static const struct at_socket_ops tb22_socket_ops =

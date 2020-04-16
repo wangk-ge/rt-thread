@@ -40,11 +40,14 @@ static int tb22_reset(struct at_device *device)
 {
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
 
-    rt_pin_mode(tb22->power_pin, PIN_MODE_OUTPUT);
-    rt_pin_write(tb22->power_pin, PIN_LOW);
-    rt_thread_mdelay(300);
-    rt_pin_write(tb22->power_pin, PIN_HIGH);
-    tb22->power_status = 1;
+    if (tb22->power_pin != -1)
+    {
+        rt_pin_mode(tb22->power_pin, PIN_MODE_OUTPUT);
+        rt_pin_write(tb22->power_pin, PIN_LOW);
+        rt_thread_mdelay(300);
+        rt_pin_write(tb22->power_pin, PIN_HIGH);
+        tb22->power_status = 1;
+    }
 
     return(RT_EOK);
 }
@@ -529,7 +532,7 @@ static void tb22_init_thread_entry(void *parameter)
 #define INIT_RETRY                     5
 #define CPIN_RETRY                     5
 #define CSQ_RETRY                      20
-#define CGREG_RETRY                    50
+#define CGREG_RETRY                    300 // 手册建议开机入网超时时间不小于300s
 #define IPADDR_RETRY                   10
 #define AT_DEFAULT_TIMEOUT             5000
 
@@ -570,7 +573,7 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
 
-        /* disable auto register */
+        /* disable auto register(禁用IoT平台的注册功能) */
         if (at_obj_exec_cmd(device->client, resp, "AT+QREGSWT=2") != RT_EOK)
         {
             result = -RT_ERROR;
@@ -593,6 +596,22 @@ static void tb22_init_thread_entry(void *parameter)
         while (at_obj_exec_cmd(device->client, resp, "AT") != RT_EOK)
         {
             rt_thread_mdelay(1000);
+        }
+        
+        /* set min function */
+        if (at_obj_exec_cmd(device->client, resp, "AT+CFUN=0") != RT_EOK)
+        {
+            result = -RT_ERROR;
+            LOG_E(">> AT+CFUN=0");
+            goto __exit;
+        }
+        
+        /* 清除先验频点 */
+        if (at_obj_exec_cmd(device->client, resp, "AT+NCSEARFCN") != RT_EOK)
+        {
+            result = -RT_ERROR;
+            LOG_E(">> AT+NCSEARFCN");
+            goto __exit;
         }
 
         /* check IMEI */
@@ -780,8 +799,6 @@ static void tb22_init_thread_entry(void *parameter)
     __exit:
         if (result != RT_EOK)
         {
-            /* power off the tb22 device */
-            //tb22_power_off(device);
             rt_thread_mdelay(1000);
 
             LOG_I("%s device initialize retry...", device->name);
