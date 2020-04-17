@@ -255,9 +255,6 @@ static rt_err_t app_mqtt_report()
 
 int main(void)
 {
-    /* 关闭LOG输出(可使用AT指令打开) */
-    ulog_global_filter_lvl_set(LOG_FILTER_LVL_SILENT);
-    
     /* 初始化APP */
     rt_err_t ret = app_init();
     if (ret != RT_EOK)
