@@ -6,7 +6,7 @@
 
 /* RT-Thread Kernel */
 
-#define RT_NAME_MAX 8
+#define RT_NAME_MAX 16
 #define RT_ALIGN_SIZE 4
 #define RT_THREAD_PRIORITY_32
 #define RT_THREAD_PRIORITY_MAX 32
@@ -17,7 +17,6 @@
 #define RT_IDLE_HOOK_LIST_SIZE 4
 #define IDLE_THREAD_STACK_SIZE 1024
 #define RT_DEBUG
-#define RT_DEBUG_COLOR
 
 /* Inter-Thread communication */
 
@@ -58,28 +57,9 @@
 
 /* Command shell */
 
-#define RT_USING_FINSH
-#define FINSH_THREAD_NAME "tshell"
-#define FINSH_USING_HISTORY
-#define FINSH_HISTORY_LINES 5
-#define FINSH_USING_SYMTAB
-#define FINSH_USING_DESCRIPTION
-#define FINSH_THREAD_PRIORITY 20
-#define FINSH_THREAD_STACK_SIZE 4096
-#define FINSH_CMD_SIZE 80
-#define FINSH_USING_MSH
-#define FINSH_USING_MSH_DEFAULT
-#define FINSH_USING_MSH_ONLY
-#define FINSH_ARG_MAX 10
 
 /* Device virtual file system */
 
-#define RT_USING_DFS
-#define DFS_USING_WORKDIR
-#define DFS_FILESYSTEMS_MAX 2
-#define DFS_FILESYSTEM_TYPES_MAX 2
-#define DFS_FD_MAX 16
-#define RT_USING_DFS_DEVFS
 
 /* Device Drivers */
 
@@ -92,6 +72,12 @@
 #define RT_SERIAL_USING_DMA
 #define RT_SERIAL_RB_BUFSZ 64
 #define RT_USING_PIN
+#define RT_USING_RTC
+#define RT_USING_SPI
+#define RT_USING_SFUD
+#define RT_SFUD_USING_SFDP
+#define RT_SFUD_USING_FLASH_INFO_TABLE
+#define RT_SFUD_SPI_MAX_HZ 50000000
 
 /* Using USB */
 
@@ -99,7 +85,6 @@
 /* POSIX layer and C standard library */
 
 #define RT_USING_LIBC
-#define RT_USING_POSIX
 
 /* Network */
 
@@ -110,7 +95,7 @@
 /* protocol stack implement */
 
 #define SAL_USING_AT
-#define SAL_USING_POSIX
+#define SAL_SOCKETS_NUM 7
 
 /* Network interface device */
 
@@ -129,10 +114,13 @@
 
 #define RT_USING_AT
 #define AT_DEBUG
+#define AT_USING_SERVER
+#define AT_SERVER_DEVICE "uart1"
+#define AT_SERVER_RECV_BUFF_LEN 256
+#define AT_CMD_END_MARK_CRLF
 #define AT_USING_CLIENT
 #define AT_CLIENT_NUM_MAX 1
 #define AT_USING_SOCKET
-#define AT_USING_CLI
 #define AT_PRINT_RAW_CMD
 #define AT_CMD_MAX_LEN 2048
 #define AT_SW_VERSION_NUM 0x10300
@@ -142,16 +130,43 @@
 
 /* Utilities */
 
+#define RT_USING_ULOG
+#define ULOG_OUTPUT_LVL_D
+#define ULOG_OUTPUT_LVL 7
+#define ULOG_USING_ISR_LOG
+#define ULOG_ASSERT_ENABLE
+#define ULOG_LINE_BUF_SIZE 128
+
+/* log format */
+
+#define ULOG_OUTPUT_FLOAT
+#define ULOG_OUTPUT_TIME
+#define ULOG_OUTPUT_LEVEL
+#define ULOG_OUTPUT_TAG
+#define ULOG_OUTPUT_THREAD_NAME
+#define ULOG_BACKEND_USING_CONSOLE
+#define ULOG_USING_FILTER
 
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
 
-#define MQTT_DEBUG
-#define PKG_USING_MYMQTT
-#define PKG_USING_MYMQTT_LATEST_VERSION
-#define PKG_USING_MYMQTT_EXAMPLE
-#define MQTT_MAX_MESSAGE_HANDLERS 1
+#define PKG_USING_KAWAII_MQTT
+#define KAWAII_MQTT_LOG_LEVEL 5
+#define KAWAII_MQTT_VERSION 4
+#define KAWAII_MQTT_KEEP_ALIVE_INTERVAL 30
+#define KAWAII_MQTT_THREAD_STACK_SIZE 4096
+#define KAWAII_MQTT_THREAD_PRIO 5
+#define KAWAII_MQTT_THREAD_TICK 50
+#define KAWAII_MQTT_MAX_PACKET_ID 0xFFFE
+#define KAWAII_MQTT_TOPIC_LEN_MAX 64
+#define KAWAII_MQTT_ACK_HANDLER_NUM_MAX 64
+#define KAWAII_MQTT_DEFAULT_BUF_SIZE 1024
+#define KAWAII_MQTT_DEFAULT_CMD_TIMEOUT 20000
+#define KAWAII_MQTT_MAX_CMD_TIMEOUT 30000
+#define KAWAII_MQTT_MIN_CMD_TIMEOUT 1000
+#define KAWAII_MQTT_RECONNECT_DEFAULT_DURATION 1000
+#define PKG_USING_KAWAII_MQTT_LATEST_VERSION
 
 /* Wi-Fi */
 
@@ -200,12 +215,15 @@
 /* Onboard Peripheral Drivers */
 
 #define BSP_USING_RS232
+#define BSP_USING_SPI_FLASH
 #define AT_DEVICE_USING_TB22
 #define AT_DEVICE_TB22_INIT_ASYN
 #define TB22_POWER_PIN 33
 #define TB22_STATUS_PIN -1
+#define TB22_DEVICE_NAME "tb22"
 #define TB22_CLIENT_NAME "uart3"
 #define TB22_RECV_BUFF_LEN 2048
+#define KAWAII_MQTT_USE_SAL
 
 /* On-chip Peripheral Drivers */
 
@@ -217,6 +235,12 @@
 #define BSP_UART3_RX_USING_DMA
 #define BSP_USING_UART5
 #define BSP_UART5_RX_USING_DMA
+#define BSP_USING_SPI
+#define BSP_USING_SPI1
+#define BSP_SPI1_TX_USING_DMA
+#define BSP_SPI1_RX_USING_DMA
+#define BSP_USING_ONCHIP_RTC
+#define BSP_RTC_USING_LSE
 
 /* Board extended module Drivers */
 

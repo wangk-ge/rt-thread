@@ -202,6 +202,7 @@ static int tb22_netdev_set_info(struct netdev *netdev)
     }
 
     /* set network interface device dns server */
+#if 0
     {
         #define DNS_ADDR_SIZE_MAX   16
         char dns_server1[DNS_ADDR_SIZE_MAX] = {0}, dns_server2[DNS_ADDR_SIZE_MAX] = {0};
@@ -238,6 +239,7 @@ static int tb22_netdev_set_info(struct netdev *netdev)
         inet_aton(dns_server2, &addr);
         netdev_low_level_set_dns_server(netdev, 1, &addr);
     }
+#endif
 
 __exit:
     if (resp)
@@ -396,6 +398,7 @@ __exit:
 #ifdef AT_USING_SOCKET
     int tb22_domain_resolve(const char *name, char ip[16]);
 #endif
+#ifdef RT_USING_FINSH
 #ifdef NETDEV_USING_PING
 static int tb22_netdev_ping(struct netdev *netdev, const char *host,
         size_t data_len, uint32_t timeout, struct netdev_ping_resp *ping_resp)
@@ -485,6 +488,7 @@ __exit:
     return result;
 }
 #endif /* NETDEV_USING_PING */
+#endif
 
 const struct netdev_ops tb22_netdev_ops =
 {
@@ -495,9 +499,13 @@ const struct netdev_ops tb22_netdev_ops =
     tb22_netdev_set_dns_server,
     RT_NULL,
 
+#ifdef RT_USING_FINSH
 #ifdef NETDEV_USING_PING
     tb22_netdev_ping,
 #endif
+    RT_NULL,
+#endif
+    
     RT_NULL,
 };
 

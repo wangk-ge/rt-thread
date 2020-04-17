@@ -26,10 +26,35 @@
 #define AT_END_CR_LF                   "\r\n"
 
 static struct at_client at_client_table[AT_CLIENT_NUM_MAX] = { 0 };
+static char send_buf[AT_CMD_MAX_LEN];
+static rt_size_t last_cmd_len = 0;
 
-extern rt_size_t at_vprintfln(rt_device_t device, const char *format, va_list args);
 extern void at_print_raw_cmd(const char *type, const char *cmd, rt_size_t size);
 extern const char *at_get_last_cmd(rt_size_t *cmd_size);
+
+const char *at_client_get_last_cmd(rt_size_t *cmd_size)
+{
+    *cmd_size = last_cmd_len;
+    return send_buf;
+}
+
+/**
+ * AT client send data and newline to AT device
+ *
+ * @param format the input format
+ */
+void at_client_vprintfln(rt_device_t device, const char *format, va_list args)
+{
+    last_cmd_len = vsnprintf(send_buf, sizeof(send_buf), format, args);
+
+#ifdef AT_PRINT_RAW_CMD
+    at_print_raw_cmd("sendline", send_buf, last_cmd_len);
+#endif
+
+    rt_device_write(device, 0, send_buf, last_cmd_len);
+    
+    rt_device_write(device, 0, "\r\n", 2);
+}
 
 /**
  * Create response object.
@@ -113,7 +138,7 @@ at_response_t at_resp_set_info(at_response_t resp, rt_size_t buf_size, rt_size_t
         resp->buf = (char *) rt_realloc(resp->buf, buf_size);
         if (!resp->buf)
         {
-            LOG_D("No memory for realloc response buffer size(%d).", buf_size);
+            LOG_E("No memory for realloc response buffer size(%d).", buf_size);
             return RT_NULL;
         }
     }
@@ -308,22 +333,22 @@ int at_obj_exec_cmd(at_client_t client, at_response_t resp, const char *cmd_expr
     }
 
     va_start(args, cmd_expr);
-    at_vprintfln(client->device, cmd_expr, args);
+    at_client_vprintfln(client->device, cmd_expr, args);
     va_end(args);
 
     if (resp != RT_NULL)
     {
         if (rt_sem_take(client->resp_notice, resp->timeout) != RT_EOK)
         {
-            cmd = at_get_last_cmd(&cmd_size);
-            LOG_D("execute command (%.*s) timeout (%d ticks)!", cmd_size, cmd, resp->timeout);
+            cmd = at_client_get_last_cmd(&cmd_size);
+            LOG_E("execute command (%.*s) timeout (%d ticks)!", cmd_size, cmd, resp->timeout);
             client->resp_status = AT_RESP_TIMEOUT;
             result = -RT_ETIMEOUT;
             goto __exit;
         }
         if (client->resp_status != AT_RESP_OK)
         {
-            cmd = at_get_last_cmd(&cmd_size);
+            cmd = at_client_get_last_cmd(&cmd_size);
             LOG_E("execute command (%.*s) failed!", cmd_size, cmd);
             result = -RT_ERROR;
             goto __exit;

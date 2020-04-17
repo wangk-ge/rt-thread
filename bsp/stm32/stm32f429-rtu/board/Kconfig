@@ -42,8 +42,12 @@ menu "Onboard Peripheral Drivers"
             int "Power status pin"
             default -1
 
+        config TB22_DEVICE_NAME
+            string "AT device name"
+            default "tb22"
+			
         config TB22_CLIENT_NAME
-            string "AT client device name"
+            string "AT client name"
             default "uart3"
 
         config TB22_RECV_BUFF_LEN
@@ -51,6 +55,10 @@ menu "Onboard Peripheral Drivers"
             default 512
 
     endif
+	
+	config KAWAII_MQTT_USE_SAL
+        bool "Enable SAL KAWAII_MQTT"
+        default y
     
 endmenu
 

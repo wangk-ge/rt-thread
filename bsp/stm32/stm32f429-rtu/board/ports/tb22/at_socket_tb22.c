@@ -117,7 +117,13 @@ static int tb22_socket_recv_info_send_mail(struct at_device *device, int device_
     recv_info->device_socket = device_socket;
     recv_info->data_len = data_len;
     
-    return (int)rt_mb_send(at_recv_thread_mb, (rt_ubase_t)recv_info);
+    rt_err_t ret = rt_mb_send(at_recv_thread_mb, (rt_ubase_t)recv_info);
+    if (ret != RT_EOK)
+    {
+        rt_free(recv_info);
+    }
+    
+    return ret;
 }
 
 /**
@@ -479,7 +485,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         
         /* waiting OK or failed result */
         event = TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL;
-        event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(10 * 1000), RT_EVENT_FLAG_OR);
+        event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(30 * 1000), RT_EVENT_FLAG_OR);
         if (event_result < 0)
         {
             LOG_E("%s device socket(%d) wait sned OK|FAIL timeout.", device->name, device_socket);
@@ -564,7 +570,7 @@ int tb22_domain_resolve(const char *name, char ip[16])
     for(i = 0; i < RESOLVE_RETRY; i++)
     {
         /* waiting result event from AT URC, the device default connection timeout is 30 seconds.*/
-        if (tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, rt_tick_from_millisecond(10 * 1000), RT_EVENT_FLAG_OR) < 0)
+        if (tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, rt_tick_from_millisecond(30 * 1000), RT_EVENT_FLAG_OR) < 0)
         {
             result = -RT_ETIMEOUT;
             continue;

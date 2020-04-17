@@ -23,15 +23,14 @@
  */
 
 #include <at_device_tb22.h>
+#include <rtconfig.h>
 
-#define LOG_TAG                 "at.tb22"
+#define LOG_TAG    "at.tb22"
 #include <at_log.h>
-
-#define TB22_DEIVCE_NAME        "tb22"
 
 static struct at_device_tb22 _dev =
 {
-    TB22_DEIVCE_NAME,
+    TB22_DEVICE_NAME,
     TB22_CLIENT_NAME,
 
     TB22_POWER_PIN,

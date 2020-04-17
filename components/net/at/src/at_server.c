@@ -37,9 +37,8 @@
 static at_server_t at_server_local = RT_NULL;
 static at_cmd_t cmd_table = RT_NULL;
 static rt_size_t cmd_num;
-
-extern void at_vprintf(rt_device_t device, const char *format, va_list args);
-extern void at_vprintfln(rt_device_t device, const char *format, va_list args);
+static char send_buf[AT_CMD_MAX_LEN];
+static rt_size_t last_cmd_len = 0;
 
 /**
  * AT server send data to AT device
@@ -52,9 +51,11 @@ void at_server_printf(const char *format, ...)
 
     va_start(args, format);
 
-    at_vprintf(at_server_local->device, format, args);
+    last_cmd_len = vsnprintf(send_buf, sizeof(send_buf), format, args);
 
     va_end(args);
+    
+    rt_device_write(at_server_local->device, 0, send_buf, last_cmd_len);
 }
 
 /**
@@ -68,9 +69,13 @@ void at_server_printfln(const char *format, ...)
 
     va_start(args, format);
 
-    at_vprintfln(at_server_local->device, format, args);
+    last_cmd_len = vsnprintf(send_buf, sizeof(send_buf), format, args);
 
     va_end(args);
+    
+    rt_device_write(at_server_local->device, 0, send_buf, last_cmd_len);
+    
+    rt_device_write(at_server_local->device, 0, "\r\n", 2);
 }
 
 

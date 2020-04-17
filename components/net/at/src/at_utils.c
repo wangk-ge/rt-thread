@@ -11,9 +11,7 @@
 #include <at.h>
 #include <stdlib.h>
 #include <stdio.h>
-
-static char send_buf[AT_CMD_MAX_LEN];
-static rt_size_t last_cmd_len = 0;
+#include <rtdbg.h>
 
 /**
  * dump hex format data to console device
@@ -31,58 +29,31 @@ void at_print_raw_cmd(const char *name, const char *buf, rt_size_t size)
 
     for (i = 0; i < size; i += WIDTH_SIZE)
     {
-        rt_kprintf("[D/AT] %s: %04X-%04X: ", name, i, i + WIDTH_SIZE);
+        LOG_RAW("[D/AT] %s: %04X-%04X: ", name, i, i + WIDTH_SIZE);
         for (j = 0; j < WIDTH_SIZE; j++)
         {
             if (i + j < size)
             {
-                rt_kprintf("%02X ", buf[i + j]);
+                LOG_RAW("%02X ", buf[i + j]);
             }
             else
             {
-                rt_kprintf("   ");
+                LOG_RAW("   ");
             }
             if ((j + 1) % 8 == 0)
             {
-                rt_kprintf(" ");
+                LOG_RAW(" ");
             }
         }
-        rt_kprintf("  ");
+        LOG_RAW("  ");
         for (j = 0; j < WIDTH_SIZE; j++)
         {
             if (i + j < size)
             {
-                rt_kprintf("%c", __is_print(buf[i + j]) ? buf[i + j] : '.');
+                LOG_RAW("%c", __is_print(buf[i + j]) ? buf[i + j] : '.');
             }
         }
-        rt_kprintf("\n");
+        LOG_RAW("\n");
     }
 }
 
-const char *at_get_last_cmd(rt_size_t *cmd_size)
-{
-    *cmd_size = last_cmd_len;
-    return send_buf;
-}
-
-rt_size_t at_vprintf(rt_device_t device, const char *format, va_list args)
-{
-    last_cmd_len = vsnprintf(send_buf, sizeof(send_buf), format, args);
-
-#ifdef AT_PRINT_RAW_CMD
-    at_print_raw_cmd("sendline", send_buf, last_cmd_len);
-#endif
-
-    return rt_device_write(device, 0, send_buf, last_cmd_len);
-}
-
-rt_size_t at_vprintfln(rt_device_t device, const char *format, va_list args)
-{
-    rt_size_t len;
-
-    len = at_vprintf(device, format, args);
-
-    rt_device_write(device, 0, "\r\n", 2);
-
-    return len + 2;
-}

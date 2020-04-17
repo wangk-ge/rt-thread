@@ -591,7 +591,21 @@ void ulog_raw(const char *format, ...)
     int fmt_result;
 
     RT_ASSERT(ulog.init_ok);
-
+#ifdef ULOG_USING_FILTER
+    /* level filter */
+#ifndef ULOG_USING_SYSLOG
+    if (LOG_LVL_DBG > ulog.filter.level)
+    {
+        return;
+    }
+#else
+    if ((LOG_MASK(LOG_DEBUG) & ulog.filter.level) == 0)
+    {
+        return;
+    }
+#endif /* ULOG_USING_SYSLOG */
+#endif /* ULOG_USING_FILTER */
+    
     /* get log buffer */
     log_buf = get_log_buf();
 
