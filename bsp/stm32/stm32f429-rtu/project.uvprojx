@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER, RT_USING_ARM_LIBC, STM32F429xx</Define>
               <Undefine></Undefine>
-              <IncludePath>.;..\..\..\include;applications;.;board;board\CubeMX_Config\Inc;board\ports;board\ports\tb22;..\libraries\HAL_Drivers;..\libraries\HAL_Drivers\config;packages\at_device-latest\inc;packages\kawaii-mqtt-latest\common;packages\kawaii-mqtt-latest\mqtt;packages\kawaii-mqtt-latest\mqttclient;packages\kawaii-mqtt-latest\network;packages\kawaii-mqtt-latest\platform\RT-Thread;..\..\..\libcpu\arm\common;..\..\..\libcpu\arm\cortex-m4;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\spi;..\..\..\components\drivers\include;..\..\..\components\drivers\spi\sfud\inc;..\..\..\components\drivers\include;..\..\..\components\libc\compilers\armlibc;..\..\..\components\libc\compilers\common;..\..\..\components\net\at\include;..\..\..\components\net\at\at_socket;..\..\..\components\net\netdev\include;..\..\..\components\net\sal_socket\include;..\..\..\components\net\sal_socket\include\socket;..\..\..\components\net\sal_socket\impl;..\..\..\components\net\sal_socket\include\socket\sys_socket;..\..\..\components\utilities\ulog;..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Inc;..\libraries\STM32F4xx_HAL\CMSIS\Device\ST\STM32F4xx\Include;..\libraries\STM32F4xx_HAL\CMSIS\Include</IncludePath>
+              <IncludePath>.;..\..\..\include;applications;.;board;board\CubeMX_Config\Inc;board\ports;board\ports\tb22;..\libraries\HAL_Drivers;..\libraries\HAL_Drivers\config;..\libraries\HAL_Drivers\drv_flash;packages\at_device-latest\inc;packages\EasyFlash-latest\inc;packages\fal-latest\inc;packages\kawaii-mqtt-latest\common;packages\kawaii-mqtt-latest\mqtt;packages\kawaii-mqtt-latest\mqttclient;packages\kawaii-mqtt-latest\network;packages\kawaii-mqtt-latest\platform\RT-Thread;..\..\..\libcpu\arm\common;..\..\..\libcpu\arm\cortex-m4;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\spi;..\..\..\components\drivers\include;..\..\..\components\drivers\spi\sfud\inc;..\..\..\components\drivers\include;..\..\..\components\libc\compilers\armlibc;..\..\..\components\libc\compilers\common;..\..\..\components\net\at\include;..\..\..\components\net\at\at_socket;..\..\..\components\net\netdev\include;..\..\..\components\net\sal_socket\include;..\..\..\components\net\sal_socket\include\socket;..\..\..\components\net\sal_socket\impl;..\..\..\components\net\sal_socket\include\socket\sys_socket;..\..\..\components\utilities\ulog;..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Inc;..\libraries\STM32F4xx_HAL\CMSIS\Device\ST\STM32F4xx\Include;..\libraries\STM32F4xx_HAL\CMSIS\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -468,9 +468,29 @@
               <FilePath>applications\at_tb22.c</FilePath>
             </File>
             <File>
-              <FileName>at_cmd.c</FileName>
+              <FileName>at_cmd_rtu.c</FileName>
               <FileType>1</FileType>
-              <FilePath>applications\at_cmd.c</FilePath>
+              <FilePath>applications\at_cmd_rtu.c</FilePath>
+            </File>
+            <File>
+              <FileName>at_cmd_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\at_cmd_uart.c</FilePath>
+            </File>
+            <File>
+              <FileName>at_cmd_ulog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\at_cmd_ulog.c</FilePath>
+            </File>
+            <File>
+              <FileName>util.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\util.c</FilePath>
+            </File>
+            <File>
+              <FileName>strref.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\strref.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -491,6 +511,11 @@
               <FileName>spi_flash_init.c</FileName>
               <FileType>1</FileType>
               <FilePath>board\ports\spi_flash_init.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_fal_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>board\ports\ef_fal_port.c</FilePath>
             </File>
             <File>
               <FileName>at_device_tb22.c</FileName>
@@ -528,6 +553,11 @@
               <FilePath>..\libraries\HAL_Drivers\drv_rtc.c</FilePath>
             </File>
             <File>
+              <FileName>drv_flash_f4.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\libraries\HAL_Drivers\drv_flash\drv_flash_f4.c</FilePath>
+            </File>
+            <File>
               <FileName>drv_common.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\libraries\HAL_Drivers\drv_common.c</FilePath>
@@ -541,6 +571,150 @@
               <FileName>at_device.c</FileName>
               <FileType>1</FileType>
               <FilePath>packages\at_device-latest\src\at_device.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>EasyFlash</GroupName>
+          <Files>
+            <File>
+              <FileName>easyflash.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\easyflash.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_cmd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_cmd.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_env.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_env.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_env_legacy.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_env_legacy.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_env_legacy_wl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_env_legacy_wl.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_iap.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_iap.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_log.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_log.c</FilePath>
+            </File>
+            <File>
+              <FileName>ef_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\EasyFlash-latest\src\ef_utils.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>fal</GroupName>
+          <GroupOption>
+            <CommonProperty>
+              <UseCPPCompiler>0</UseCPPCompiler>
+              <RVCTCodeConst>0</RVCTCodeConst>
+              <RVCTZI>0</RVCTZI>
+              <RVCTOtherData>0</RVCTOtherData>
+              <ModuleSelection>0</ModuleSelection>
+              <IncludeInBuild>1</IncludeInBuild>
+              <AlwaysBuild>0</AlwaysBuild>
+              <GenerateAssemblyFile>0</GenerateAssemblyFile>
+              <AssembleAssemblyFile>0</AssembleAssemblyFile>
+              <PublicsOnly>0</PublicsOnly>
+              <StopOnExitCode>3</StopOnExitCode>
+              <CustomArgument></CustomArgument>
+              <IncludeLibraryModules></IncludeLibraryModules>
+              <ComprImg>0</ComprImg>
+            </CommonProperty>
+            <GroupArmAds>
+              <Cads>
+                <interw>2</interw>
+                <Optim>0</Optim>
+                <oTime>2</oTime>
+                <SplitLS>2</SplitLS>
+                <OneElfS>2</OneElfS>
+                <Strict>2</Strict>
+                <EnumInt>2</EnumInt>
+                <PlainCh>2</PlainCh>
+                <Ropi>2</Ropi>
+                <Rwpi>2</Rwpi>
+                <wLevel>0</wLevel>
+                <uThumb>2</uThumb>
+                <uSurpInc>2</uSurpInc>
+                <uC99>2</uC99>
+                <uGnu>2</uGnu>
+                <useXO>2</useXO>
+                <v6Lang>0</v6Lang>
+                <v6LangP>0</v6LangP>
+                <vShortEn>2</vShortEn>
+                <vShortWch>2</vShortWch>
+                <v6Lto>2</v6Lto>
+                <v6WtE>2</v6WtE>
+                <v6Rtti>2</v6Rtti>
+                <VariousControls>
+                  <MiscControls></MiscControls>
+                  <Define> </Define>
+                  <Undefine> </Undefine>
+                  <IncludePath></IncludePath>
+                </VariousControls>
+              </Cads>
+              <Aads>
+                <interw>2</interw>
+                <Ropi>2</Ropi>
+                <Rwpi>2</Rwpi>
+                <thumb>2</thumb>
+                <SplitLS>2</SplitLS>
+                <SwStkChk>2</SwStkChk>
+                <NoWarn>2</NoWarn>
+                <uSurpInc>2</uSurpInc>
+                <useXO>2</useXO>
+                <uClangAs>2</uClangAs>
+                <VariousControls>
+                  <MiscControls></MiscControls>
+                  <Define></Define>
+                  <Undefine></Undefine>
+                  <IncludePath></IncludePath>
+                </VariousControls>
+              </Aads>
+            </GroupArmAds>
+          </GroupOption>
+          <Files>
+            <File>
+              <FileName>fal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\fal-latest\src\fal.c</FilePath>
+            </File>
+            <File>
+              <FileName>fal_flash.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\fal-latest\src\fal_flash.c</FilePath>
+            </File>
+            <File>
+              <FileName>fal_partition.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\fal-latest\src\fal_partition.c</FilePath>
+            </File>
+            <File>
+              <FileName>fal_rtt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\fal-latest\src\fal_rtt.c</FilePath>
+            </File>
+            <File>
+              <FileName>fal_flash_sfud_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>packages\fal-latest\samples\porting\fal_flash_sfud_port.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1045,6 +1219,21 @@
               <FileName>stm32f4xx_hal_rtc_ex.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rtc_ex.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32f4xx_hal_flash.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32f4xx_hal_flash_ex.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ex.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32f4xx_hal_flash_ramfunc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ramfunc.c</FilePath>
             </File>
           </Files>
         </Group>

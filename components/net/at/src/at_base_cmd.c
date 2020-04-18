@@ -22,13 +22,13 @@
 
 extern at_server_t at_get_server(void);
 
-static at_result_t at_exec(void)
+static at_result_t at_exec(const struct at_cmd *cmd)
 {
     return AT_RESULT_OK;
 }
-AT_CMD_EXPORT("AT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_exec);
+AT_CMD_EXPORT("AT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_exec, 0);
 
-static at_result_t atz_exec(void)
+static at_result_t atz_exec(const struct at_cmd *cmd)
 {
     at_server_printfln("OK");
 
@@ -36,9 +36,9 @@ static at_result_t atz_exec(void)
 
     return AT_RESULT_NULL;
 }
-AT_CMD_EXPORT("ATZ", RT_NULL, RT_NULL, RT_NULL, RT_NULL, atz_exec);
+AT_CMD_EXPORT("ATZ", RT_NULL, RT_NULL, RT_NULL, RT_NULL, atz_exec, 0);
 
-static at_result_t at_rst_exec(void)
+static at_result_t at_rst_exec(const struct at_cmd *cmd)
 {
     at_server_printfln("OK");
 
@@ -46,9 +46,9 @@ static at_result_t at_rst_exec(void)
 
     return AT_RESULT_NULL;
 }
-AT_CMD_EXPORT("AT+RST", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_rst_exec);
+AT_CMD_EXPORT("AT+RST", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_rst_exec, 0);
 
-static at_result_t ate_setup(const char *args)
+static at_result_t ate_setup(const struct at_cmd *cmd, const char *args)
 {
     int echo_mode = atoi(args);
 
@@ -63,9 +63,9 @@ static at_result_t ate_setup(const char *args)
 
     return AT_RESULT_OK;
 }
-AT_CMD_EXPORT("ATE", "<value>", RT_NULL, RT_NULL, ate_setup, RT_NULL);
+AT_CMD_EXPORT("ATE", "<value>", RT_NULL, RT_NULL, ate_setup, RT_NULL, 0);
 
-static at_result_t at_show_cmd_exec(void)
+static at_result_t at_show_cmd_exec(const struct at_cmd *cmd)
 {
     extern void rt_at_server_print_all_cmd(void);
 
@@ -73,9 +73,9 @@ static at_result_t at_show_cmd_exec(void)
 
     return AT_RESULT_OK;
 }
-AT_CMD_EXPORT("AT&L", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_show_cmd_exec);
+AT_CMD_EXPORT("AT&L", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_show_cmd_exec, 0);
 
-static at_result_t at_uart_query(void)
+static at_result_t at_uart_query(const struct at_cmd *cmd)
 {
     struct rt_serial_device *serial = (struct rt_serial_device *)at_get_server()->device;
 
@@ -85,7 +85,7 @@ static at_result_t at_uart_query(void)
     return AT_RESULT_OK;
 }
 
-static at_result_t at_uart_setup(const char *args)
+static at_result_t at_uart_setup(const struct at_cmd *cmd, const char *args)
 {
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
     int baudrate, databits, stopbits, parity, flow_control, argc;
@@ -116,6 +116,6 @@ static at_result_t at_uart_setup(const char *args)
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART", "=<baudrate>,<databits>,<stopbits>,<parity>,<flow_control>", RT_NULL, at_uart_query, at_uart_setup, RT_NULL);
+AT_CMD_EXPORT("AT+UART", "=<baudrate>,<databits>,<stopbits>,<parity>,<flow_control>", RT_NULL, at_uart_query, at_uart_setup, RT_NULL, 0);
 
 #endif /* AT_USING_SERVER */

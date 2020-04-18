@@ -12,6 +12,8 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 #include <board.h>
+#include <fal.h>
+#include <easyflash.h>
 #include <at.h>
 #include <arpa/inet.h>
 #include <netdev.h>
@@ -132,6 +134,36 @@ static rt_err_t app_init()
     LOG_D("app_init()");
     
     rt_err_t ret = RT_EOK;
+    
+    /* fal init */
+    {
+        int iret = fal_init();
+        if (iret < 0)
+        {
+            LOG_E("fal init error(%d)!", iret);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+    }
+    
+    /* easyflash init */
+    {
+        EfErrCode ef_err = easyflash_init();
+        if (ef_err != EF_NO_ERR)
+        {
+            LOG_E("easyflash init error(%d)!", ef_err);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+        
+        /* 根据保存的配置来设置ULOG全局日志level */
+        uint8_t level = 0;
+        size_t len = ef_get_env_blob("ulog_glb_lvl", &level, 1, RT_NULL);
+        if ((len == 1) && (level <= 1))
+        {
+            ulog_global_filter_lvl_set(level);
+        }
+    }
     
     /* create app event */
     app_event = rt_event_create("app_event", RT_IPC_FLAG_FIFO);

@@ -20,7 +20,7 @@ extern "C" {
 
 #define AT_SW_VERSION                  "1.3.0"
 
-#define AT_CMD_NAME_LEN                16
+#define AT_CMD_NAME_LEN                64
 #define AT_END_MARK_LEN                4
 
 #ifndef AT_CMD_MAX_LEN
@@ -49,8 +49,8 @@ extern "C" {
 #define AT_CLIENT_NUM_MAX              1
 #endif
 
-#define AT_CMD_EXPORT(_name_, _args_expr_, _test_, _query_, _setup_, _exec_)   \
-    RT_USED static const struct at_cmd __at_cmd_##_test_##_query_##_setup_##_exec_ SECTION("RtAtCmdTab") = \
+#define AT_CMD_EXPORT(_name_, _args_expr_, _test_, _query_, _setup_, _exec_,_n_)   \
+    RT_USED static const struct at_cmd __at_cmd_##_test_##_query_##_setup_##_exec_##_n_ SECTION("RtAtCmdTab") = \
     {                                                                          \
         _name_,                                                                \
         _args_expr_,                                                           \
@@ -82,12 +82,12 @@ typedef enum at_result at_result_t;
 
 struct at_cmd
 {
-    char name[AT_CMD_NAME_LEN];
+    char *name;
     char *args_expr;
-    at_result_t (*test)(void);
-    at_result_t (*query)(void);
-    at_result_t (*setup)(const char *args);
-    at_result_t (*exec)(void);
+    at_result_t (*test)(const struct at_cmd *cmd);
+    at_result_t (*query)(const struct at_cmd *cmd);
+    at_result_t (*setup)(const struct at_cmd *cmd, const char *args);
+    at_result_t (*exec)(const struct at_cmd *cmd);
 };
 typedef struct at_cmd *at_cmd_t;
 

@@ -12,24 +12,19 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 #include <board.h>
+#include <easyflash.h>
+#include <netdev_ipaddr.h>
 #include <at.h>
 
-#define LOG_TAG              "main.at_cmd"
+#define LOG_TAG              "main.at_cmd_ulog"
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-/* 重启系统 */
-static at_result_t at_reboot_exec(void)
-{
-    rt_hw_cpu_reset();
-    
-    return AT_RESULT_OK;
-}
-AT_CMD_EXPORT("AT+REBOOT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_reboot_exec);
-
 /* ULOG相关AT指令 */
 
-static at_result_t at_ulog_tag_lvl_query(void)
+/* AT+ULOGTAGLVL 设置指定tag对应日志的输出等级 */
+
+static at_result_t at_ulog_tag_lvl_query(const struct at_cmd *cmd)
 {
     if (!rt_slist_isempty(ulog_tag_lvl_list_get()))
     {
@@ -47,7 +42,7 @@ static at_result_t at_ulog_tag_lvl_query(void)
     return AT_RESULT_OK;
 }
 
-static at_result_t at_ulog_tag_lvl_setup(const char *args)
+static at_result_t at_ulog_tag_lvl_setup(const struct at_cmd *cmd, const char *args)
 {
     char tag[ULOG_FILTER_TAG_MAX_LEN] = "";
     rt_uint32_t level = 0;
@@ -57,6 +52,7 @@ static at_result_t at_ulog_tag_lvl_setup(const char *args)
     int argc = at_req_parse_args(args, req_expr, tag, &level);
     if ((argc < 1) || (argc > 2))
     {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1 or 2!", req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -69,12 +65,14 @@ static at_result_t at_ulog_tag_lvl_setup(const char *args)
     {
         if (level > LOG_FILTER_LVL_ALL)
         {
+            LOG_E("<level>(%d)>%d!", level, LOG_FILTER_LVL_ALL);
             return AT_RESULT_CHECK_FAILE;
         }
         
         int ret = ulog_tag_lvl_filter_set(tag, level);
         if (ret != RT_EOK)
         {
+            LOG_E("ulog_tag_lvl_filter_set(%s,%d) error(%d)!", tag, level, ret);
             return AT_RESULT_FAILE;
         }
     }
@@ -82,9 +80,11 @@ static at_result_t at_ulog_tag_lvl_setup(const char *args)
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+ULOGTAGLVL", "=<tag>[,<level>]", RT_NULL, at_ulog_tag_lvl_query, at_ulog_tag_lvl_setup, RT_NULL);
+AT_CMD_EXPORT("AT+ULOGTAGLVL", "=<tag>[,<level>]", RT_NULL, at_ulog_tag_lvl_query, at_ulog_tag_lvl_setup, RT_NULL, 0);
 
-static at_result_t at_ulog_global_tag_query(void)
+/* AT+ULOGTAG 设置全局日志过滤tag */
+
+static at_result_t at_ulog_global_tag_query(const struct at_cmd *cmd)
 {
     const char* tag = ulog_global_filter_tag_get();
     if (tag != NULL)
@@ -95,7 +95,7 @@ static at_result_t at_ulog_global_tag_query(void)
     return AT_RESULT_OK;
 }
 
-static at_result_t at_ulog_global_tag_setup(const char *args)
+static at_result_t at_ulog_global_tag_setup(const struct at_cmd *cmd, const char *args)
 {
     char tag[ULOG_FILTER_TAG_MAX_LEN] = "";
     char req_expr[16] = "";
@@ -103,12 +103,14 @@ static at_result_t at_ulog_global_tag_setup(const char *args)
 
     if (rt_strlen(args) > sizeof(tag))
     {
+        LOG_E("rt_strlen(args)>%d!", sizeof(tag));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, tag);
     if (argc != 1)
     {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
@@ -117,39 +119,66 @@ static at_result_t at_ulog_global_tag_setup(const char *args)
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+ULOGGLBTAG", "=<tag>", RT_NULL, at_ulog_global_tag_query, at_ulog_global_tag_setup, RT_NULL);
+AT_CMD_EXPORT("AT+ULOGTAG", "=<tag>", RT_NULL, at_ulog_global_tag_query, at_ulog_global_tag_setup, RT_NULL, 0);
 
-static at_result_t at_ulog_global_lvl_query(void)
+/* AT+ULOGLVL 设置全局日志等级 */
+
+static at_result_t at_ulog_global_lvl_query(const struct at_cmd *cmd)
 {
     at_server_printfln("%d", ulog_global_filter_lvl_get());
 
     return AT_RESULT_OK;
 }
 
-static at_result_t at_ulog_global_lvl_setup(const char *args)
+static at_result_t at_ulog_global_lvl_setup(const struct at_cmd *cmd, const char *args)
 {
     rt_uint32_t level = 0;
-    const char *req_expr = "=%d";
+    rt_uint32_t save = 0;
+    const char *req_expr = "=%d,%d";
 
-    int argc = at_req_parse_args(args, req_expr, &level);
-    if (argc != 1)
+    int argc = at_req_parse_args(args, req_expr, &level, &save);
+    if ((argc < 1) || (argc > 2))
     {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1 or 2!", req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if (level > LOG_FILTER_LVL_ALL)
     {
+        LOG_E("<level>(%d)>%d!", level, LOG_FILTER_LVL_ALL);
         return AT_RESULT_CHECK_FAILE;
     }
+    
+    if (argc == 2)
+    {
+        if (save > 1)
+        {
+            LOG_E("<save>(%d) !=0 or 1!", save);
+            return AT_RESULT_CHECK_FAILE;
+        }
 
+        if (save)
+        {
+            uint8_t level_val = (uint8_t)level;
+            EfErrCode ef_ret = ef_set_env_blob("ulog_glb_lvl", &level_val, 1);
+            if (ef_ret != EF_NO_ERR)
+            {
+                LOG_E("ef_set_env_blob(ulog_glb_lvl,%u) error(%d)!", level_val, ef_ret);
+                return AT_RESULT_FAILE;
+            }
+        }
+    }
+    
     ulog_global_filter_lvl_set(level);
 
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+ULOGGLBLVL", "=<level>", RT_NULL, at_ulog_global_lvl_query, at_ulog_global_lvl_setup, RT_NULL);
+AT_CMD_EXPORT("AT+ULOGLVL", "=<level>[,<save>]", RT_NULL, at_ulog_global_lvl_query, at_ulog_global_lvl_setup, RT_NULL, 0);
 
-static at_result_t at_ulog_global_kw_query(void)
+/* AT+ULOGKW 设置全局日志过滤关键字 */
+
+static at_result_t at_ulog_global_kw_query(const struct at_cmd *cmd)
 {
     const char* kw = ulog_global_filter_kw_get();
     if (kw != NULL)
@@ -160,7 +189,7 @@ static at_result_t at_ulog_global_kw_query(void)
     return AT_RESULT_OK;
 }
 
-static at_result_t at_ulog_global_kw_setup(const char *args)
+static at_result_t at_ulog_global_kw_setup(const struct at_cmd *cmd, const char *args)
 {
     char keyword[ULOG_FILTER_KW_MAX_LEN] = "";
     char req_expr[16] = "";
@@ -168,12 +197,14 @@ static at_result_t at_ulog_global_kw_setup(const char *args)
 
     if (rt_strlen(args) > sizeof(keyword))
     {
+        LOG_E("rt_strlen(args)>%d!", sizeof(keyword));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, keyword);
     if (argc != 1)
     {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
@@ -184,4 +215,4 @@ static at_result_t at_ulog_global_kw_setup(const char *args)
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+ULOGGLBKW", "=<keyword>", RT_NULL, at_ulog_global_kw_query, at_ulog_global_kw_setup, RT_NULL);
+AT_CMD_EXPORT("AT+ULOGKW", "=<keyword>", RT_NULL, at_ulog_global_kw_query, at_ulog_global_kw_setup, RT_NULL, 0);

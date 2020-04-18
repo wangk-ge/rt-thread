@@ -55,6 +55,11 @@ void at_server_printf(const char *format, ...)
 
     va_end(args);
     
+    if (last_cmd_len <= 0)
+    {
+        return;
+    }
+    
     rt_device_write(at_server_local->device, 0, send_buf, last_cmd_len);
 }
 
@@ -73,7 +78,10 @@ void at_server_printfln(const char *format, ...)
 
     va_end(args);
     
-    rt_device_write(at_server_local->device, 0, send_buf, last_cmd_len);
+    if (last_cmd_len > 0)
+    {
+        rt_device_write(at_server_local->device, 0, send_buf, last_cmd_len);
+    }
     
     rt_device_write(at_server_local->device, 0, "\r\n", 2);
 }
@@ -326,7 +334,7 @@ static rt_err_t at_cmd_process(at_cmd_t cmd, const char *cmd_args)
             return -RT_ERROR;
         }
 
-        result = cmd->test();
+        result = cmd->test(cmd);
         at_server_print_result(result);
     }
     else if (cmd_args[0] == AT_CMD_QUESTION_MARK && cmd_args[1] == AT_CMD_CR)
@@ -337,7 +345,7 @@ static rt_err_t at_cmd_process(at_cmd_t cmd, const char *cmd_args)
             return -RT_ERROR;
         }
 
-        result = cmd->query();
+        result = cmd->query(cmd);
         at_server_print_result(result);
     }
     else if (cmd_args[0] == AT_CMD_EQUAL_MARK
@@ -355,7 +363,7 @@ static rt_err_t at_cmd_process(at_cmd_t cmd, const char *cmd_args)
             return -RT_ERROR;
         }
 
-        result = cmd->setup(cmd_args);
+        result = cmd->setup(cmd, cmd_args);
         at_server_print_result(result);
     }
     else if (cmd_args[0] == AT_CMD_CR)
@@ -366,7 +374,7 @@ static rt_err_t at_cmd_process(at_cmd_t cmd, const char *cmd_args)
             return -RT_ERROR;
         }
 
-        result = cmd->exec();
+        result = cmd->exec(cmd);
         at_server_print_result(result);
     }
     else
@@ -404,7 +412,7 @@ static rt_err_t at_cmd_get_name(const char *cmd_buffer, char *cmd_name)
     {
         if (*(cmd_buffer + i) == AT_CMD_QUESTION_MARK || *(cmd_buffer + i) == AT_CMD_EQUAL_MARK
                 || *(cmd_buffer + i) == AT_CMD_CR
-                || (*(cmd_buffer + i) >= AT_CMD_CHAR_0 && *(cmd_buffer + i) <= AT_CMD_CHAR_9))
+                /*|| (*(cmd_buffer + i) >= AT_CMD_CHAR_0 && *(cmd_buffer + i) <= AT_CMD_CHAR_9)*/)
         {
             cmd_name_len = i;
             memcpy(cmd_name, cmd_buffer, cmd_name_len);

@@ -1279,7 +1279,7 @@ int ulog_init(void)
 #endif /* ULOG_USING_ASYNC_OUTPUT */
 
 #ifdef ULOG_USING_FILTER
-    ulog_global_filter_lvl_set(LOG_FILTER_LVL_SILENT);
+    ulog_global_filter_lvl_set(LOG_FILTER_LVL_ALL);
 #endif
 
     ulog.init_ok = RT_TRUE;

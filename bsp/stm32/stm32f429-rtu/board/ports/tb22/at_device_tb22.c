@@ -845,6 +845,42 @@ static void tb22_init_thread_entry(void *parameter)
     }
 }
 
+static int tb22_get_csq(struct at_device *device, int* signal_strength, int *err_rate)
+{
+    int ret = RT_EOK;
+    
+    at_response_t resp = at_create_resp(256, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
+    if (resp == RT_NULL)
+    {
+        LOG_E("no memory for resp create.");
+        return -RT_ENOMEM;
+    }
+    
+    ret = at_obj_exec_cmd(device->client, resp, "AT+CSQ");
+    if (ret != RT_EOK)
+    {
+        LOG_E("at_obj_exec_cmd error(%d).", ret);
+        goto __exit;
+    }
+    
+    if (at_resp_parse_line_args_by_kw(resp, "+CSQ:", "+CSQ:%d,%d", signal_strength, err_rate) <= 0)
+    {
+        LOG_E("at_resp_parse_line_args_by_kw error.");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    LOG_I("%s device csq %d,%d.", device->name, *signal_strength, *err_rate);
+    
+__exit:
+    if (resp)
+    {
+        at_delete_resp(resp);
+    }
+    
+    return ret;
+}
+
 /* tb22 device network initialize */
 static int tb22_net_init(struct at_device *device)
 {
@@ -930,6 +966,18 @@ static int tb22_control(struct at_device *device, int cmd, void *arg)
     case AT_DEVICE_CTRL_RESET:
         result = tb22_reset(device);
         break;
+    case AT_DEVICE_CTRL_GET_SIGNAL:
+    {
+        int signal_strength = 0;
+        int err_rate = 0;
+        result = tb22_get_csq(device, &signal_strength, &err_rate);
+        if ((result == RT_EOK)
+            && (arg != NULL))
+        {
+            *((int*)arg) = signal_strength;
+        }
+        break;
+    }
     case AT_DEVICE_CTRL_SLEEP:
     case AT_DEVICE_CTRL_WAKEUP:
     case AT_DEVICE_CTRL_POWER_ON:
@@ -938,7 +986,6 @@ static int tb22_control(struct at_device *device, int cmd, void *arg)
     case AT_DEVICE_CTRL_NET_CONN:
     case AT_DEVICE_CTRL_NET_DISCONN:
     case AT_DEVICE_CTRL_SET_WIFI_INFO:
-    case AT_DEVICE_CTRL_GET_SIGNAL:
     case AT_DEVICE_CTRL_GET_GPS:
     case AT_DEVICE_CTRL_GET_VER:
         LOG_W("not support the control command(%d).", cmd);
