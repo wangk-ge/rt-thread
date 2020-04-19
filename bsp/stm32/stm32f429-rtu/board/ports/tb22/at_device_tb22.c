@@ -809,6 +809,49 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
         
+        /* get date time  */
+        if (at_obj_exec_cmd(device->client, resp, "AT+CCLK?") == RT_EOK)
+        {
+            int yy = 0, MM = 0, dd = 0;
+            int hh = 0, mm = 0, ss = 0, zz = 0;
+            /* parse response data "+CCLK:yy/MM/dd,hh:mm:ss±zz" */
+            if (at_resp_parse_line_args_by_kw(resp, "+CCLK:", "+CCLK:%02d/%02d/%02d,%02d:%02d:%02d%d", &yy, &MM, &dd, &hh, &mm, &ss, &zz) > 0)
+            {
+                LOG_I("%s device date time: %02d/%02d/%02d,%02d:%02d:%02d%+02d", device->name, yy, MM, dd, hh, mm, ss, zz);
+                
+#ifdef RT_USING_RTC
+                
+                /* convert to local timezone */
+                struct tm tm_time = {
+                    .tm_sec = ss, /* seconds after the minute, 0 to 60 */
+                    .tm_min = mm, /* minutes after the hour, 0 to 59 */
+                    .tm_hour = hh, /* hours since midnight, 0 to 23 */
+                    .tm_mday = dd, /* day of the month, 1 to 31 */
+                    .tm_mon = (MM - 1), /* months since January, 0 to 11 */
+                    .tm_year = ((2000 + yy) - 1900) /* years since 1900 */
+                };
+                time_t time_utc = mktime(&tm_time);
+                time_utc = (time_t)((int)time_utc + ((zz / 4) * 3600));
+                struct tm *local_time = gmtime(&time_utc);
+                
+                /* set system date time */
+                rt_err_t ret = set_date((1900 + local_time->tm_year), (local_time->tm_mon + 1), local_time->tm_mday);
+                if (ret != RT_EOK)
+                {
+                    LOG_W("%s device set_date failed", device->name);
+                }
+                else
+                {
+                    ret = set_time(local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
+                    if (ret != RT_EOK)
+                    {
+                        LOG_W("%s device set_time failed", device->name);
+                    }
+                }
+#endif
+            }
+        }
+        
         /* initialize successfully  */
         result = RT_EOK;
         break;

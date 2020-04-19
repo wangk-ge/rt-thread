@@ -23,18 +23,18 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-/* 定时上报周期(s) */
-#define APP_MQTT_REPORT_INTERVAL (10)
-
 /* event flag */
 #define APP_EVENT_MQTT_CONNECT_REQ 0x00000001 // MQTT连接请求
-#define APP_EVENT_MQTT_REPORT_REQ 0x00000002 // MQTT连接上报数据
+#define APP_EVENT_DATA_REPORT_REQ 0x00000002 // 数据上报请求
+#define APP_EVENT_DATA_ACQUISITION_REQ 0x00000004 // 数据采集请求
 
 /* event for application */
 static rt_event_t app_event = RT_NULL;
 
 /* 定时上报定时器 */
 static rt_timer_t report_timer = RT_NULL;
+/* 定时采集定时器 */
+static rt_timer_t acquisition_timer = RT_NULL;
 
 /* mqtt client */
 static mqtt_client_t mq_client;
@@ -108,7 +108,14 @@ static void report_timer_timeout(void *parameter)
 {
     LOG_D("report_timer_timeout()");
     
-    app_send_event(APP_EVENT_MQTT_REPORT_REQ);
+    app_send_event(APP_EVENT_DATA_REPORT_REQ); // 发送数据上报请求
+}
+
+static void acquisition_timer_timeout(void *parameter)
+{
+    LOG_D("acquisition_timer_timeout()");
+    
+    app_send_event(APP_EVENT_DATA_ACQUISITION_REQ); // 发送数据采集请求
 }
 
 static void app_deinit()
@@ -126,6 +133,11 @@ static void app_deinit()
     {
         rt_timer_delete(report_timer);
         report_timer = RT_NULL;
+    }
+    if (RT_NULL != acquisition_timer)
+    {
+        rt_timer_delete(acquisition_timer);
+        acquisition_timer = RT_NULL;
     }
 }
 
@@ -174,14 +186,50 @@ static rt_err_t app_init()
         goto __exit;
     }
     
-    report_timer = rt_timer_create("report_timer", report_timer_timeout, 
-                            RT_NULL, rt_tick_from_millisecond(APP_MQTT_REPORT_INTERVAL * 1000), 
-                            RT_TIMER_FLAG_PERIODIC);
-    if (RT_NULL == report_timer)
     {
-        LOG_E("create report timer failed!");
-        ret = -RT_ERROR;
-        goto __exit;
+        /* 读取数据发布间隔时间(分钟) */
+        uint8_t cycle = 0;
+        size_t len = ef_get_env_blob("cycle", &cycle, 1, RT_NULL);
+        if ((len != 1) || (cycle < 1) || (cycle > 180))
+        { // 读取失败或数据超范围
+            LOG_W("ef_get_env_blob(cycle) return(%u) cycle=%u use default!", len, cycle);
+            /* 使用默认值 */
+            cycle = 30;
+        }
+        
+        /* create report timer */
+        report_timer = rt_timer_create("report_timer", report_timer_timeout, 
+                                RT_NULL, rt_tick_from_millisecond(cycle * 60 * 1000), 
+                                RT_TIMER_FLAG_PERIODIC);
+        if (RT_NULL == report_timer)
+        {
+            LOG_E("create report timer failed!");
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+    }
+    
+    {
+        /* 读取数据采集间隔时间(分钟) */
+        uint8_t acquisition = 0;
+        size_t len = ef_get_env_blob("acquisition", &acquisition, 1, RT_NULL);
+        if ((len != 1) || (acquisition < 1) || (acquisition > 30))
+        { // 读取失败或数据超范围
+            LOG_W("ef_get_env_blob(acquisition) return(%u) acquisition=%u use default!", len, acquisition);
+            /* 使用默认值 */
+            acquisition = 5;
+        }
+        
+        /* create acquisition timer */
+        acquisition_timer = rt_timer_create("acquisition_timer", acquisition_timer_timeout, 
+                                RT_NULL, rt_tick_from_millisecond(acquisition * 60 * 1000), 
+                                RT_TIMER_FLAG_PERIODIC);
+        if (RT_NULL == acquisition_timer)
+        {
+            LOG_E("create acquisition timer failed!");
+            ret = -RT_ERROR;
+            goto __exit;
+        }
     }
     
     mq_init_params.cmd_timeout = KAWAII_MQTT_MAX_CMD_TIMEOUT;
@@ -235,6 +283,11 @@ __exit:
         rt_timer_delete(report_timer);
         report_timer = RT_NULL;
     }
+    if (RT_NULL != acquisition_timer)
+    {
+        rt_timer_delete(acquisition_timer);
+        acquisition_timer = RT_NULL;
+    }
     
     return ret;
 }
@@ -262,9 +315,10 @@ static rt_err_t app_mqtt_connect()
     return RT_EOK;
 }
 
-static rt_err_t app_mqtt_report()
+/* 上报数据 */
+static rt_err_t app_data_report()
 {
-    LOG_D("app_mqtt_report()");
+    LOG_D("app_data_report()");
 
     char buf[128] = "";
     sprintf(buf, "welcome to mqttclient, this is a publish test, a rand number: %d ...", random_number());
@@ -285,6 +339,26 @@ static rt_err_t app_mqtt_report()
     return RT_EOK;
 }
 
+/* 采集数据 */
+static rt_err_t app_data_acquisition()
+{
+    LOG_D("app_data_acquisition()");
+
+    // TODO
+    
+    return RT_EOK;
+}
+
+/* 保存数据 */
+static rt_err_t app_data_save()
+{
+    LOG_D("app_data_save()");
+
+    // TODO
+    
+    return RT_EOK;
+}
+    
 int main(void)
 {
     /* 初始化APP */
@@ -298,7 +372,7 @@ int main(void)
     while (1)
     {
         rt_uint32_t event_recved = 0;
-        ret = rt_event_recv(app_event, (APP_EVENT_MQTT_CONNECT_REQ | APP_EVENT_MQTT_REPORT_REQ),
+        ret = rt_event_recv(app_event, (APP_EVENT_MQTT_CONNECT_REQ | APP_EVENT_DATA_REPORT_REQ),
                           (RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR),
                           RT_WAITING_FOREVER, &event_recved);
         if (RT_EOK != ret)
@@ -328,9 +402,16 @@ int main(void)
             }
         }
         
-        if (event_recved & APP_EVENT_MQTT_REPORT_REQ)
+        if (event_recved & APP_EVENT_DATA_REPORT_REQ)
         {
-            app_mqtt_report();
+            /* 上报数据 */
+            app_data_report();
+        }
+        
+        if (event_recved & APP_EVENT_DATA_ACQUISITION_REQ)
+        {
+            /* 采集数据 */
+            app_data_acquisition();
         }
     }
     

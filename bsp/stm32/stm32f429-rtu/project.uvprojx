@@ -483,6 +483,11 @@
               <FilePath>applications\at_cmd_ulog.c</FilePath>
             </File>
             <File>
+              <FileName>at_cmd_misc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\at_cmd_misc.c</FilePath>
+            </File>
+            <File>
               <FileName>util.c</FileName>
               <FileType>1</FileType>
               <FilePath>applications\util.c</FilePath>

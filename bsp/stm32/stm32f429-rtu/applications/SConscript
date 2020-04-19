@@ -9,6 +9,7 @@ at_tb22.c
 at_cmd_rtu.c
 at_cmd_uart.c
 at_cmd_ulog.c
+at_cmd_misc.c
 util.c
 strref.c
 """)
