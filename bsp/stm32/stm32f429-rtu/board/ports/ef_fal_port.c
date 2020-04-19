@@ -38,15 +38,72 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
+#define STR_LEN(str) (sizeof(str) - 1)
+#define STR_ITEM(s) (s), STR_LEN(s)
+
 /* EasyFlash partition name on FAL partition table */
 #define FAL_EF_PART_NAME               "easyflash"
 
 /* default ENV set for user */
 static const ef_env default_env_set[] = {
-        {"ulog_glb_lvl", "\0", 1}, // ULOG全局日志level
+        {"ulog_glb_lvl", "\0", 1}, // ULOG全局日志level,默认值0
         {"client_id", "\0\0\0\0", 4}, // 默认值0000000000
-        {"acquisition", "\5", 1}, // 默认值5
+        {"a_ip", "\x2F\x6F\xBA\x34", 4}, // 默认值47.111.186.52
+        {"a_port", "\x70\x17", 2}, // 默认值6000
+        {"b_ip", "\x2F\x6F\xBA\x34", 4}, // 默认值47.111.186.52
+        {"b_port", "\x70\x17", 2}, // 默认值6000
+        {"acquisition", "\x05", 1}, // 默认值5
         {"cycle", "\x1E", 1}, // 默认值30
+        /* uartXvariable */
+        {"uart1variable", STR_ITEM("temperature")},
+        {"uart2variable", STR_ITEM("temperature")},
+        {"uart3variable", STR_ITEM("temperature")},
+        {"uart4variable", STR_ITEM("temperature")},
+        /* uartXvariablecnt */
+        {"uart1variablecnt", "\x01", 1}, // 默认值1
+        {"uart2variablecnt", "\x01", 1}, // 默认值1
+        {"uart3variablecnt", "\x01", 1}, // 默认值1
+        {"uart4variablecnt", "\x01", 1}, // 默认值1
+        /* uartXbaudrate */
+        {"uart1baudrate", "\x80\x25\x00\x00", 4}, // 默认值9600
+        {"uart2baudrate", "\x80\x25\x00\x00", 4}, // 默认值9600
+        {"uart3baudrate", "\x80\x25\x00\x00", 4}, // 默认值9600
+        {"uart4baudrate", "\x80\x25\x00\x00", 4}, // 默认值9600
+        /* uartXwordlength */
+        {"uart1wordlength", "\x08", 1}, // 默认值8
+        {"uart2wordlength", "\x08", 1}, // 默认值8
+        {"uart3wordlength", "\x08", 1}, // 默认值8
+        {"uart4wordlength", "\x08", 1}, // 默认值8
+        /* uartXparity */
+        {"uart1parity", "\x00", 1}, // 默认值0
+        {"uart2parity", "\x00", 1}, // 默认值0
+        {"uart3parity", "\x00", 1}, // 默认值0
+        {"uart4parity", "\x00", 1}, // 默认值0
+        /* uartXstopbits */
+        {"uart1stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart2stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart3stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart4stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        /* uartXslaveraddr */
+        {"uart1slaveraddr", "\x01", 1}, // 默认值0x01
+        {"uart1s2averaddr", "\x01", 1}, // 默认值0x01
+        {"uart1s3averaddr", "\x01", 1}, // 默认值0x01
+        {"uart1s4averaddr", "\x01", 1}, // 默认值0x01
+        /* uartXfunction */
+        {"uart1function", "\x03", 1}, // 默认值0x03
+        {"uart2function", "\x03", 1}, // 默认值0x03
+        {"uart3function", "\x03", 1}, // 默认值0x03
+        {"uart4function", "\x03", 1}, // 默认值0x03
+        /* uartXstartaddr */
+        {"uart1startaddr", "\x00\x26", 2}, // 默认值0x2600
+        {"uart2startaddr", "\x00\x26", 2}, // 默认值0x2600
+        {"uart3startaddr", "\x00\x26", 2}, // 默认值0x2600
+        {"uart4startaddr", "\x00\x26", 2}, // 默认值0x2600
+        /* uartXlength */
+        {"uart1length", "\x07\x00", 2}, // 默认值0x0007
+        {"uart2length", "\x07\x00", 2}, // 默认值0x0007
+        {"uart3length", "\x07\x00", 2}, // 默认值0x0007
+        {"uart4length", "\x07\x00", 2}, // 默认值0x0007
 };
 
 static char log_buf[RT_CONSOLEBUF_SIZE];

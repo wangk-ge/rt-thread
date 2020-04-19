@@ -469,7 +469,8 @@ static at_result_t at_uartxstopbits_setup(const struct at_cmd *cmd, const char *
     // 检查数据位数有效性(1,1.5,2)
     if (bits == 1)
     {
-        if (bits_fractions != 5)
+        if ((bits_fractions != 0) 
+            && (bits_fractions != 5))
         {
             LOG_E("bits(%u.%u) can only be 1 1.5 2!", bits, bits_fractions);
             return AT_RESULT_CHECK_FAILE;

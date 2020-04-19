@@ -411,7 +411,12 @@ AT_CMD_EXPORT("AT+CLR", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_clr_exec, 0);
 
 static at_result_t at_deft_exec(const struct at_cmd *cmd)
 {
-    // TODO
+    EfErrCode ef_ret = ef_env_set_default();
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("ef_env_set_default error(%d)!", ef_ret);
+        return AT_RESULT_FAILE;
+    }
     
     return AT_RESULT_OK;
 }
