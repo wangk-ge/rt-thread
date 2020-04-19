@@ -29,6 +29,33 @@ static int get_modem_rssi(int *rssi)
     return at_device_control(device, AT_DEVICE_CTRL_GET_SIGNAL, rssi);
 }
 
+/* 恢复默认配置 */
+static EfErrCode set_default_config(void)
+{
+    LOG_D("set_default_config()");
+    
+    extern void ef_get_default_env(ef_env const **default_env, size_t *default_env_size);
+    size_t default_env_set_size = 0;
+    const ef_env *default_env_set;
+    
+    /* 取得默认配置集 */
+    ef_get_default_env(&default_env_set, &default_env_set_size);
+    
+    /* 全部从新设置为默认配置 */
+    int i = 0;
+    for (i = 0; i < default_env_set_size; ++i)
+    {
+        EfErrCode ret = ef_set_env_blob(default_env_set[i].key, default_env_set[i].value, default_env_set[i].value_len);
+        if (ret != EF_NO_ERR)
+        {
+            LOG_E("ef_set_env_blob(%d) error!", default_env_set[i].key);
+            return ret;
+        }
+    }
+    
+    return EF_NO_ERR;
+}
+
 /* RTU相关AT指令 */
 
 /* AT+CLIENTID 查询/读取客户端编号 */
@@ -411,10 +438,10 @@ AT_CMD_EXPORT("AT+CLR", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_clr_exec, 0);
 
 static at_result_t at_deft_exec(const struct at_cmd *cmd)
 {
-    EfErrCode ef_ret = ef_env_set_default();
+    EfErrCode ef_ret = set_default_config();
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_env_set_default error(%d)!", ef_ret);
+        //LOG_E("set_default_config error(%d)!", ef_ret);
         return AT_RESULT_FAILE;
     }
     

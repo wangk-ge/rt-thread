@@ -75,10 +75,10 @@ static const ef_env default_env_set[] = {
         {"uart3wordlength", "\x08", 1}, // 默认值8
         {"uart4wordlength", "\x08", 1}, // 默认值8
         /* uartXparity */
-        {"uart1parity", "\x00", 1}, // 默认值0
-        {"uart2parity", "\x00", 1}, // 默认值0
-        {"uart3parity", "\x00", 1}, // 默认值0
-        {"uart4parity", "\x00", 1}, // 默认值0
+        {"uart1parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
+        {"uart2parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
+        {"uart3parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
+        {"uart4parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
         /* uartXstopbits */
         {"uart1stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
         {"uart2stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
@@ -280,4 +280,12 @@ void ef_print(const char *format, ...) {
     rt_vsprintf(log_buf, format, args);
     rt_kprintf("%s", log_buf);
     va_end(args);
+}
+
+/**
+ * get default ENV
+ */
+void ef_get_default_env(ef_env const **default_env, size_t *default_env_size) {
+    *default_env = default_env_set;
+    *default_env_size = sizeof(default_env_set) / sizeof(default_env_set[0]);
 }

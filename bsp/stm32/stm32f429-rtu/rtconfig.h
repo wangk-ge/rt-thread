@@ -60,6 +60,12 @@
 
 /* Device virtual file system */
 
+#define RT_USING_DFS
+#define DFS_USING_WORKDIR
+#define DFS_FILESYSTEMS_MAX 2
+#define DFS_FILESYSTEM_TYPES_MAX 2
+#define DFS_FD_MAX 16
+#define RT_USING_DFS_DEVFS
 
 /* Device Drivers */
 
@@ -85,6 +91,8 @@
 /* POSIX layer and C standard library */
 
 #define RT_USING_LIBC
+#define RT_USING_POSIX
+#define RT_USING_POSIX_TERMIOS
 
 /* Network */
 
@@ -167,6 +175,12 @@
 #define KAWAII_MQTT_MIN_CMD_TIMEOUT 1000
 #define KAWAII_MQTT_RECONNECT_DEFAULT_DURATION 1000
 #define PKG_USING_KAWAII_MQTT_LATEST_VERSION
+#define PKG_USING_LIBMODBUS
+#define PKG_USING_LIBMODBUS_RTU
+#define HAVE_DECL_TIOCSRS485 1
+#define HAVE_DECL_TIOCM_RTS 1
+#define PKG_USING_LIBMODBUS_LATEST_VERSION
+#define PKG_LIBMODBUS_VER_NUM 0x99999
 
 /* Wi-Fi */
 

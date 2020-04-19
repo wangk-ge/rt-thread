@@ -27,6 +27,27 @@
 #define ARGS_EXPR_VAR_PARM20 "=<p1>[,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p9>][,<p10>]" \
     "[,<p11>][,<p12>][,<p13>][,<p14>][,<p15>][,<p16>][,<p17>][,<p18>][,<p19>][,<p20>]"
 
+/* 读取串口号对应的变量个数 */
+static bool get_variablecnt(char uart_x, uint8_t *var_cnt)
+{
+    /* 生成配置KEY值 */
+    char cfg_key[32] = "uartXvariablecnt";
+    cfg_key[STR_LEN("uart")] = uart_x;
+    
+    /* 读取配置 */
+    uint8_t cnt = 0;
+    size_t len = ef_get_env_blob(cfg_key, &cnt, sizeof(cnt), RT_NULL);
+    if (len != sizeof(cnt))
+    {
+        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        return false;
+    }
+    
+    *var_cnt = cnt;
+    
+    return true;
+}
+
 /* MODBUS相关AT指令 */
 
 /* AT+UARTXVARIABLE 设置/读取UART X相关的变量名列表(变量名最长20个字符,个数不定,最多20个) */
@@ -94,6 +115,24 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
         return AT_RESULT_PARSE_FAILE;
     }
     
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("param_count=%u cfg_var_cnt=%u!", param_count, cfg_var_cnt);
+        return AT_RESULT_FAILE;
+    }
+    
     // 检查参数格式(长度)
     int i = 0;
     for (i = 0; i < param_count; ++i)
@@ -104,10 +143,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
             return AT_RESULT_PARSE_FAILE;
         }
     }
-    
-    /* 串口号UART X的X实际字符 */
-    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
-    
+
     /* 生成配置KEY值 */
     char cfg_key[32] = "uartXvariable";
     cfg_key[STR_LEN("uart")] = uart_x;
@@ -132,20 +168,15 @@ AT_CMD_EXPORT("AT+UART4VARIABLE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxvariabl
 
 static at_result_t at_uartxvariablecnt_println(char uart_x)
 {
-    /* 生成配置KEY值 */
-    char cfg_key[32] = "uartXvariablecnt";
-    cfg_key[STR_LEN("uart")] = uart_x;
-    
-    /* 读取配置 */
-    uint8_t cnt = 0;
-    size_t len = ef_get_env_blob(cfg_key, &cnt, sizeof(cnt), RT_NULL);
-    if (len != sizeof(cnt))
+    uint8_t var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &var_cnt);
+    if (!ret)
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        //LOG_E("get_variablecnt error!");
         return AT_RESULT_FAILE;
     }
     
-    at_server_printfln("+UART%cVARIABLECNT: %u", uart_x, cnt);
+    at_server_printfln("+UART%cVARIABLECNT: %u", uart_x, var_cnt);
 
     return AT_RESULT_OK;
 }
@@ -717,6 +748,24 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
         return AT_RESULT_PARSE_FAILE;
     }
     
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("param_count=%u cfg_var_cnt=%u!", param_count, cfg_var_cnt);
+        return AT_RESULT_FAILE;
+    }
+    
     /* 转换成u16数组并检查格式 */
     uint16_t addr_list[20] = {0x0000};
     int i = 0;
@@ -746,9 +795,6 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
         }
         addr_list[i] = (uint16_t)((uint32_t)addr);
     }
-    
-    /* 串口号UART X的X实际字符 */
-    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
     
     /* 生成配置KEY值 */
     char cfg_key[32] = "uartXstartaddr";
@@ -826,6 +872,24 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
         return AT_RESULT_PARSE_FAILE;
     }
     
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("param_count=%u cfg_var_cnt=%u!", param_count, cfg_var_cnt);
+        return AT_RESULT_FAILE;
+    }
+    
     /* 转换成u16数组并检查格式 */
     uint16_t num_list[20] = {0x0000};
     int i = 0;
@@ -855,9 +919,6 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
         }
         num_list[i] = (uint16_t)((uint32_t)num);
     }
-    
-    /* 串口号UART X的X实际字符 */
-    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
     
     /* 生成配置KEY值 */
     char cfg_key[32] = "uartXlength";
