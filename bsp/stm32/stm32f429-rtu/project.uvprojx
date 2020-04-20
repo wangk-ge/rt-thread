@@ -497,6 +497,11 @@
               <FileType>1</FileType>
               <FilePath>applications\strref.c</FilePath>
             </File>
+            <File>
+              <FileName>config.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\config.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

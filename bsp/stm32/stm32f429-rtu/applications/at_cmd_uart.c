@@ -413,7 +413,7 @@ static at_result_t at_uartxparity_setup(const struct at_cmd *cmd, const char *ar
         return AT_RESULT_PARSE_FAILE;
     }
     
-    // 检查数据位数有效性(0,1,2)
+    // 检查数据位数有效性(0=无,1=奇,2=偶)
     if (parity > 2)
     {
         LOG_E("parity(%u) range[0,2]!", parity);
@@ -453,25 +453,15 @@ static at_result_t at_uartxstopbits_println(char uart_x)
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 读取配置 */
-    uint8_t bits_val = 0;
-    size_t len = ef_get_env_blob(cfg_key, &bits_val, sizeof(bits_val), RT_NULL);
-    if (len != sizeof(bits_val))
+    uint8_t bits = 0;
+    size_t len = ef_get_env_blob(cfg_key, &bits, sizeof(bits), RT_NULL);
+    if (len != sizeof(bits))
     {
         LOG_E("ef_get_env_blob(%s) error!", cfg_key);
         return AT_RESULT_FAILE;
     }
     
-    rt_uint32_t bits = (rt_uint32_t)(bits_val >> 4); // 整数部分
-    rt_uint32_t bits_fractions = (rt_uint32_t)(bits_val & 0x0F); // 小数部分
-    
-    if (bits_fractions > 0)
-    {
-        at_server_printfln("+UART%cSTOPBITS: %u.%u", uart_x, bits, bits_fractions);
-    }
-    else
-    {
-        at_server_printfln("+UART%cSTOPBITS: %u", uart_x, bits);
-    }
+    at_server_printfln("+UART%cSTOPBITS: %u", uart_x, bits);
     
     return AT_RESULT_OK;
 }
@@ -486,38 +476,20 @@ static at_result_t at_uartxstopbits_query(const struct at_cmd *cmd)
 
 static at_result_t at_uartxstopbits_setup(const struct at_cmd *cmd, const char *args)
 {
-    rt_uint32_t bits = 0; // 整数部分
-    rt_uint32_t bits_fractions = 0; // 小数部分
-    const char *req_expr = "=%u.%u";
+    rt_uint32_t bits = 0;
+    const char *req_expr = "=%u";
 
-    int argc = at_req_parse_args(args, req_expr, &bits, &bits_fractions);
-    if ((argc < 1) || (argc > 2))
+    int argc = at_req_parse_args(args, req_expr, &bits);
+    if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1 or 2!", req_expr, argc);
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
-    // 检查数据位数有效性(1,1.5,2)
-    if (bits == 1)
+    // 检查数据位数有效性(1,2)
+    if ((bits != 1) && (bits != 2))
     {
-        if ((bits_fractions != 0) 
-            && (bits_fractions != 5))
-        {
-            LOG_E("bits(%u.%u) can only be 1 1.5 2!", bits, bits_fractions);
-            return AT_RESULT_CHECK_FAILE;
-        }
-    }
-    else if (bits == 2)
-    {
-        if (bits_fractions != 0)
-        {
-            LOG_E("bits(%u.%u) can only be 1 1.5 2!", bits, bits_fractions);
-            return AT_RESULT_CHECK_FAILE;
-        }
-    }
-    else
-    {
-        LOG_E("bits(%u.%u) can only be 1 1.5 2!", bits, bits_fractions);
+        LOG_E("stop_bits(%u) can only be 1 or 2!", bits);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -528,10 +500,8 @@ static at_result_t at_uartxstopbits_setup(const struct at_cmd *cmd, const char *
     char cfg_key[32] = "uartXstopbits";
     cfg_key[STR_LEN("uart")] = uart_x;
     
-    /* 转换格式以便存储到一个字节中 */
-    uint8_t bits_val = ((uint8_t)bits << 4) | (uint8_t)bits_fractions;
-    
     /* 保存配置 */
+    uint8_t bits_val = (uint8_t)bits;
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &bits_val, sizeof(bits_val));
     if (ef_ret != EF_NO_ERR)
     {

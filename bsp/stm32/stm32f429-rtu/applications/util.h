@@ -3,9 +3,9 @@
  * File Name
  *  util.h
  * Author
- *  wangk
+ *  
  * Date
- *  2018/01/17
+ *  2020/04/19
  * Descriptions:
  * UTIL实用工具接口定义
  *
@@ -39,7 +39,7 @@ extern   "C"
 /*************************************************
 * Function: util_str_to_u32
 * Description: 字符串转32位无符号整数
-* Author: wangk
+* Author: 
 * Returns:
 * Parameter:
 * History:

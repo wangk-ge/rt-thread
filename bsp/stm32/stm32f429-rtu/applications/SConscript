@@ -12,6 +12,7 @@ at_cmd_ulog.c
 at_cmd_misc.c
 util.c
 strref.c
+config.c
 """)
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)

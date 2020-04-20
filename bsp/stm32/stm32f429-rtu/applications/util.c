@@ -3,9 +3,9 @@
  * File Name
  *  util.c
  * Author
- *  wangk
+ *  
  * Date
- *  2018/01/17
+ *  2020/04/19
  * Descriptions:
  * UTIL实用工具接口实现
  *
@@ -58,7 +58,7 @@ extern   "C"
 /*************************************************
 * Function: util_str_to_u32
 * Description: 字符串转32位无符号整数
-* Author: wangk
+* Author: 
 * Returns:
 * Parameter:
 * History:
@@ -84,6 +84,54 @@ uint32_t util_str_to_u32(const char* str, uint32_t str_len)
     }
 
     return val;
+}
+
+/*************************************************
+* Function: util_to_hex_str
+* Description: convert data to hex string
+* Author: 
+* Returns: the data length of convert success
+* Parameter:
+*  data data to convert
+*  data_len data length (in bytes)
+*  hex_str_buf buffer to hex string
+*  buf_len buffer length (in bytes)
+* History:
+*************************************************/
+uint32_t util_to_hex_str(const uint8_t* data, size_t data_len, 
+    char* hex_str_buf, size_t buf_len)
+{
+    if ((NULL == hex_str_buf)
+        || (buf_len <=0 ))
+    { // 缓冲区无效
+        return 0;
+    }
+    
+    /* 清空缓冲区为"" */
+    hex_str_buf[0] = '\0';
+    
+    if ((NULL == data)
+        || (data_len <=0 ))
+    { // 数据为空
+        return 0;
+    }
+
+    /* 最大可转换长度为: ((buf_len - 1) / 2) */
+    uint32_t convert_len = MIN(data_len, ((buf_len - 1) / 2));
+    uint32_t i = 0;
+    uint32_t j = 0;
+    for (i = 0; i < convert_len; ++i)
+    {
+        uint8_t data_byte = data[i];
+        uint8_t high = (data_byte >> 4) & 0x0F;
+        uint8_t low = data_byte & 0x0F;
+        hex_str_buf[j++] = TO_HEX_CHAR(high);
+        hex_str_buf[j++] = TO_HEX_CHAR(low);
+    }
+    hex_str_buf[j] = '\0';
+
+    /* 返回实际转换的数据长度 */
+    return convert_len;
 }
 
 /**---------------------------------------------------------------------------*

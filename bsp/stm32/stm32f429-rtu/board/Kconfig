@@ -82,15 +82,24 @@ menu "On-chip Peripheral Drivers"
                 bool "Enable UART1 RX DMA"
                 depends on BSP_USING_UART1 && RT_SERIAL_USING_DMA
                 default y
+				
+			config BSP_USING_UART2
+                bool "Enable UART2"
+                default y
+
+            config BSP_UART2_RX_USING_DMA
+                bool "Enable UART2 RX DMA"
+                depends on BSP_USING_UART2 && RT_SERIAL_USING_DMA
+                default y
 
             config BSP_USING_UART3
                 bool "Enable UART3"
-                default n
+                default y
 
             config BSP_UART3_RX_USING_DMA
                 bool "Enable UART3 RX DMA"
                 depends on BSP_USING_UART3 && RT_SERIAL_USING_DMA
-                default n
+                default y
                 
             config BSP_USING_UART5
                 bool "Enable UART5"
@@ -100,6 +109,33 @@ menu "On-chip Peripheral Drivers"
                 bool "Enable UART5 RX DMA"
                 depends on BSP_USING_UART5 && RT_SERIAL_USING_DMA
                 default n
+				
+			config BSP_USING_UART6
+                bool "Enable UART6"
+                default y
+
+            config BSP_UART6_RX_USING_DMA
+                bool "Enable UART6 RX DMA"
+                depends on BSP_USING_UART6 && RT_SERIAL_USING_DMA
+                default y
+				
+			config BSP_USING_UART7
+                bool "Enable UART7"
+                default y
+
+            config BSP_UART7_RX_USING_DMA
+                bool "Enable UART7 RX DMA"
+                depends on BSP_USING_UART7 && RT_SERIAL_USING_DMA
+                default y
+				
+			config BSP_USING_UART8
+                bool "Enable UART8"
+                default y
+
+            config BSP_UART8_RX_USING_DMA
+                bool "Enable UART8 RX DMA"
+                depends on BSP_USING_UART8 && RT_SERIAL_USING_DMA
+                default y
         endif
 
     config BSP_USING_ON_CHIP_FLASH

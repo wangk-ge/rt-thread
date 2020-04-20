@@ -3,9 +3,9 @@
  * File Name
  *  common.h
  * Author
- *  wangk
+ *  
  * Date
- *  2018/01/16
+ *  2020/04/19
  * Descriptions:
  * 公共定义头文件
  *
@@ -51,6 +51,9 @@ extern   "C"
 #ifndef STR_ITEM
 #define STR_ITEM(s) (s), STR_LEN(s)
 #endif
+
+/* 半字节转换为HEX字符 */
+#define TO_HEX_CHAR(b) (((b) <= 0x09) ? ((b) + (uint8_t)'0') : (((b) - 0x0A) + (uint8_t)'A'))
 
 // Case返回枚举常量(或宏)名称字符串
 #define MACRO_NAME_CASE(eMacro) case eMacro: return #eMacro
