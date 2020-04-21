@@ -22,6 +22,14 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
+#define JSON_DATA_BUF_LEN (1024)
+
+/* 清空历史数据 */
+extern rt_err_t clear_history_data(void);
+
+/* 读取前n个时刻的一条历史数据(JSON格式) */
+extern uint32_t read_history_data(uint32_t n, char* json_data_buf, uint32_t json_buf_len);
+
 /* 取得模组信号强度指示 */
 static int get_modem_rssi(int *rssi)
 {
@@ -48,7 +56,7 @@ static EfErrCode set_default_config(void)
         EfErrCode ret = ef_set_env_blob(default_env_set[i].key, default_env_set[i].value, default_env_set[i].value_len);
         if (ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(%d) error!", default_env_set[i].key);
+            LOG_E("ef_set_env_blob(%s) error!", default_env_set[i].key);
             return ret;
         }
     }
@@ -428,7 +436,12 @@ AT_CMD_EXPORT("AT+CYCLE", "=<minutes>", RT_NULL, at_cycle_query, at_cycle_setup,
 
 static at_result_t at_clr_exec(const struct at_cmd *cmd)
 {
-    // TODO
+    rt_err_t ret = clear_history_data();
+    if (ret != RT_EOK)
+    {
+        //LOG_E("clear_history_data() error(%d)!", ret);
+        return AT_RESULT_FAILE;
+    }
     
     return AT_RESULT_OK;
 }
@@ -493,11 +506,28 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
         return AT_RESULT_PARSE_FAILE;
     }
     
-    /* 
-        <n>=0代表读取最近一条采集数据
-        <n>=n读取上n个时刻的采集数据
-    */
-    // TODO
+    char* json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
+    if (json_data_buf == NULL)
+    {
+        LOG_E("rt_malloc(%d) failed!", JSON_DATA_BUF_LEN);
+        return AT_RESULT_PARSE_FAILE;
+    }
+    
+    /* 读取前n个时刻的一条历史数据(JSON格式)  */
+    uint32_t read_len = read_history_data(n, json_data_buf, JSON_DATA_BUF_LEN);
+    
+    /* 输出JSON数据 */
+    if (read_len > 0)
+    { // 读取到数据
+        at_server_printfln("+DATARD: %s", json_data_buf);
+    }
+    else
+    { // 没有读取到数据
+        at_server_printfln("+DATARD: ");
+    }
+    
+    rt_free(json_data_buf);
+    json_data_buf = NULL;
     
     return AT_RESULT_OK;
 }

@@ -22,6 +22,7 @@
 #include <errno.h>
 #include "config.h"
 #include "common.h"
+#include "util.h"
 
 #define LOG_TAG              "main"
 #define LOG_LVL              LOG_LVL_DBG
@@ -44,8 +45,16 @@
 #define RS485_3_REN_PIN GET_PIN(E, 12) // PE12(高电平发送,低电平接收)
 #define RS485_4_REN_PIN GET_PIN(E, 13) // PE13(高电平发送,低电平接收)
 
-/* UARTX每条采集的数据大小(字节数) */
-static uint32_t uart_x_data_len[4] = {0};
+/* 历史数据保存的最大条数 */
+#define HISTORY_DATA_MAX_NUM (4096)
+
+/* 历史数据FIFO队列信息(头部插入、尾部删除) */
+typedef struct
+{
+    uint32_t length; // 队列长度
+    uint32_t head_pos; // 头部位置
+    uint32_t tail_pos; // 尾部位置
+} history_fifo_info;
 
 /* event for application */
 static rt_event_t app_event = RT_NULL;
@@ -160,30 +169,6 @@ static void app_deinit()
     }
 }
 
-/* 统计UARTX每条采集的数据大小(字节数) 
- *
- *   数据格式: "采集时间(YYMMDDhhmmss),变量名1:读出数据的HEX格式字符串1,变量名2:读出数据的HEX格式字符串2,...\0"
- *
- */
-static uint32_t calc_uart_x_data_len(int x)
-{
-    int index = x - 1;
-    config_info *cfg = cfg_get();
-
-    uint32_t data_len = STR_LEN("YYMMDDhhmmss") + 1; // 采集时间(YYMMDDhhmmss)+分隔符','
-    uint8_t variablecnt = cfg->uart_x_cfg[index].variablecnt; // 变量个数
-    int i = 0;
-    for (i = 0; i < variablecnt; ++i)
-    {
-        char* variable = cfg->uart_x_cfg[index].variable[i]; // 变量名
-        uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数(每个2字节,转换成HEX字符串4字节)
-        
-        data_len += rt_strlen(variable) + 1 + length * 2 * 2 + 1; // 变量名长度+分隔符':'+数据HEX字符串长度+分隔符','
-    }
-    
-    return data_len;
-}
-
 static rt_err_t app_init()
 {
     LOG_D("app_init()");
@@ -227,17 +212,6 @@ static rt_err_t app_init()
     
     /* 取得缓存的配置信息 */
     cfg = cfg_get();
-    
-    /* 统计UARTX每条采集的数据大小(字节数) */
-    {
-        int i = 0;
-        for (i = 0; i < ARRAY_SIZE(uart_x_data_len); ++i)
-        {
-            int x = i + 1;
-            uart_x_data_len[i] = calc_uart_x_data_len(x);
-            LOG_I("uart_%d_data_len=%u", x, uart_x_data_len[i]);
-        }
-    }
     
     /* 根据保存的配置来设置ULOG全局日志level */
     {
@@ -384,31 +358,24 @@ static rt_err_t app_data_report()
 }
 
 /* 采集UARTX数据 */
-static char* app_data_acquisition(int x)
+static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_len)
 {
-    LOG_D("app_data_acquisition(UART%d)", x);
+    LOG_D("uart_x_data_acquisition(UART%d)", x);
     
     /* 内部函数不做参数检查,由调用者保证参数有效性 */
     int index = x - 1;
     
-    modbus_t *mb_ctx = NULL;
-    
-    rt_err_t ret = RT_EOK;
+    uint32_t data_len = 0; // 采集的数据长度(字节数)
     
     /* 校验位转换表(0=无'NONE',1=奇'EVEN',2=偶'ODD') */
     const char parity_name[] = {'N', 'E', 'O'};
+    
+    modbus_t *mb_ctx = NULL;
 
     /* 配置信息 */
     config_info *cfg = cfg_get();
     
-    /* 分配采集数据缓存 */
-    char *acquisition_data = (char*)rt_malloc(uart_x_data_len[index]);
-    if (acquisition_data == NULL)
-    {
-        LOG_E("rt_malloc(%u) error", uart_x_data_len[index]);
-        goto __exit;
-    }
-
+    /* 采集数据 */
     {
         /* 创建MODBUS RTU对象实例 */
         mb_ctx = modbus_new_rtu(RS485_1_DEVICE_NAME, 
@@ -419,7 +386,6 @@ static char* app_data_acquisition(int x)
         if (mb_ctx == NULL)
         {
             LOG_E("modbus_new_rtu error");
-            ret = -RT_ERROR;
             goto __exit;
         }
         
@@ -435,43 +401,30 @@ static char* app_data_acquisition(int x)
         if (iret != 0)
         {
             LOG_E("modbus_connect error(%d)", errno);
-            ret = -RT_ERROR;
             goto __exit;
         }
-        
-        /* acquisition_data中的数据长度 */
-        int data_len = 0;
-        
-        /* 获取当前时间 */
-        time_t now = time(RT_NULL);
-        struct tm* local_time = localtime(&now);
-        data_len = snprintf(acquisition_data, uart_x_data_len[index], "%02d%02d%02d%02d%02d%02d", 
-            (local_time->tm_year + 1900) - 2000, local_time->tm_mon + 1, local_time->tm_mday,
-            local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
         
         int i = 0;
         uint8_t variablecnt = cfg->uart_x_cfg[index].variablecnt; // 变量个数
         for (i = 0; i < variablecnt; ++i)
         {
-            char* variable = cfg->uart_x_cfg[index].variable[i]; // 变量名
             uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
             uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
             /* Reads the holding registers of remote device and put the data into an array */
             uint16_t read_buf[MODBUS_MAX_READ_REGISTERS] = {0}; // 读取数据缓冲区
-            int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, read_buf);
+            memset(read_buf, 0, sizeof(read_buf)); // 先清零
+            int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, read_buf); // 读取寄存器数据
             
             /* 保存到采集数据缓存 */
-            data_len += snprintf(acquisition_data + data_len, uart_x_data_len[index] - data_len, "%s:", variable);
             int j = 0;
             for (j = 0; j < length; ++j)
             {
-                data_len += snprintf(acquisition_data + data_len, uart_x_data_len[index] - data_len, "%04x", read_buf[j]);
+                uint16_t data = read_buf[i];
+                RT_ASSERT(data_len < buf_len);
+                data_buf[data_len++] = (uint8_t)(data >> 8); // 高字节
+                RT_ASSERT(data_len < buf_len);
+                data_buf[data_len++] = (uint8_t)(data & 0x00FF); // 低字节
             }
-            acquisition_data[data_len++] = ',';
-        }
-        if (data_len > 0)
-        {
-            acquisition_data[data_len - 1] = '\0'; // 最后一个','改为'\0'
         }
     }
     
@@ -482,25 +435,259 @@ __exit:
     /* 释放MODBUS对象实例 */
     modbus_free(mb_ctx);
     
-    if (ret != RT_EOK)
-    {
-        free(acquisition_data);
-        acquisition_data = NULL;
-    }
-    
-    return acquisition_data;
+    return data_len;
 }
 
-/* 保存数据 */
-static rt_err_t app_data_save(int x, const char* data)
+/* 采集数据并保存到Flash */
+static rt_err_t app_data_acquisition_and_save()
 {
-    LOG_D("app_data_save(UART%d)", x);
+    LOG_D("app_data_acquisition_and_save()");
+    
+    rt_err_t ret = RT_EOK;
+    uint8_t data_buf[256] = {0};
+    uint32_t data_len = 0;
+    char data_key[16] = "";
+    
+    /* 读取历史数据队列信息 */
+    history_fifo_info fifo_info = {
+        .length = 0, // 队列长度
+        .head_pos = 0, // 头部位置
+        .tail_pos = 0 // 尾部位置
+    };
+    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info), NULL);
+    if (len != sizeof(fifo_info))
+    {
+        /* 加载FIFO队列失败,提示将会新建一个(第一次运行?) */
+        LOG_W("ef_get_env_blob(history_fifo_info) load fail, create new!");
+    }
+    
+    /* 本次采集将保存在FIFO中的位置 */
+    uint32_t pos = fifo_info.head_pos;
+    
+    /* 记录当前时间 */
+    time_t now = time(RT_NULL);
+    
+    int x = 1;
+    for (x = 1; x <= CFG_UART_X_NUM; ++x)
+    {
+        /* 采集UARTX数据 */
+        data_len = uart_x_data_acquisition(x, data_buf, sizeof(data_buf));
+        /* 保存UARTX数据 */
+        snprintf(data_key, sizeof(data_key) - 1, "u%dd%u", x, pos); // Key="uXdN"
+        EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, data_len);
+        if (ret != EF_NO_ERR)
+        { // 保存失败
+            /* 输出警告 */
+            LOG_W("ef_set_env_blob(%s) error!", data_key);
+            /* 继续采集其他总线的数据 */
+        }
+    }
+    
+    /* 保存时间戳 */
+    snprintf(data_key, sizeof(data_key) - 1, "d%uts", pos); // Key="dNts"
+    EfErrCode ef_ret = ef_set_env_blob(data_key, &now, sizeof(now));
+    if (ret != EF_NO_ERR)
+    {
+        LOG_E("ef_set_env_blob(%s) error!", data_key);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 更新FIFO信息 */
+    fifo_info.head_pos++; // 指向下一个空位置
+    if (fifo_info.head_pos >= HISTORY_DATA_MAX_NUM)
+    { // 超出边界
+        fifo_info.head_pos = 0; // 回到起点
+    }
+    fifo_info.length++;
+    if (fifo_info.length > HISTORY_DATA_MAX_NUM)
+    { // FIFO已满
+        /* 删除尾部最旧的数据 */
+        fifo_info.tail_pos++;
+        if (fifo_info.tail_pos >= HISTORY_DATA_MAX_NUM)
+        {  // 超出边界
+            fifo_info.tail_pos = 0; // 回到起点
+        }
+        fifo_info.length = HISTORY_DATA_MAX_NUM;
+    }
+    /* 保存新的FIFO信息 */
+    ef_ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
+    if (ret != EF_NO_ERR)
+    {
+        LOG_E("ef_set_env_blob(history_fifo_info) error!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+__exit:
+    return ret;
+}
 
-    // TODO
+/* 
+ * 读取FIFO队列中指定位置的一条历史数据(JSON格式) 
+ *
+ * 返回读到的数据字节数
+ *
+ */
+static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_buf, uint32_t json_buf_len)
+{
+    LOG_D("read_history_pos_data_json(%u)", read_pos);
+    
+    /* 缓冲区中已读取数据字节数 */
+    uint32_t json_data_len = 0;
+    
+    /* 配置信息 */
+    config_info *cfg = cfg_get();
+    
+    char data_key[16] = "";
+    
+    /* 读取时间戳 */
+    snprintf(data_key, sizeof(data_key) - 1, "d%uts", read_pos); // Key="dNts"
+    time_t time_stamp = 0;
+    size_t len = ef_get_env_blob(data_key, &time_stamp, sizeof(time_stamp), NULL);
+    if (len != sizeof(time_stamp))
+    {
+        LOG_E("ef_get_env_blob(%s) error!", data_key);
+        return 0;
+    }
+    /* 时间戳编码成JSON格式并写入缓冲区 */
+    struct tm* local_time = localtime(&time_stamp);
+    json_data_len = rt_snprintf(json_data_buf, json_buf_len, "{\"ts\":\"%04d%02d%02d%02d%02d%02d\",", 
+        (local_time->tm_year + 1900), (local_time->tm_mon + 1), local_time->tm_mday,
+        local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
+    
+    /* 读取UARTX数据 */
+    int x = 1;
+    for (x = 1; x < CFG_UART_X_NUM; ++x)
+    {
+        /* 读取保存的历史数据 */
+        uint8_t data_buf[128] = {0};
+        snprintf(data_key, sizeof(data_key) - 1, "u%dd%u", x, read_pos); // Key="uXdN"
+        len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
+        if (len != sizeof(data_buf))
+        {
+            LOG_E("ef_get_env_blob(%s) error!", data_key);
+            return 0;
+        }
+        
+        /* 转换成JSON格式并写入数据缓冲区 */
+        json_data_len += rt_snprintf(json_data_buf + json_data_len, 
+            json_buf_len - json_data_len, "\"u%d\":{", x); // 分组名
+        uint32_t data_read_pos = 0; // 变量采集值的读取位置
+        int i = 0;
+        for (i = 0; i < cfg->uart_x_cfg[x - 1].variablecnt; ++i)
+        {
+            /* 每个寄存器16bit */
+            uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 寄存器个数
+            uint16_t data_bytes = reg_num * sizeof(uint16_t); // 字节数
+            
+            char hex_str_buf[128] = "";
+            util_to_hex_str(data_buf + data_read_pos, // 取得变量对应的采集值
+                data_bytes, hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
+            json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                "\"%s\":\"%s\",", cfg->uart_x_cfg[x - 1].variable[i], hex_str_buf);
+            
+            data_read_pos += data_bytes; // 指向下一个采集值起始
+        }
+        if (json_data_len < json_buf_len)
+        {
+            json_data_buf[json_data_len - 1] = '}'; // 末尾','改成'}'
+            json_data_buf[json_data_len++] = ','; // 添加','
+        }
+    }
+    if (json_data_len < json_buf_len)
+    {
+        json_data_buf[json_data_len - 1] = '}'; // 末尾','改成'}'
+        json_data_buf[json_data_len] = '\0'; // 添加'\0'
+    }
+    
+    return json_data_len;
+}
+
+/* 
+ * 读取前n个时刻的一条历史数据(JSON格式) 
+ *
+ *   n=0 读取最近一条历史数据
+ *   n>0 读取前n个时刻的一条历史数据
+ *
+ * 返回实际读取数据字节数
+ */
+uint32_t read_history_data(uint32_t n, char* json_data_buf, uint32_t json_buf_len)
+{
+    LOG_D("read_history_data(%u)", n);
+    
+    /* 缓冲区中已读取数据字节数 */
+    uint32_t json_data_len = 0;
+    
+    /* 读取历史数据队列信息 */
+    history_fifo_info fifo_info = {
+        .length = 0, // 队列长度
+        .head_pos = 0, // 头部位置
+        .tail_pos = 0 // 尾部位置
+    };
+    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info), NULL);
+    if (len != sizeof(fifo_info))
+    {
+        /* 加载FIFO队列失败(第一次运行?) */
+        LOG_E("ef_get_env_blob(history_fifo_info) load fail!");
+        return 0;
+    }
+    
+    /* 状态检查 */
+    if (fifo_info.length <= 0)
+    { // 队列为空
+        LOG_E("history data is empty!");
+        return 0;
+    }
+    
+    /* 范围检查 */
+    if (n >= fifo_info.length)
+    {
+        /* 超范围 */
+        LOG_E("n(%u) not in range[0,%u]!", n, fifo_info.length - 1);
+        return 0;
+    }
+    
+    /* 读取前第n条历史数据 */
+    uint32_t read_pos = fifo_info.head_pos;
+    if (fifo_info.head_pos >= n)
+    {
+        read_pos = fifo_info.head_pos - n;
+    }
+    else
+    {
+        read_pos = HISTORY_DATA_MAX_NUM - n;
+    }
+    
+    /* 读取read_pos处的一条历史数据(JSON格式) */
+    json_data_len = read_history_pos_data_json(read_pos, json_data_buf, json_buf_len);
+    
+    return json_data_len;
+}
+
+/* 
+ * 清空历史数据
+ */
+rt_err_t clear_history_data(void)
+{
+    LOG_D("clear_history_data()");
+    
+    /* 清空历史数据队列信息 */
+    history_fifo_info fifo_info = {
+        .length = 0, // 队列长度
+        .head_pos = 0, // 头部位置
+        .tail_pos = 0 // 尾部位置
+    };
+    EfErrCode ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
+    if (ret != EF_NO_ERR)
+    {
+        LOG_E("ef_set_env_blob(history_fifo_info) error!");
+        return -RT_ERROR;
+    }
     
     return RT_EOK;
 }
-    
+
 int main(void)
 {
     /* 初始化APP */
@@ -552,21 +739,8 @@ int main(void)
         
         if (event_recved & APP_EVENT_DATA_ACQUISITION_REQ)
         {
-            /* 采集4路UART数据 */
-            char* data1 = app_data_acquisition(1); // UART1
-            char* data2 = app_data_acquisition(2); // UART2
-            char* data3 = app_data_acquisition(3); // UART3
-            char* data4 = app_data_acquisition(4); // UART4
-            
-            LOG_I("data1: %s", data1);
-            LOG_I("data2: %s", data2);
-            LOG_I("data3: %s", data3);
-            LOG_I("data4: %s", data4);
-            
-            rt_free(data1);
-            rt_free(data2);
-            rt_free(data3);
-            rt_free(data4);
+            /* 采集并保存数据 */
+            app_data_acquisition_and_save();
         }
     }
     

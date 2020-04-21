@@ -46,6 +46,21 @@ extern   "C"
 *************************************************/
 uint32_t util_str_to_u32(const char* str, uint32_t str_len);
 
+/*************************************************
+* Function: util_to_hex_str
+* Description: convert data to hex string
+* Author: 
+* Returns: the data length of convert success
+* Parameter:
+*  data data to convert
+*  data_len data length (in bytes)
+*  hex_str_buf buffer to hex string
+*  buf_len buffer length (in bytes)
+* History:
+*************************************************/
+uint32_t util_to_hex_str(const uint8_t* data, size_t data_len, 
+    char* hex_str_buf, size_t buf_len);
+
 /**--------------------------------------------------------------------------*
 **                         Compiler Flag                                     *
 **---------------------------------------------------------------------------*/
