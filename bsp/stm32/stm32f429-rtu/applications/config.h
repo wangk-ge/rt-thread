@@ -61,6 +61,8 @@ typedef struct
     uint8_t ulog_glb_lvl; // LOG输出等级
     uint8_t acquisition; // 数据采集间隔时间(分钟)
     uint8_t cycle; // 数据发布间隔时间(分钟)
+    char* productkey; // productKey
+    char* deviceid; // deviceId
 } config_info;
 
 /*----------------------------------------------------------------------------*

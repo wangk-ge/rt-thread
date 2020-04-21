@@ -20,7 +20,8 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-/* RTC相关AT指令 */
+/* 取得历史数据条目数 */
+extern uint32_t get_history_data_num(void);
 
 /* AT+DATETIME 读取当前日期时间 */
 
@@ -39,3 +40,98 @@ static at_result_t at_date_time_query(const struct at_cmd *cmd)
 }
 
 AT_CMD_EXPORT("AT+DATETIME", RT_NULL, RT_NULL, at_date_time_query, RT_NULL, RT_NULL, 0);
+
+/* AT+HISTORYDATANUM 读取历史数据条目数 */
+
+static at_result_t at_history_data_num_query(const struct at_cmd *cmd)
+{
+    at_server_printfln("+HISTORYDATANUM: %u", get_history_data_num());
+
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+HISTORYDATANUM", RT_NULL, RT_NULL, at_history_data_num_query, RT_NULL, RT_NULL, 0);
+
+/* AT+PRODUCTKEY 设置/读取productKey */
+
+static at_result_t at_productkey_query(const struct at_cmd *cmd)
+{
+    char key[32] = "";
+    size_t len = ef_get_env_blob("productkey", key, sizeof(key) - 1, RT_NULL);
+    key[len] = '\0';
+    at_server_printfln("+PRODUCTKEY: %s", key);
+    
+    return AT_RESULT_OK;
+}
+
+static at_result_t at_productkey_setup(const struct at_cmd *cmd, const char *args)
+{
+    char key[32] = "";
+    char *req_expr = "=%s";
+
+    if (rt_strlen(args) > sizeof(key))
+    {
+        LOG_E("rt_strlen(args)>%d!", sizeof(key));
+        return AT_RESULT_CHECK_FAILE;
+    }
+    
+    int argc = at_req_parse_args(args, req_expr, key);
+    if (argc != 1)
+    {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        return AT_RESULT_PARSE_FAILE;
+    }
+
+    EfErrCode ef_ret = ef_set_env_blob("productkey", key, rt_strlen(key));
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("ef_set_env_blob(productkey,%s) error(%d)!", key, ef_ret);
+        return AT_RESULT_FAILE;
+    }
+
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+PRODUCTKEY", "=<key>", RT_NULL, at_productkey_query, at_productkey_setup, RT_NULL, 0);
+
+/* AT+DEVICEID 设置/读取deviceId */
+
+static at_result_t at_deviceid_query(const struct at_cmd *cmd)
+{
+    char deviceid[32] = "";
+    size_t len = ef_get_env_blob("deviceid", deviceid, sizeof(deviceid) - 1, RT_NULL);
+    deviceid[len] = '\0';
+    at_server_printfln("+DEVICEID: %s", deviceid);
+    
+    return AT_RESULT_OK;
+}
+
+static at_result_t at_deviceid_setup(const struct at_cmd *cmd, const char *args)
+{
+    char deviceid[32] = "";
+    char *req_expr = "=%s";
+
+    if (rt_strlen(args) > sizeof(deviceid))
+    {
+        LOG_E("rt_strlen(args)>%d!", sizeof(deviceid));
+        return AT_RESULT_CHECK_FAILE;
+    }
+    
+    int argc = at_req_parse_args(args, req_expr, deviceid);
+    if (argc != 1)
+    {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        return AT_RESULT_PARSE_FAILE;
+    }
+
+    EfErrCode ef_ret = ef_set_env_blob("deviceid", deviceid, rt_strlen(deviceid));
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("ef_set_env_blob(deviceid,%s) error(%d)!", deviceid, ef_ret);
+        return AT_RESULT_FAILE;
+    }
+
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+DEVICEID", "=<id>", RT_NULL, at_deviceid_query, at_deviceid_setup, RT_NULL, 0);

@@ -108,6 +108,16 @@ static void cfg_info_clear(void)
         }
     }
     
+    if (cfg_info.productkey != NULL)
+    {
+        rt_free(cfg_info.productkey);
+    }
+    
+    if (cfg_info.deviceid != NULL)
+    {
+        rt_free(cfg_info.deviceid);
+    }
+    
     /* 所有成员清0 */
     memset(&cfg_info, 0, sizeof(cfg_info));
 }
@@ -307,6 +317,56 @@ bool cfg_load(void)
 
 #undef LOAD_CONFIG_ITEM
     
+    /* 加载productKey */
+    {
+        size_t productkey_len = 0;
+        ef_get_env_blob("productkey", RT_NULL, 0, &productkey_len);
+        if (productkey_len > 0)
+        {
+            cfg_info.productkey = rt_malloc(productkey_len + 1);
+            if (cfg_info.productkey == RT_NULL)
+            {
+                LOG_E("rt_malloc(%u) error!", productkey_len + 1);
+                ret = false;
+                goto __exit;
+            }
+            
+            size_t len = ef_get_env_blob("productkey", cfg_info.productkey, productkey_len, RT_NULL);
+            if (len != productkey_len)
+            {
+                LOG_E("ef_get_env_blob(productkey) error!");
+                ret = false;
+                goto __exit;
+            }
+            cfg_info.productkey[productkey_len] = '\0';
+        }
+    }
+    
+    /* 加载deviceId */
+    {
+        size_t deviceid_len = 0;
+        ef_get_env_blob("deviceid", RT_NULL, 0, &deviceid_len);
+        if (deviceid_len > 0)
+        {
+            cfg_info.deviceid = rt_malloc(deviceid_len + 1);
+            if (cfg_info.deviceid == RT_NULL)
+            {
+                LOG_E("rt_malloc(%u) error!", deviceid_len + 1);
+                ret = false;
+                goto __exit;
+            }
+            
+            size_t len = ef_get_env_blob("deviceid", cfg_info.deviceid, deviceid_len, RT_NULL);
+            if (len != deviceid_len)
+            {
+                LOG_E("ef_get_env_blob(deviceid) error!");
+                ret = false;
+                goto __exit;
+            }
+            cfg_info.deviceid[deviceid_len] = '\0';
+        }
+    }
+    
     /* 加载UARTX配置项 */
     {
         int x = 1;
@@ -364,6 +424,8 @@ void cfg_print(void)
     LOG_I("ulog_glb_lvl: %u", cfg_info.ulog_glb_lvl);
     LOG_I("acquisition: %u", cfg_info.acquisition);
     LOG_I("cycle: %u", cfg_info.cycle);
+    LOG_I("productkey: %s", cfg_info.productkey ? cfg_info.productkey : "");
+    LOG_I("deviceid: %s", cfg_info.deviceid ? cfg_info.deviceid : "");
     
     int i = 0;
     for (i = 0; i < ARRAY_SIZE(cfg_info.uart_x_cfg); ++i)

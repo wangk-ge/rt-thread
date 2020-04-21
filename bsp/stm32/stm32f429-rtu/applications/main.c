@@ -6,7 +6,6 @@
  * Change Logs:
  * Date           Author       Notes
  * 2018-11-06     SummerGift   first version
- * 2018-11-19     flybreak     add stm32f429-fire-challenger bsp
  */
 
 #include <rtthread.h>
@@ -20,6 +19,7 @@
 #include <modbus-rtu.h>
 #include <mqttclient.h>
 #include <errno.h>
+#include <jsmn.h>
 #include "config.h"
 #include "common.h"
 #include "util.h"
@@ -56,6 +56,9 @@ typedef struct
     uint32_t tail_pos; // 尾部位置
 } history_fifo_info;
 
+/* 用于保护历史数据FIFO队列信息的并发访问 */
+static rt_mutex_t history_fifo_mutex = RT_NULL;
+
 /* event for application */
 static rt_event_t app_event = RT_NULL;
 
@@ -77,14 +80,6 @@ static rt_err_t app_send_event(rt_uint32_t event_set)
         LOG_E("app_send_event() call rt_event_send error(%d)", ret);
     }
     return ret;
-}
-
-static void topic_rtu_test_handler(void* client, message_data_t* msg)
-{
-    (void) client;
-    LOG_I("-----------------------------------------------------------------------------------");
-    LOG_I("%s:%d %s()...\ntopic: %s\nmessage:%s", __FILE__, __LINE__, __FUNCTION__, msg->topic_name, (char*)msg->message->payload);
-    LOG_I("-----------------------------------------------------------------------------------");
 }
 
 static void tbss_netdev_status_callback(struct netdev *netdev, enum netdev_cb_type type)
@@ -152,6 +147,11 @@ static void app_deinit()
     
     mqtt_release(&mq_client);
     
+    if (RT_NULL != history_fifo_mutex)
+    {
+        rt_mutex_delete(history_fifo_mutex);
+        history_fifo_mutex = RT_NULL;
+    }
     if (RT_NULL != app_event)
     {
         rt_event_delete(app_event);
@@ -216,6 +216,15 @@ static rt_err_t app_init()
     /* 根据保存的配置来设置ULOG全局日志level */
     {
         ulog_global_filter_lvl_set(cfg->ulog_glb_lvl);
+    }
+    
+    /* create history fifo mutex */
+    history_fifo_mutex = rt_mutex_create("history_fifo", RT_IPC_FLAG_FIFO);
+    if (RT_NULL == history_fifo_mutex)
+    {
+        LOG_E("create history fifo mutex failed!");
+        ret = -RT_ERROR;
+        goto __exit;
     }
     
     /* create app event */
@@ -291,6 +300,11 @@ __exit_mq_init:
     mqtt_release(&mq_client);
     
 __exit:
+    if (RT_NULL != history_fifo_mutex)
+    {
+        rt_mutex_delete(history_fifo_mutex);
+        history_fifo_mutex = RT_NULL;
+    }
     if (RT_NULL != app_event)
     {
         rt_event_delete(app_event);
@@ -310,6 +324,97 @@ __exit:
     return ret;
 }
 
+static const char* get_productkey()
+{
+    config_info *cfg = cfg_get();
+    if (cfg->productkey == NULL)
+    {
+        return "productKey";
+    }
+    return cfg->productkey;
+}
+
+static const char* get_deviceid()
+{
+    config_info *cfg = cfg_get();
+    if (cfg->deviceid == NULL)
+    {
+        return "deviceId";
+    }
+    return cfg->deviceid;
+}
+
+static void topic_telemetry_get_handler(void* client, message_data_t* msg)
+{
+    (void) client;
+    
+    const char *json_str = (const char*)(msg->message->payload);
+    size_t json_str_len = msg->message->payloadlen;
+    
+    LOG_I("-----------------------------------------------------------------------------------");
+    LOG_I("%s:%d %s()...\ntopic: %s\nmessage:%s", __FILE__, __LINE__, __FUNCTION__, msg->topic_name, json_str);
+    LOG_I("-----------------------------------------------------------------------------------");
+    
+    /* 解析JSON字符串 */
+    jsmn_parser json_paser;
+    jsmn_init(&json_paser);
+    jsmntok_t tok_list[20];
+    int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
+    int i = 0;
+    for (i = 0; i < list_len; ++i)
+    {
+        if (JSMN_STRING == tok_list[i].type)
+		{
+			const char *token_str = json_str + tok_list[i].start;
+			int token_str_len = tok_list[i].end - tok_list[i].start;
+			if ((token_str_len == STR_LEN("productKey")) 
+				&& (0 == memcmp(token_str, "productKey", token_str_len)))
+			{
+                const char *productkey = json_str + tok_list[i + 1].start;
+                int productkey_len = tok_list[i + 1].end - tok_list[i + 1].start;
+				// TODO
+			}
+            else if ((token_str_len == STR_LEN("deviceId")) 
+				&& (0 == memcmp(token_str, "deviceId", token_str_len)))
+			{
+                const char *deviceid = json_str + tok_list[i + 1].start;
+                int deviceid_len = tok_list[i + 1].end - tok_list[i + 1].start;
+				// TODO
+			}
+            else if ((token_str_len == STR_LEN("OperationDate")) 
+				&& (0 == memcmp(token_str, "OperationDate", token_str_len)))
+			{
+                const char *operationdate = json_str + tok_list[i + 1].start;
+                int operationdate_len = tok_list[i + 1].end - tok_list[i + 1].start;
+				// TODO
+			}
+            else if ((token_str_len == STR_LEN("id")) 
+				&& (0 == memcmp(token_str, "id", token_str_len)))
+			{
+                const char *id = json_str + tok_list[i + 1].start;
+                int id_len = tok_list[i + 1].end - tok_list[i + 1].start;
+				// TODO
+			}
+		}
+    }
+}
+
+static void topic_config_get_handler(void* client, message_data_t* msg)
+{
+    (void) client;
+    LOG_I("-----------------------------------------------------------------------------------");
+    LOG_I("%s:%d %s()...\ntopic: %s\nmessage:%s", __FILE__, __LINE__, __FUNCTION__, msg->topic_name, (char*)msg->message->payload);
+    LOG_I("-----------------------------------------------------------------------------------");
+}
+
+static void topic_config_set_handler(void* client, message_data_t* msg)
+{
+    (void) client;
+    LOG_I("-----------------------------------------------------------------------------------");
+    LOG_I("%s:%d %s()...\ntopic: %s\nmessage:%s", __FILE__, __LINE__, __FUNCTION__, msg->topic_name, (char*)msg->message->payload);
+    LOG_I("-----------------------------------------------------------------------------------");
+}
+
 static rt_err_t app_mqtt_connect()
 {
     LOG_D("app_mqtt_connect()");
@@ -321,12 +426,38 @@ static rt_err_t app_mqtt_connect()
         return -RT_ERROR;
     }
     
-    ret = mqtt_subscribe(&mq_client, "/sys/rtu_test", QOS1, topic_rtu_test_handler);
+    char topic_buf[128] = "";
+    
+    /* 订阅/sys/${productKey}/${deviceId}/telemetry/get主题,接收服务器数据查询指令 */
+    rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/telemetry/get", get_productkey(), get_deviceid());
+    ret = mqtt_subscribe(&mq_client, topic_buf, QOS1, topic_telemetry_get_handler);
     if (ret != MQTT_SUCCESS_ERROR)
     {
         mqtt_disconnect(&mq_client);
         
-        LOG_E("mqtt subscribe error(%d)", ret);
+        LOG_E("mqtt subscribe(%s) error(%d)", topic_buf, ret);
+        return -RT_ERROR;
+    }
+    
+    /* 订阅/sys/${productKey}/${deviceId}/config/get主题,接收服务器配置查询指令 */
+    rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/config/get", get_productkey(), get_deviceid());
+    ret = mqtt_subscribe(&mq_client, topic_buf, QOS1, topic_config_get_handler);
+    if (ret != MQTT_SUCCESS_ERROR)
+    {
+        mqtt_disconnect(&mq_client);
+        
+        LOG_E("mqtt subscribe(%s) error(%d)", topic_buf, ret);
+        return -RT_ERROR;
+    }
+    
+    /* 订阅/sys/${productKey}/${deviceId}/config/set主题,接收服务器配置设置指令 */
+    rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/config/set", get_productkey(), get_deviceid());
+    ret = mqtt_subscribe(&mq_client, topic_buf, QOS1, topic_config_set_handler);
+    if (ret != MQTT_SUCCESS_ERROR)
+    {
+        mqtt_disconnect(&mq_client);
+        
+        LOG_E("mqtt subscribe(%s) error(%d)", topic_buf, ret);
         return -RT_ERROR;
     }
     
@@ -439,14 +570,17 @@ __exit:
 }
 
 /* 采集数据并保存到Flash */
-static rt_err_t app_data_acquisition_and_save()
+static rt_err_t data_acquisition_and_save()
 {
-    LOG_D("app_data_acquisition_and_save()");
+    LOG_D("data_acquisition_and_save()");
     
     rt_err_t ret = RT_EOK;
     uint8_t data_buf[256] = {0};
     uint32_t data_len = 0;
     char data_key[16] = "";
+    
+    /* 确保互斥修改FIFO队列 */
+    rt_mutex_take(history_fifo_mutex, RT_WAITING_FOREVER);
     
     /* 读取历史数据队列信息 */
     history_fifo_info fifo_info = {
@@ -520,6 +654,10 @@ static rt_err_t app_data_acquisition_and_save()
     }
     
 __exit:
+    
+    /* 释放互斥锁 */
+    rt_mutex_release(history_fifo_mutex);
+    
     return ret;
 }
 
@@ -671,21 +809,55 @@ uint32_t read_history_data(uint32_t n, char* json_data_buf, uint32_t json_buf_le
 rt_err_t clear_history_data(void)
 {
     LOG_D("clear_history_data()");
+
+    rt_err_t ret = RT_EOK;
     
-    /* 清空历史数据队列信息 */
     history_fifo_info fifo_info = {
         .length = 0, // 队列长度
         .head_pos = 0, // 头部位置
         .tail_pos = 0 // 尾部位置
     };
-    EfErrCode ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
-    if (ret != EF_NO_ERR)
+    
+    /* 确保互斥修改FIFO队列 */
+    rt_mutex_take(history_fifo_mutex, RT_WAITING_FOREVER);
+    
+    /* 清空历史数据队列信息 */
+    EfErrCode ef_ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
+    if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(history_fifo_info) error!");
-        return -RT_ERROR;
+        LOG_E("ef_set_env_blob(history_fifo_info) error(%d)!", ef_ret);
+        ret = -RT_ERROR;
+        goto __exit;
     }
     
-    return RT_EOK;
+__exit:
+
+    /* 释放互斥锁 */
+    rt_mutex_release(history_fifo_mutex);
+    
+    return ret;
+}
+
+/* 
+ * 取得历史数据条目数
+ */
+uint32_t get_history_data_num(void)
+{
+    /* 读取历史数据队列信息 */
+    history_fifo_info fifo_info = {
+        .length = 0, // 队列长度
+        .head_pos = 0, // 头部位置
+        .tail_pos = 0 // 尾部位置
+    };
+    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info), NULL);
+    if (len != sizeof(fifo_info))
+    {
+        /* 加载FIFO队列失败(第一次运行?) */
+        LOG_E("ef_get_env_blob(history_fifo_info) load fail!");
+        return 0;
+    }
+    
+    return fifo_info.length;
 }
 
 int main(void)
@@ -740,7 +912,7 @@ int main(void)
         if (event_recved & APP_EVENT_DATA_ACQUISITION_REQ)
         {
             /* 采集并保存数据 */
-            app_data_acquisition_and_save();
+            data_acquisition_and_save();
         }
     }
     
