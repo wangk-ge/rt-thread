@@ -28,14 +28,10 @@
 extern rt_err_t clear_history_data(void);
 
 /* 读取前n个时刻的一条历史数据(JSON格式) */
-extern uint32_t read_history_data(uint32_t n, char* json_data_buf, uint32_t json_buf_len);
+extern uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len);
 
 /* 取得模组信号强度指示 */
-static int get_modem_rssi(int *rssi)
-{
-    struct at_device *device = at_device_get_by_name(AT_DEVICE_NAMETYPE_DEVICE, TB22_DEVICE_NAME);
-    return at_device_control(device, AT_DEVICE_CTRL_GET_SIGNAL, rssi);
-}
+extern int get_modem_rssi(int *rssi);
 
 /* 恢复默认配置 */
 static EfErrCode set_default_config(void)
@@ -365,9 +361,9 @@ static at_result_t at_acquisition_setup(const struct at_cmd *cmd, const char *ar
         return AT_RESULT_PARSE_FAILE;
     }
     
-    if (minutes > 30)
+    if ((minutes < 1) || (minutes > 30))
     {
-        LOG_E("<minutes>(%u)>30!", minutes);
+        LOG_E("<minutes>(%u) not in range[1,30]!", minutes);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -413,9 +409,9 @@ static at_result_t at_cycle_setup(const struct at_cmd *cmd, const char *args)
         return AT_RESULT_PARSE_FAILE;
     }
     
-    if (minutes > 180)
+    if ((minutes < 1) || (minutes > 180))
     {
-        LOG_E("<minutes>(%u)>180!", minutes);
+        LOG_E("<minutes>(%u) not in range[1,180]!", minutes);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -514,7 +510,7 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
     }
     
     /* 读取前n个时刻的一条历史数据(JSON格式)  */
-    uint32_t read_len = read_history_data(n, json_data_buf, JSON_DATA_BUF_LEN);
+    uint32_t read_len = read_history_data_json(n, json_data_buf, JSON_DATA_BUF_LEN);
     
     /* 输出JSON数据 */
     if (read_len > 0)
