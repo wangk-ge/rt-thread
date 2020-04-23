@@ -135,3 +135,45 @@ static at_result_t at_deviceid_setup(const struct at_cmd *cmd, const char *args)
 }
 
 AT_CMD_EXPORT("AT+DEVICEID", "=<id>", RT_NULL, at_deviceid_query, at_deviceid_setup, RT_NULL, 0);
+
+/* AT+ITEMID 设置/读取itemId */
+
+static at_result_t at_itemid_query(const struct at_cmd *cmd)
+{
+    char itemid[32] = "";
+    size_t len = ef_get_env_blob("itemid", itemid, sizeof(itemid) - 1, RT_NULL);
+    itemid[len] = '\0';
+    at_server_printfln("+ITEMID: %s", itemid);
+    
+    return AT_RESULT_OK;
+}
+
+static at_result_t at_itemid_setup(const struct at_cmd *cmd, const char *args)
+{
+    char itemid[32] = "";
+    char *req_expr = "=%s";
+
+    if (rt_strlen(args) > sizeof(itemid))
+    {
+        LOG_E("rt_strlen(args)>%d!", sizeof(itemid));
+        return AT_RESULT_CHECK_FAILE;
+    }
+    
+    int argc = at_req_parse_args(args, req_expr, itemid);
+    if (argc != 1)
+    {
+        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        return AT_RESULT_PARSE_FAILE;
+    }
+
+    EfErrCode ef_ret = ef_set_env_blob("itemid", itemid, rt_strlen(itemid));
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("ef_set_env_blob(itemid,%s) error(%d)!", itemid, ef_ret);
+        return AT_RESULT_FAILE;
+    }
+
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+ITEMID", "=<id>", RT_NULL, at_itemid_query, at_itemid_setup, RT_NULL, 0);

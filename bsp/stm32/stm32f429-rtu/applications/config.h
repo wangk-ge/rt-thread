@@ -63,6 +63,7 @@ typedef struct
     uint8_t cycle; // 数据发布间隔时间(分钟)
     char* productkey; // productKey
     char* deviceid; // deviceId
+    char* itemid; // itemId
 } config_info;
 
 /*----------------------------------------------------------------------------*

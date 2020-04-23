@@ -118,6 +118,11 @@ static void cfg_info_clear(void)
         rt_free(cfg_info.deviceid);
     }
     
+    if (cfg_info.itemid != NULL)
+    {
+        rt_free(cfg_info.itemid);
+    }
+    
     /* 所有成员清0 */
     memset(&cfg_info, 0, sizeof(cfg_info));
 }
@@ -364,6 +369,31 @@ bool cfg_load(void)
                 goto __exit;
             }
             cfg_info.deviceid[deviceid_len] = '\0';
+        }
+    }
+    
+    /* 加载itemId */
+    {
+        size_t itemid_len = 0;
+        ef_get_env_blob("itemid", RT_NULL, 0, &itemid_len);
+        if (itemid_len > 0)
+        {
+            cfg_info.itemid = rt_malloc(itemid_len + 1);
+            if (cfg_info.itemid == RT_NULL)
+            {
+                LOG_E("rt_malloc(%u) error!", itemid_len + 1);
+                ret = false;
+                goto __exit;
+            }
+            
+            size_t len = ef_get_env_blob("itemid", cfg_info.itemid, itemid_len, RT_NULL);
+            if (len != itemid_len)
+            {
+                LOG_E("ef_get_env_blob(itemid) error!");
+                ret = false;
+                goto __exit;
+            }
+            cfg_info.itemid[itemid_len] = '\0';
         }
     }
     

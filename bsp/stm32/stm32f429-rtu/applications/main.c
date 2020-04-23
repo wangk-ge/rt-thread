@@ -126,9 +126,12 @@ static const char* get_deviceid()
 /* 取得标签ID */
 static const char* get_itemid()
 {
-    //config_info *cfg = cfg_get();
-    //return cfg->itemid;
-    return ""; // TODO
+    config_info *cfg = cfg_get();
+    if (cfg->itemid == NULL)
+    {
+        return "";
+    }
+    return cfg->itemid;
 }
 
 /* 采集UARTX数据 */
