@@ -64,6 +64,12 @@ typedef enum
 /* 主循环消息队列最大长度 */
 #define APP_MSG_QUEUE_LEN (8)
 
+/* MQTT客户端线程栈大小 */
+#define MQTT_CLIENT_THREAD_STACK_SIZE (8192)
+
+/* MQTT客户端线程优先级(优先级必须高于主线程) */
+#define MQTT_CLIENT_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY - 1)
+
 /* 历史数据FIFO队列信息(头部插入、尾部删除) */
 typedef struct
 {
@@ -313,7 +319,7 @@ static rt_err_t data_acquisition_and_save()
         /* 采集UARTX数据 */
         data_len = uart_x_data_acquisition(x, data_buf, sizeof(data_buf));
         /* 保存UARTX数据 */
-        snprintf(data_key, sizeof(data_key) - 1, "u%dd%u", x, pos); // Key="uXdN"
+        snprintf(data_key, sizeof(data_key), "u%dd%u", x, pos); // Key="uXdN"
         EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, data_len);
         if (ret != EF_NO_ERR)
         { // 保存失败
@@ -324,7 +330,7 @@ static rt_err_t data_acquisition_and_save()
     }
     
     /* 保存时间戳 */
-    snprintf(data_key, sizeof(data_key) - 1, "d%uts", pos); // Key="dNts"
+    snprintf(data_key, sizeof(data_key), "d%uts", pos); // Key="dNts"
     EfErrCode ef_ret = ef_set_env_blob(data_key, &now, sizeof(now));
     if (ret != EF_NO_ERR)
     {
@@ -386,7 +392,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     char data_key[16] = "";
     
     /* 读取时间戳 */
-    snprintf(data_key, sizeof(data_key) - 1, "d%uts", read_pos); // Key="dNts"
+    snprintf(data_key, sizeof(data_key), "d%uts", read_pos); // Key="dNts"
     time_t time_stamp = 0;
     size_t len = ef_get_env_blob(data_key, &time_stamp, sizeof(time_stamp), NULL);
     if (len != sizeof(time_stamp))
@@ -406,7 +412,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     {
         /* 读取保存的历史数据 */
         uint8_t data_buf[128] = {0};
-        snprintf(data_key, sizeof(data_key) - 1, "u%dd%u", x, read_pos); // Key="uXdN"
+        snprintf(data_key, sizeof(data_key), "u%dd%u", x, read_pos); // Key="uXdN"
         len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
         if (len != sizeof(data_buf))
         {
@@ -997,6 +1003,12 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         ret = -RT_ERROR;
         goto __exit;
     }
+    if (strref_is_empty(&id))
+    {
+        LOG_E("id is empty!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
     
     /* 分配响应消息用的内存 */
     topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
@@ -1036,7 +1048,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         json_data_buf[json_data_len] = '\0';
         
         /* 请求发布/sys/${productKey}/${deviceId}/telemetry/get_reply响应 */
-        rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/telemetry/get_reply", get_productkey(), get_deviceid());
+        rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/get_reply", get_productkey(), get_deviceid());
         LOG_D("publish(%s) %s", topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
@@ -1141,6 +1153,12 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
         ret = -RT_ERROR;
         goto __exit;
     }
+    if (strref_is_empty(&id))
+    {
+        LOG_E("id is empty!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
     
     /* 分配响应消息用的内存 */
     topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
@@ -1187,7 +1205,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
         }
         
         /* 发布/sys/${productKey}/${deviceId}/config/get_reply响应 */
-        rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/config/get_reply", get_productkey(), get_deviceid());
+        rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/get_reply", get_productkey(), get_deviceid());
         LOG_D("publish(%s) %s", topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
@@ -1215,6 +1233,24 @@ __exit:
             json_data_buf = NULL;
         }
     }
+}
+
+const char* cfg_ret_code_get_message(int cfg_ret_code)
+{
+    switch (cfg_ret_code)
+    {
+        case 200:
+            return "success";
+        case 500:
+            return "error";
+        case 410:
+            return "too many requests";
+        case 420:
+            return "request parameter error";
+        default:
+            break;
+    }
+    return "";
 }
 
 static void topic_config_set_handler(mqtt_client *client, message_data *msg)
@@ -1365,6 +1401,18 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
         ret = -RT_ERROR;
         goto __exit;
     }
+    if (strref_is_empty(&id))
+    {
+        LOG_E("id is empty!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    if (strref_is_empty(&operationdate))
+    {
+        LOG_E("operationdate is empty!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
     
     /* 修改配置 */
     cfg_ret_code = set_config_info(&cycle, &acquisition, &autocontrol, 
@@ -1390,16 +1438,17 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     /* 编码响应信息并发送 */
     {
         /* 消息内容 */
-        rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/config/set", get_productkey(), get_deviceid());
+        rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/set", get_productkey(), get_deviceid());
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceId\":\"%s\",\"OperationDate\":\"%.*s\",\"requestId\":\"%.*s\","
-            "\"code\":\"%d\",\"topic\":\"%s\",\"data\":{}}", get_productkey(), get_deviceid(), 
-            operationdate.len, operationdate.c_str, id.len, id.c_str, cfg_ret_code, topic_buf);
+            "\"code\":\"%d\",\"message\":\"%s\",\"topic\":\"%s\",\"data\":{}}", get_productkey(), get_deviceid(), 
+            operationdate.len, operationdate.c_str, id.len, id.c_str, cfg_ret_code, 
+            cfg_ret_code_get_message(cfg_ret_code), topic_buf);
         RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
         json_data_buf[json_data_len] = '\0';
         
         /* 发布/sys/${productKey}/${deviceId}/config/set_reply响应 */
-        rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/config/set_reply", get_productkey(), get_deviceid());
+        rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/set_reply", get_productkey(), get_deviceid());
         LOG_D("publish(%s) %s", topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
@@ -1816,7 +1865,7 @@ static rt_err_t mqtt_client_start(void)
 {
     LOG_D("mqtt_client_start()");
     
-    int ret = paho_mqtt_start(&mq_client, 8196, 20);
+    int ret = paho_mqtt_start(&mq_client, MQTT_CLIENT_THREAD_STACK_SIZE, MQTT_CLIENT_THREAD_PRIORITY);
     if (ret != PAHO_SUCCESS)
     {
        LOG_E("paho_mqtt_start() error(%d)", ret);
@@ -1878,8 +1927,8 @@ static rt_err_t app_data_report(void)
         
         /* 发布/sys/${productKey}/${deviceId}/telemetry/real_time_data */
         {
-            char topic_buf[128] = "";
-            rt_snprintf(topic_buf, sizeof(topic_buf) - 1, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_deviceid());
+            char topic_buf[MQTT_TOPIC_BUF_LEN] = "";
+            rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_deviceid());
             LOG_D("publish(%s) %s", topic_buf, json_data_buf);
             int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, topic_buf, json_data_buf, json_data_len);
             if (mqtt_ret != PAHO_SUCCESS)

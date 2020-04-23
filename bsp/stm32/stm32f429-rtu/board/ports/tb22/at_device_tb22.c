@@ -585,8 +585,24 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E("ATE0");
             goto __exit;
         }
+        
+        /* set min function */
+        if (at_obj_exec_cmd(device->client, resp, "AT+CFUN=0") != RT_EOK)
+        {
+            result = -RT_ERROR;
+            LOG_E(">> AT+CFUN=0");
+            goto __exit;
+        }
+        
+        /* search band 8 */
+        if (at_obj_exec_cmd(device->client, resp, "AT+NBAND=8") != RT_EOK)
+        {
+            result = -RT_ERROR;
+            LOG_E(">> AT+NBAND=8");
+            goto __exit;
+        }
 
-        #if 0
+#if 0
         /* disable auto register(禁用IoT平台的注册功能) */
         if (at_obj_exec_cmd(device->client, resp, "AT+QREGSWT=2") != RT_EOK)
         {
@@ -594,13 +610,21 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+QREGSWT=2");
             goto __exit;
         }
-        #endif
+#endif
         
         /* disable auto connect */
         if (at_obj_exec_cmd(device->client, resp, "AT+NCONFIG=AUTOCONNECT,FALSE") != RT_EOK)
         {
             result = -RT_ERROR;
             LOG_E(">> AT+NCONFIG=AUTOCONNECT,FALSE");
+            goto __exit;
+        }
+        
+        /* ??? */
+        if (at_obj_exec_cmd(device->client, resp, "AT+NCONFIG=PCO_IE_TYPE,PCO") != RT_EOK)
+        {
+            result = -RT_ERROR;
+            LOG_E(">> AT+NCONFIG=PCO_IE_TYPE,PCO");
             goto __exit;
         }
 
@@ -637,16 +661,6 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
         
-#if 0
-        /* search band 8 */
-        if (at_obj_exec_cmd(device->client, resp, "AT+NBAND=8") != RT_EOK)
-        {
-            result = -RT_ERROR;
-            LOG_E(">> AT+NBAND=8");
-            goto __exit;
-        }
-#endif
-        
         /* set max function */
         if (at_obj_exec_cmd(device->client, resp, "AT+CFUN=1") != RT_EOK)
         {
@@ -655,7 +669,7 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
 
-        #if 0
+#if 0
         /* auto report recv from tcp */
         if (at_obj_exec_cmd(device->client, resp, "AT+NSONMI=2") != RT_EOK)
         {
@@ -663,7 +677,7 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+NSONMI=2");
             goto __exit;
         }
-        #endif
+#endif
 
         /* disable eDRX mode  */
         if (at_obj_exec_cmd(device->client, resp, "AT+CEDRXS=0,5") != RT_EOK)

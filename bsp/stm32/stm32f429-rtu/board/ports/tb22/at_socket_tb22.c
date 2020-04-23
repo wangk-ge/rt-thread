@@ -58,8 +58,8 @@
 
 /* Socket数据接收线程参数 */
 #define TB22_SOCKET_RECV_THREAD_STACK_SIZE  2048
-#define TB22_SOCKET_RECV_THREAD_PRIORITY    (RT_THREAD_PRIORITY_MAX / 2)
-#define TB22_SOCKET_RECV_MB_SIZE            8
+#define TB22_SOCKET_RECV_THREAD_PRIORITY    (RT_THREAD_PRIORITY_MAX / 3 - 2) // 优先级应该高于at_client线程
+#define TB22_SOCKET_RECV_MB_SIZE            128
 
 /* TB22设备Socket信息 */
 struct tb22_sock_t {

@@ -103,7 +103,7 @@
 /* protocol stack implement */
 
 #define SAL_USING_AT
-#define SAL_SOCKETS_NUM 7
+#define SAL_USING_POSIX
 
 /* Network interface device */
 
