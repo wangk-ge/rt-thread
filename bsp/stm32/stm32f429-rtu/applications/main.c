@@ -1773,10 +1773,13 @@ static rt_err_t app_init()
         
         /* 设置服务器地址和端口 */
         {
+#if 0
             char addr[32] = "";
             inet_ntoa_r(cfg->a_ip, addr, sizeof(addr));
             rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", addr, cfg->a_port);
-            //mq_client.uri = "tcp://mq.tongxinmao.com:18830";
+#else
+            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
+#endif
             mq_client.uri = mqtt_server_url;
             LOG_D("mqtt_server_url %s", mqtt_server_url);
         }
