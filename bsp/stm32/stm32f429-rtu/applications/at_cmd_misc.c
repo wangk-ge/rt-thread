@@ -94,47 +94,47 @@ static at_result_t at_productkey_setup(const struct at_cmd *cmd, const char *arg
 
 AT_CMD_EXPORT("AT+PRODUCTKEY", "=<key>", RT_NULL, at_productkey_query, at_productkey_setup, RT_NULL, 0);
 
-/* AT+DEVICEID 设置/读取deviceId */
+/* AT+DEVICECODE 设置/读取deviceCode */
 
-static at_result_t at_deviceid_query(const struct at_cmd *cmd)
+static at_result_t at_devicecode_query(const struct at_cmd *cmd)
 {
-    char deviceid[32] = "";
-    size_t len = ef_get_env_blob("deviceid", deviceid, sizeof(deviceid) - 1, RT_NULL);
-    deviceid[len] = '\0';
-    at_server_printfln("+DEVICEID: %s", deviceid);
+    char devicecode[32] = "";
+    size_t len = ef_get_env_blob("devicecode", devicecode, sizeof(devicecode) - 1, RT_NULL);
+    devicecode[len] = '\0';
+    at_server_printfln("+DEVICECODE: %s", devicecode);
     
     return AT_RESULT_OK;
 }
 
-static at_result_t at_deviceid_setup(const struct at_cmd *cmd, const char *args)
+static at_result_t at_devicecode_setup(const struct at_cmd *cmd, const char *args)
 {
-    char deviceid[32] = "";
+    char devicecode[32] = "";
     char *req_expr = "=%s";
 
-    if (rt_strlen(args) > sizeof(deviceid))
+    if (rt_strlen(args) > sizeof(devicecode))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(deviceid));
+        LOG_E("rt_strlen(args)>%d!", sizeof(devicecode));
         return AT_RESULT_CHECK_FAILE;
     }
     
-    int argc = at_req_parse_args(args, req_expr, deviceid);
+    int argc = at_req_parse_args(args, req_expr, devicecode);
     if (argc != 1)
     {
         LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
-    EfErrCode ef_ret = ef_set_env_blob("deviceid", deviceid, rt_strlen(deviceid));
+    EfErrCode ef_ret = ef_set_env_blob("devicecode", devicecode, rt_strlen(devicecode));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(deviceid,%s) error(%d)!", deviceid, ef_ret);
+        LOG_E("ef_set_env_blob(devicecode,%s) error(%d)!", devicecode, ef_ret);
         return AT_RESULT_FAILE;
     }
 
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+DEVICEID", "=<id>", RT_NULL, at_deviceid_query, at_deviceid_setup, RT_NULL, 0);
+AT_CMD_EXPORT("AT+DEVICECODE", "=<id>", RT_NULL, at_devicecode_query, at_devicecode_setup, RT_NULL, 0);
 
 /* AT+ITEMID 设置/读取itemId */
 
