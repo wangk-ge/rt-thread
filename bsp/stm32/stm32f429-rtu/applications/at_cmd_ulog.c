@@ -35,7 +35,7 @@ static at_result_t at_ulog_tag_lvl_query(const struct at_cmd *cmd)
         for (node = rt_slist_first(ulog_tag_lvl_list_get()); node; node = rt_slist_next(node))
         {
             tag_lvl = rt_slist_entry(node, struct ulog_tag_lvl_filter, list);
-            at_server_printfln("%*.s,%d", ULOG_FILTER_TAG_MAX_LEN, tag_lvl->tag, tag_lvl->level);
+            at_server_printfln("%.*s,%d", ULOG_FILTER_TAG_MAX_LEN, tag_lvl->tag, tag_lvl->level);
         }
     }
 

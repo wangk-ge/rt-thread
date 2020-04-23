@@ -636,7 +636,8 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+CGSN=1");
             goto __exit;
         }
-
+        
+#if 0
         /* search band 8 */
         if (at_obj_exec_cmd(device->client, resp, "AT+NBAND=8") != RT_EOK)
         {
@@ -644,7 +645,8 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+NBAND=8");
             goto __exit;
         }
-
+#endif
+        
         /* set max function */
         if (at_obj_exec_cmd(device->client, resp, "AT+CFUN=1") != RT_EOK)
         {

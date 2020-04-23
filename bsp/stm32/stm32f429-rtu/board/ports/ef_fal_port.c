@@ -86,9 +86,9 @@ static const ef_env default_env_set[] = {
         {"uart4stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
         /* uartXslaveraddr */
         {"uart1slaveraddr", "\x01", 1}, // 默认值0x01
-        {"uart1s2averaddr", "\x01", 1}, // 默认值0x01
-        {"uart1s3averaddr", "\x01", 1}, // 默认值0x01
-        {"uart1s4averaddr", "\x01", 1}, // 默认值0x01
+        {"uart2slaveraddr", "\x01", 1}, // 默认值0x01
+        {"uart3slaveraddr", "\x01", 1}, // 默认值0x01
+        {"uart4slaveraddr", "\x01", 1}, // 默认值0x01
         /* uartXfunction */
         {"uart1function", "\x03", 1}, // 默认值0x03
         {"uart2function", "\x03", 1}, // 默认值0x03

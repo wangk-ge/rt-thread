@@ -58,7 +58,7 @@
 
 /* Socket数据接收线程参数 */
 #define TB22_SOCKET_RECV_THREAD_STACK_SIZE  2048
-#define TB22_SOCKET_RECV_THREAD_PRIORITY    (RT_THREAD_PRIORITY_MAX/2)
+#define TB22_SOCKET_RECV_THREAD_PRIORITY    (RT_THREAD_PRIORITY_MAX / 2)
 #define TB22_SOCKET_RECV_MB_SIZE            8
 
 /* TB22设备Socket信息 */
@@ -665,6 +665,8 @@ static void urc_send_func(struct at_client *client, const char *data, rt_size_t 
     char *client_name = client->device->parent.name;
 
     RT_ASSERT(data && size);
+    
+    LOG_D("urc_send_func()");
 
     device = at_device_get_by_name(AT_DEVICE_NAMETYPE_CLIENT, client_name);
     if (device == RT_NULL)
@@ -699,6 +701,8 @@ static void urc_close_func(struct at_client *client, const char *data, rt_size_t
     char *client_name = client->device->parent.name;
 
     RT_ASSERT(data && size);
+    
+    LOG_D("urc_close_func()");
 
     device = at_device_get_by_name(AT_DEVICE_NAMETYPE_CLIENT, client_name);
     if (device == RT_NULL)
@@ -731,6 +735,8 @@ static void urc_recv_func(struct at_client *client, const char *data, rt_size_t 
 
     RT_ASSERT(data && size);
 
+    LOG_D("urc_recv_func()");
+    
     device = at_device_get_by_name(AT_DEVICE_NAMETYPE_CLIENT, client_name);
     if (device == RT_NULL)
     {
@@ -763,6 +769,8 @@ static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_
     char *client_name = client->device->parent.name;
 
     RT_ASSERT(data && size);
+    
+    LOG_D("urc_dnsqip_func()");
 
     device = at_device_get_by_name(AT_DEVICE_NAMETYPE_CLIENT, client_name);
     if (device == RT_NULL)
@@ -809,6 +817,8 @@ static void tb22_socket_recv_thread_entry(void *parameter)
             {
                 continue;
             }
+            
+            LOG_D("tb22_socket_recv_thread rt_mb_recv");
             
             device = recv_info->device;
             device_socket = recv_info->device_socket;

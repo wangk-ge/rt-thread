@@ -415,6 +415,7 @@ __exit:
     { // 加载失败
         /* 清除缓存的配置数据,释放内存 */
         cfg_info_clear();
+        //ef_env_set_default();
     }
     
     return ret;
