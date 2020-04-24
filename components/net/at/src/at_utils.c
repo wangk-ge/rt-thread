@@ -11,6 +11,9 @@
 #include <at.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#define LOG_TAG              "at"
+#define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
 /**
@@ -22,6 +25,9 @@
  */
 void at_print_raw_cmd(const char *name, const char *buf, rt_size_t size)
 {
+#if 1
+    LOG_I("[D/AT] %s: %.*s", name, size, buf);
+#else
 #define __is_print(ch)       ((unsigned int)((ch) - ' ') < 127u - ' ')
 #define WIDTH_SIZE           32
 
@@ -55,5 +61,6 @@ void at_print_raw_cmd(const char *name, const char *buf, rt_size_t size)
         }
         LOG_RAW("\n");
     }
+#endif
 }
 
