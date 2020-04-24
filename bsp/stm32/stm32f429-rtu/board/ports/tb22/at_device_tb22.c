@@ -593,14 +593,6 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+CFUN=0");
             goto __exit;
         }
-        
-        /* search band 8 */
-        if (at_obj_exec_cmd(device->client, resp, "AT+NBAND=8") != RT_EOK)
-        {
-            result = -RT_ERROR;
-            LOG_E(">> AT+NBAND=8");
-            goto __exit;
-        }
 
 #if 0
         /* disable auto register(禁用IoT平台的注册功能) */
@@ -645,14 +637,26 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
         
-        /* 清除先验频点 */
-        if (at_obj_exec_cmd(device->client, resp, "AT+NCSEARFCN") != RT_EOK)
+        /* search band 8 */
+        if (at_obj_exec_cmd(device->client, resp, "AT+NBAND=8") != RT_EOK)
         {
             result = -RT_ERROR;
-            LOG_E(">> AT+NCSEARFCN");
+            LOG_E(">> AT+NBAND=8");
             goto __exit;
         }
-
+        
+        /* 初次驻网不清除先验频点 */
+        if ((retry_num + 1) < INIT_RETRY)
+        {
+            /* 清除先验频点 */
+            if (at_obj_exec_cmd(device->client, resp, "AT+NCSEARFCN") != RT_EOK)
+            {
+                result = -RT_ERROR;
+                LOG_E(">> AT+NCSEARFCN");
+                goto __exit;
+            }
+        }
+        
         /* check IMEI */
         if (at_obj_exec_cmd(device->client, resp, "AT+CGSN=1") != RT_EOK)
         {
