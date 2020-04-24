@@ -1918,11 +1918,11 @@ static rt_err_t mqtt_client_start(void)
 }
 
 /* 停止MQTT客户端 */
-static rt_err_t mqtt_client_stop(void)
+static rt_err_t mqtt_client_stop(rt_int32_t timeout)
 {
-    LOG_D("mqtt_client_stop()");
+    LOG_D("mqtt_client_stop() timeout=%d", timeout);
     
-    int ret = paho_mqtt_stop(&mq_client);
+    int ret = paho_mqtt_stop(&mq_client, timeout);
     if (ret != PAHO_SUCCESS)
     {
        LOG_E("paho_mqtt_stop() error(%d)", ret);
@@ -2092,8 +2092,10 @@ __exit:
     
     LOG_D("main exit");
     
-    mqtt_client_stop();
+    /* 停止MQTT客户端 */
+    mqtt_client_stop(2000);
     
+    /* 逆初始化 */
     app_deinit();
     
     /* 重启系统 */
