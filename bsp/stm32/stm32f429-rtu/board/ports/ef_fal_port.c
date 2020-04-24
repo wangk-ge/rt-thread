@@ -80,10 +80,10 @@ static const ef_env default_env_set[] = {
         {"uart3parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
         {"uart4parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
         /* uartXstopbits */
-        {"uart1stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
-        {"uart2stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
-        {"uart3stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
-        {"uart4stopbits", "\x20", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart1stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart2stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart3stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart4stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
         /* uartXslaveraddr */
         {"uart1slaveraddr", "\x01", 1}, // 默认值0x01
         {"uart2slaveraddr", "\x01", 1}, // 默认值0x01

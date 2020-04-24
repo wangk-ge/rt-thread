@@ -23,6 +23,9 @@
 /* 取得历史数据条目数 */
 extern uint32_t get_history_data_num(void);
 
+/* 请求采集数据 */
+extern void req_data_acquisition(void);
+
 /* AT+DATETIME 读取当前日期时间 */
 
 static at_result_t at_date_time_query(const struct at_cmd *cmd)
@@ -177,3 +180,40 @@ static at_result_t at_itemid_setup(const struct at_cmd *cmd, const char *args)
 }
 
 AT_CMD_EXPORT("AT+ITEMID", "=<id>", RT_NULL, at_itemid_query, at_itemid_setup, RT_NULL, 0);
+
+/* AT+TESTRD 立即采集数据 */
+
+static at_result_t at_testrd_exec(const struct at_cmd *cmd)
+{
+    req_data_acquisition();
+    
+    return AT_RESULT_OK;
+}
+AT_CMD_EXPORT("AT+TESTRD", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_testrd_exec, 0);
+
+/* AT+EFSETDEFAULT FLASH回复默认配置(包括擦除所有数据) */
+
+static at_result_t at_efsetdefault_exec(const struct at_cmd *cmd)
+{
+    EfErrCode ef_ret = ef_env_set_default();
+	if (ef_ret != EF_NO_ERR)
+	{
+		LOG_E("ef_env_set_default() error(%d)!", ef_ret);
+        return AT_RESULT_FAILE;
+	}
+    
+    return AT_RESULT_OK;
+}
+AT_CMD_EXPORT("AT+EFSETDEFAULT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_efsetdefault_exec, 0);
+
+/* AT+EFPRINT 输出Flash中所有的ENV */
+
+static at_result_t at_efprint_exec(const struct at_cmd *cmd)
+{
+	at_server_printfln("+EFPRINT: ");
+	
+    ef_print_env();
+    
+    return AT_RESULT_OK;
+}
+AT_CMD_EXPORT("AT+EFPRINT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_efprint_exec, 0);

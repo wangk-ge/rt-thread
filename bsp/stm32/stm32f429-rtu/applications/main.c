@@ -42,9 +42,10 @@ typedef enum
 
 /* RS485设备名 */
 #define RS485_1_DEVICE_NAME "/dev/uart2"
-#define RS485_2_DEVICE_NAME "/dev/uart6"
-#define RS485_3_DEVICE_NAME "/dev/uart7"
-#define RS485_4_DEVICE_NAME "/dev/uart8"
+#define RS485_2_DEVICE_NAME "/dev/uart8"
+#define RS485_3_DEVICE_NAME "/dev/uart6"
+//#define RS485_4_DEVICE_NAME "/dev/uart7"
+#define RS485_4_DEVICE_NAME "/dev/uart5"
 
 /* RS485接收使能GPIO引脚 */
 #define RS485_1_REN_PIN GET_PIN(E, 10) // PE10(高电平发送,低电平接收)
@@ -93,6 +94,23 @@ typedef struct
     char *payload; // 数据
     size_t length; // 数据长度
 } mqtt_publish_data_info;
+
+/* RS485接口信息 */
+typedef struct
+{
+    const char *dev_name; // 设备名
+	rt_base_t rts_pin; //RTS引脚
+	int serial_mode;
+} rs485_device_info;
+
+static rs485_device_info rs485_dev_infos[CFG_UART_X_NUM] = 
+{
+	{RS485_1_DEVICE_NAME, RS485_1_REN_PIN, MODBUS_RTU_RS485},
+	{RS485_2_DEVICE_NAME, RS485_2_REN_PIN, MODBUS_RTU_RS485},
+	{RS485_3_DEVICE_NAME, RS485_3_REN_PIN, MODBUS_RTU_RS485},
+	//{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS485},
+	{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS232},
+};
 
 /* 用于保护历史数据FIFO队列信息的并发访问 */
 static rt_mutex_t history_fifo_mutex = RT_NULL;
@@ -222,7 +240,7 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
     /* 采集数据 */
     {
         /* 创建MODBUS RTU对象实例 */
-        mb_ctx = modbus_new_rtu(RS485_1_DEVICE_NAME, 
+        mb_ctx = modbus_new_rtu(rs485_dev_infos[index].dev_name, 
             cfg->uart_x_cfg[index].baudrate, 
             parity_name[cfg->uart_x_cfg[index].parity], 
             cfg->uart_x_cfg[index].wordlength, 
@@ -234,9 +252,12 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
         }
         
         /* 配置MODBUS RTU属性 */
-        modbus_rtu_set_serial_mode(mb_ctx, MODBUS_RTU_RS485);
-        /* function shall set the Request To Send mode to communicate on a RS485 serial bus. */
-        modbus_rtu_set_rts(mb_ctx, RS485_1_REN_PIN, MODBUS_RTU_RTS_UP);
+        modbus_rtu_set_serial_mode(mb_ctx, rs485_dev_infos[index].serial_mode);
+		if (rs485_dev_infos[index].serial_mode == MODBUS_RTU_RS485)
+		{
+			/* function shall set the Request To Send mode to communicate on a RS485 serial bus. */
+			modbus_rtu_set_rts(mb_ctx, rs485_dev_infos[index].rts_pin, MODBUS_RTU_RTS_UP);
+		}
         modbus_set_slave(mb_ctx, cfg->uart_x_cfg[index].slaveraddr); // 从机地址
         modbus_set_response_timeout(mb_ctx, 1, 0); // 超时时间:1S
         
@@ -258,12 +279,16 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
             uint16_t read_buf[MODBUS_MAX_READ_REGISTERS] = {0}; // 读取数据缓冲区
             memset(read_buf, 0, sizeof(read_buf)); // 先清零
             int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, read_buf); // 读取寄存器数据
-            
+            if (read_bytes != length)
+			{
+				LOG_W("modbus_read_registers(0x%04x,%u) return(%u)!", startaddr, length, read_bytes);
+			}
+			
             /* 保存到采集数据缓存 */
             int j = 0;
             for (j = 0; j < length; ++j)
             {
-                uint16_t data = read_buf[i];
+                uint16_t data = read_buf[j];
                 RT_ASSERT(data_len < buf_len);
                 data_buf[data_len++] = (uint8_t)(data >> 8); // 高字节
                 RT_ASSERT(data_len < buf_len);
@@ -409,13 +434,13 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     
     /* 读取UARTX数据 */
     int x = 1;
-    for (x = 1; x < CFG_UART_X_NUM; ++x)
+    for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
         /* 读取保存的历史数据 */
         uint8_t data_buf[128] = {0};
         snprintf(data_key, sizeof(data_key), "u%dd%u", x, read_pos); // Key="uXdN"
         len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
-        if (len != sizeof(data_buf))
+        if (len <= 0)
         {
             LOG_E("ef_get_env_blob(%s) error!", data_key);
             return 0;
@@ -500,6 +525,7 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
     }
     
     /* 读取前第n条历史数据 */
+	n += 1;
     uint32_t read_pos = fifo_info.head_pos;
     if (fifo_info.head_pos >= n)
     {
@@ -1860,6 +1886,12 @@ static rt_err_t app_init()
         }
         netdev_set_status_callback(net_dev, tbss_netdev_status_callback);
     }
+	
+	/* 初始化RS485 RTS GPIO */
+	rt_pin_mode(RS485_1_REN_PIN, PIN_MODE_OUTPUT);
+	rt_pin_mode(RS485_2_REN_PIN, PIN_MODE_OUTPUT);
+	rt_pin_mode(RS485_3_REN_PIN, PIN_MODE_OUTPUT);
+	rt_pin_mode(RS485_4_REN_PIN, PIN_MODE_OUTPUT);
     
 __exit:
     
@@ -1990,6 +2022,15 @@ __exit:
     }
     
     return ret;
+}
+
+/* 请求采集数据 */
+
+void req_data_acquisition(void)
+{
+	LOG_D("req_data_acquisition");
+	
+	app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
 }
 
 int main(void)
