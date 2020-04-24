@@ -536,6 +536,7 @@ int tb22_domain_resolve(const char *name, char ip[16])
     at_response_t resp = RT_NULL;
     struct at_device *device = RT_NULL;
     struct at_device_tb22 *tb22 = RT_NULL;
+    rt_mutex_t lock = RT_NULL;
 
     RT_ASSERT(name);
     RT_ASSERT(ip);
@@ -546,13 +547,18 @@ int tb22_domain_resolve(const char *name, char ip[16])
         LOG_E("get first init device failed.");
         return -RT_ERROR;
     }
+    
+    lock = device->client->lock;
 
+    rt_mutex_take(lock, RT_WAITING_FOREVER);
+    
     /* the maximum response time is 60 seconds, but it set to 10 seconds is convenient to use. */
     resp = at_create_resp(128, 0, rt_tick_from_millisecond(300));
     if (!resp)
     {
         LOG_E("no memory for resp create.");
-        return -RT_ENOMEM;
+        result = -RT_ENOMEM;
+        goto __exit;
     }
 
     /* clear TB22_EVENT_DOMAIN_OK */
@@ -564,13 +570,14 @@ int tb22_domain_resolve(const char *name, char ip[16])
     if (at_obj_exec_cmd(device->client, resp, "AT+MDNS=0,%s", name) != RT_EOK)
     {
         result = -RT_ERROR;
+        LOG_E("at_obj_exec_cmd failed!");
         goto __exit;
     }
 
     for(i = 0; i < RESOLVE_RETRY; i++)
     {
         /* waiting result event from AT URC, the device default connection timeout is 30 seconds.*/
-        if (tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, rt_tick_from_millisecond(30 * 1000), RT_EVENT_FLAG_OR) < 0)
+        if (tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, rt_tick_from_millisecond(10 * 1000), RT_EVENT_FLAG_OR) < 0)
         {
             result = -RT_ETIMEOUT;
             continue;
@@ -598,6 +605,8 @@ int tb22_domain_resolve(const char *name, char ip[16])
     {
         at_delete_resp(resp);
     }
+    
+    rt_mutex_release(lock);
 
     return result;
 
