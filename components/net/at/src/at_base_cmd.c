@@ -48,9 +48,9 @@ static at_result_t at_rst_exec(const struct at_cmd *cmd)
 }
 AT_CMD_EXPORT("AT+RST", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_rst_exec, 0);
 
-static at_result_t ate_setup(const struct at_cmd *cmd, const char *args)
+static at_result_t ate_exec(const struct at_cmd *cmd)
 {
-    int echo_mode = atoi(args);
+    int echo_mode = (cmd->name[3] - '0');
 
     if(echo_mode == AT_ECHO_MODE_CLOSE || echo_mode == AT_ECHO_MODE_OPEN)
     {
@@ -63,7 +63,8 @@ static at_result_t ate_setup(const struct at_cmd *cmd, const char *args)
 
     return AT_RESULT_OK;
 }
-AT_CMD_EXPORT("ATE", "<value>", RT_NULL, RT_NULL, ate_setup, RT_NULL, 0);
+AT_CMD_EXPORT("ATE0", RT_NULL, RT_NULL, RT_NULL, RT_NULL, ate_exec, 0);
+AT_CMD_EXPORT("ATE1", RT_NULL, RT_NULL, RT_NULL, RT_NULL, ate_exec, 1);
 
 static at_result_t at_show_cmd_exec(const struct at_cmd *cmd)
 {

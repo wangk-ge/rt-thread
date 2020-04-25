@@ -417,6 +417,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     
     char data_key[16] = "";
     
+#if 0
     /* 读取时间戳 */
     snprintf(data_key, sizeof(data_key), "d%uts", read_pos); // Key="dNts"
     time_t time_stamp = 0;
@@ -426,12 +427,16 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
         LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
         return 0;
     }
+	
     /* 时间戳编码成JSON格式并写入缓冲区 */
     struct tm* local_time = localtime(&time_stamp);
     json_data_len = rt_snprintf(json_data_buf, json_buf_len, "{\"ts\":\"%04d%02d%02d%02d%02d%02d\",", 
         (local_time->tm_year + 1900), (local_time->tm_mon + 1), local_time->tm_mday,
         local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
-    
+#else
+	json_data_len = rt_snprintf(json_data_buf, json_buf_len, "{");
+#endif
+	
     /* 读取UARTX数据 */
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
@@ -439,16 +444,18 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
         /* 读取保存的历史数据 */
         uint8_t data_buf[128] = {0};
         snprintf(data_key, sizeof(data_key), "u%dd%u", x, read_pos); // Key="uXdN"
-        len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
+        int len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
         if (len <= 0)
         {
             LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
             return 0;
         }
         
+#if 0
         /* 转换成JSON格式并写入数据缓冲区 */
         json_data_len += rt_snprintf(json_data_buf + json_data_len, 
             json_buf_len - json_data_len, "\"u%d\":{", x); // 分组名
+#endif
         uint32_t data_read_pos = 0; // 变量采集值的读取位置
         int i = 0;
         for (i = 0; i < cfg->uart_x_cfg[x - 1].variablecnt; ++i)
@@ -465,11 +472,13 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
             
             data_read_pos += data_bytes; // 指向下一个采集值起始
         }
+#if 0
         if (json_data_len < json_buf_len)
         {
             json_data_buf[json_data_len - 1] = '}'; // 末尾','改成'}'
             json_data_buf[json_data_len++] = ','; // 添加','
         }
+#endif
     }
     if (json_data_len < json_buf_len)
     {
@@ -622,9 +631,9 @@ static uint32_t read_config_info_json(char* json_data_buf, uint32_t json_buf_len
     get_modem_rssi(&rssi);
     
     rt_int32_t json_data_len = rt_snprintf(json_data_buf, json_buf_len, 
-        "{\"CycleSet\":\"%u\",\"AcquisitionSet\":\"%u\",\"AutoControlSet\":\"0\","
-        "\"AIPSet\":\"%s\",\"APortSet\":\"%u\",\"BIPSet\":\"%s\",\"BPortSet\":\"%u\","
-        "\"Rssi\":\"%d\",\"version\":\"%s\"}", cfg->cycle, cfg->acquisition, 
+        "{\"cycleSet\":\"%u\",\"acquisitionSet\":\"%u\",\"autoControlSet\":\"0\","
+        "\"aIPSet\":\"%s\",\"aPortSet\":\"%u\",\"bIPSet\":\"%s\",\"bPortSet\":\"%u\","
+        "\"rssi\":\"%d\",\"version\":\"%s\"}", cfg->cycle, cfg->acquisition, 
         a_ip, cfg->a_port, b_ip, cfg->b_port,  rssi, SW_VERSION);
     
     return (uint32_t)json_data_len;
@@ -970,7 +979,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     size_t json_str_len = msg->message->payloadlen;
     c_str_ref productkey = {0, NULL}; // productKey
     c_str_ref devicecode = {0, NULL}; // deviceCode
-    c_str_ref operationdate = {0, NULL}; // OperationDate
+    c_str_ref operationdate = {0, NULL}; // operationDate
     c_str_ref id = {0, NULL}; // id
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
@@ -1013,8 +1022,8 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
                 devicecode.c_str = json_str + tok_list[i].start;
                 devicecode.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("OperationDate")) 
-				&& (0 == memcmp(token_str, "OperationDate", token_str_len)))
+            else if ((token_str_len == STR_LEN("operationDate")) 
+				&& (0 == memcmp(token_str, "operationDate", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
@@ -1068,14 +1077,16 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         ret = -RT_ENOMEM;
         goto __exit;
     }
-    
+	
     /* 编码JSON采集数据并发送 */
     {
+		time_t time_stamp = time(RT_NULL); // 上报时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\",\"itemId\":\"%s\",\"requestId\":\"%.*s\",\"data\":", 
-             get_productkey(), get_devicecode(), get_clientid(), get_itemid(), id.len, id.c_str);
+            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\",\"itemId\":\"%s\","
+			"\"timeStamp\":\"%u\",\"requestId\":\"%.*s\",\"data\":", get_productkey(), get_devicecode(), 
+			get_clientid(), get_itemid(), time_stamp, id.len, id.c_str);
         
-        /* 读取最新采集的数据(JSON格式)  */
+        /* 读取最新采集的数据(JSON格式) */
         uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
         if (read_len <= 0)
         {
@@ -1127,7 +1138,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     size_t json_str_len = msg->message->payloadlen;
     c_str_ref productkey = {0, NULL}; // productKey
     c_str_ref devicecode = {0, NULL}; // deviceCode
-    c_str_ref operationdate = {0, NULL}; // OperationDate
+    c_str_ref operationdate = {0, NULL}; // operationDate
     c_str_ref id = {0, NULL}; // id
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
@@ -1170,8 +1181,8 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
                 devicecode.c_str = json_str + tok_list[i].start;
                 devicecode.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("OperationDate")) 
-				&& (0 == memcmp(token_str, "OperationDate", token_str_len)))
+            else if ((token_str_len == STR_LEN("operationDate")) 
+				&& (0 == memcmp(token_str, "operationDate", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
@@ -1229,7 +1240,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     /* 编码JSON配置信息并发送 */
     {
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-            "{\"Status\":\"200\",\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"requestId\":\"%.*s\",\"data\":", 
+            "{\"status\":\"200\",\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"requestId\":\"%.*s\",\"data\":", 
              get_productkey(), get_devicecode(), id.len, id.c_str);
         
         /* 读取配置信息(JSON格式)  */
@@ -1239,7 +1250,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
             LOG_E("%s read_config_info_json(read_len=%d) failed!", __FUNCTION__, read_len);
             
             json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-                "{\"Status\":\"500\",\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"requestId\":\"%.*s\"}", 
+                "{\"status\":\"500\",\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"requestId\":\"%.*s\"}", 
                  get_productkey(), get_devicecode(), id.len, id.c_str);
             RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
             json_data_buf[json_data_len] = '\0';
@@ -1310,16 +1321,16 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     size_t json_str_len = msg->message->payloadlen;
     c_str_ref productkey = {0, NULL}; // productKey
     c_str_ref devicecode = {0, NULL}; // deviceCode
-    c_str_ref operationdate = {0, NULL}; // OperationDate
+    c_str_ref operationdate = {0, NULL}; // operationDate
     c_str_ref id = {0, NULL}; // id
-    c_str_ref cycle = {0, NULL}; // CycleSet
-    c_str_ref acquisition = {0, NULL}; // AcquisitionSet
-    c_str_ref autocontrol = {0, NULL}; // AutoControlSet
-    c_str_ref a_ip = {0, NULL}; // AIPSet
-    c_str_ref a_port = {0, NULL}; // APortSet
-    c_str_ref b_ip = {0, NULL}; // AIPSet
-    c_str_ref b_port = {0, NULL}; // APortSet
-    c_str_ref restart = {0, NULL}; // Restart
+    c_str_ref cycle = {0, NULL}; // cycleSet
+    c_str_ref acquisition = {0, NULL}; // acquisitionSet
+    c_str_ref autocontrol = {0, NULL}; // autoControlSet
+    c_str_ref a_ip = {0, NULL}; // aIPSet
+    c_str_ref a_port = {0, NULL}; // aPortSet
+    c_str_ref b_ip = {0, NULL}; // bIPSet
+    c_str_ref b_port = {0, NULL}; // bPortSet
+    c_str_ref restart = {0, NULL}; // restart
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
     rt_err_t ret = RT_EOK;
@@ -1362,8 +1373,8 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
                 devicecode.c_str = json_str + tok_list[i].start;
                 devicecode.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("OperationDate")) 
-				&& (0 == memcmp(token_str, "OperationDate", token_str_len)))
+            else if ((token_str_len == STR_LEN("operationDate")) 
+				&& (0 == memcmp(token_str, "operationDate", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
@@ -1378,64 +1389,64 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
                 id.c_str = json_str + tok_list[i].start;
                 id.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("CycleSet")) 
-				&& (0 == memcmp(token_str, "CycleSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("cycleSet")) 
+				&& (0 == memcmp(token_str, "cycleSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 cycle.c_str = json_str + tok_list[i].start;
                 cycle.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("AcquisitionSet")) 
-				&& (0 == memcmp(token_str, "AcquisitionSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("acquisitionSet")) 
+				&& (0 == memcmp(token_str, "acquisitionSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 acquisition.c_str = json_str + tok_list[i].start;
                 acquisition.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("AutoControlSet")) 
-				&& (0 == memcmp(token_str, "AutoControlSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("autoControlSet")) 
+				&& (0 == memcmp(token_str, "autoControlSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 autocontrol.c_str = json_str + tok_list[i].start;
                 autocontrol.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("AIPSet")) 
-				&& (0 == memcmp(token_str, "AIPSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("aIPSet")) 
+				&& (0 == memcmp(token_str, "aIPSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 a_ip.c_str = json_str + tok_list[i].start;
                 a_ip.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("APortSet")) 
-				&& (0 == memcmp(token_str, "APortSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("aPortSet")) 
+				&& (0 == memcmp(token_str, "aPortSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 a_port.c_str = json_str + tok_list[i].start;
                 a_port.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("BIPSet")) 
-				&& (0 == memcmp(token_str, "BIPSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("bIPSet")) 
+				&& (0 == memcmp(token_str, "bIPSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 b_ip.c_str = json_str + tok_list[i].start;
                 b_ip.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("BPortSet")) 
-				&& (0 == memcmp(token_str, "BPortSet", token_str_len)))
+            else if ((token_str_len == STR_LEN("bPortSet")) 
+				&& (0 == memcmp(token_str, "bPortSet", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
                 b_port.c_str = json_str + tok_list[i].start;
                 b_port.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("Restart")) 
-				&& (0 == memcmp(token_str, "Restart", token_str_len)))
+            else if ((token_str_len == STR_LEN("restart")) 
+				&& (0 == memcmp(token_str, "restart", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
@@ -1497,7 +1508,7 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
         /* 消息内容 */
         rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/set", get_productkey(), get_devicecode());
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"OperationDate\":\"%.*s\",\"requestId\":\"%.*s\","
+            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"operationDate\":\"%.*s\",\"requestId\":\"%.*s\","
             "\"code\":\"%d\",\"message\":\"%s\",\"topic\":\"%s\",\"data\":{}}", get_productkey(), get_devicecode(), 
             operationdate.len, operationdate.c_str, id.len, id.c_str, cfg_ret_code, 
             cfg_ret_code_get_message(cfg_ret_code), topic_buf);
@@ -1551,7 +1562,7 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
     size_t json_str_len = msg->message->payloadlen;
     c_str_ref productkey = {0, NULL}; // productKey
     c_str_ref devicecode = {0, NULL}; // deviceCode
-    c_str_ref operationdate = {0, NULL}; // OperationDate
+    c_str_ref operationdate = {0, NULL}; // operationDate
     c_str_ref id = {0, NULL}; // id
     c_str_ref code = {0, NULL}; // code
     c_str_ref message = {0, NULL}; // message
@@ -1595,8 +1606,8 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
                 devicecode.c_str = json_str + tok_list[i].start;
                 devicecode.len = tok_list[i].end - tok_list[i].start;
 			}
-            else if ((token_str_len == STR_LEN("OperationDate")) 
-				&& (0 == memcmp(token_str, "OperationDate", token_str_len)))
+            else if ((token_str_len == STR_LEN("operationDate")) 
+				&& (0 == memcmp(token_str, "operationDate", token_str_len)))
 			{
                 ++i; // 指向Value
                 RT_ASSERT(i < list_len);
@@ -1813,7 +1824,8 @@ static rt_err_t app_init()
             inet_ntoa_r(cfg->a_ip, addr, sizeof(addr));
             rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", addr, cfg->a_port);
 #else
-            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
+            //rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
+			rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://47.103.22.229:1883");
 #endif
             mq_client.uri = mqtt_server_url;
             LOG_D("%s mqtt_server_url %s", __FUNCTION__, mqtt_server_url);
@@ -1990,9 +2002,11 @@ static rt_err_t app_data_report(void)
     
     /* 编码JSON采集数据并发送 */
     {
+		time_t time_stamp = time(RT_NULL); // 上报时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\",\"itemId\":\"%s\",\"data\":", 
-             get_productkey(), get_devicecode(), get_clientid(), get_itemid());
+            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
+			"\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
+			get_clientid(), time_stamp, get_itemid());
         
         /* 读取最新采集的数据(JSON格式)  */
         uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
