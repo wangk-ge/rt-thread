@@ -17,6 +17,7 @@
 #include <at.h>
 #include <at_device.h>
 #include "common.h"
+#include "config.h"
 
 #define LOG_TAG              "main.at_cmd_rtu"
 #define LOG_LVL              LOG_LVL_DBG
@@ -28,37 +29,10 @@
 extern rt_err_t clear_history_data(void);
 
 /* 读取前n个时刻的一条历史数据(JSON格式) */
-extern uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len);
+extern uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len, bool need_timestamp);
 
 /* 取得模组信号强度指示 */
 extern int get_modem_rssi(int *rssi);
-
-/* 恢复默认配置 */
-static EfErrCode set_default_config(void)
-{
-    LOG_D("%s()", __FUNCTION__);
-    
-    extern void ef_get_default_env(ef_env const **default_env, size_t *default_env_size);
-    size_t default_env_set_size = 0;
-    const ef_env *default_env_set;
-    
-    /* 取得默认配置集 */
-    ef_get_default_env(&default_env_set, &default_env_set_size);
-    
-    /* 全部从新设置为默认配置 */
-    int i = 0;
-    for (i = 0; i < default_env_set_size; ++i)
-    {
-        EfErrCode ret = ef_set_env_blob(default_env_set[i].key, default_env_set[i].value, default_env_set[i].value_len);
-        if (ret != EF_NO_ERR)
-        {
-            LOG_E("%s ef_set_env_blob(%s) error!", __FUNCTION__, default_env_set[i].key);
-            return ret;
-        }
-    }
-    
-    return EF_NO_ERR;
-}
 
 /* RTU相关AT指令 */
 
@@ -447,10 +421,10 @@ AT_CMD_EXPORT("AT+CLR", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_clr_exec, 0);
 
 static at_result_t at_deft_exec(const struct at_cmd *cmd)
 {
-    EfErrCode ef_ret = set_default_config();
-    if (ef_ret != EF_NO_ERR)
+    bool ret = cfg_set_default();
+    if (!ret)
     {
-        LOG_E("%s set_default_config() error(%d)!", __FUNCTION__, ef_ret);
+        LOG_E("%s set_default_config() failed!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -510,7 +484,7 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
     }
     
     /* 读取前n个时刻的一条历史数据(JSON格式)  */
-    uint32_t read_len = read_history_data_json(n, json_data_buf, JSON_DATA_BUF_LEN);
+    uint32_t read_len = read_history_data_json(n, json_data_buf, JSON_DATA_BUF_LEN, true);
     
     /* 输出JSON数据 */
     if (read_len > 0)

@@ -31,6 +31,8 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
+#define TEST_NEW_FETURE // 测试新特性
+
 typedef enum
 {
     APP_MSG_NONE = 0,
@@ -405,7 +407,7 @@ __exit:
  * 返回读到的数据字节数
  *
  */
-static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_buf, uint32_t json_buf_len)
+static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_buf, uint32_t json_buf_len, bool need_timestamp)
 {
     LOG_D("%s(%u)", __FUNCTION__, read_pos);
     
@@ -417,25 +419,26 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     
     char data_key[16] = "";
     
-#if 0
-    /* 读取时间戳 */
-    snprintf(data_key, sizeof(data_key), "d%uts", read_pos); // Key="dNts"
-    time_t time_stamp = 0;
-    size_t len = ef_get_env_blob(data_key, &time_stamp, sizeof(time_stamp), NULL);
-    if (len != sizeof(time_stamp))
+    json_data_buf[json_data_len++] = '{';
+    
+    if (need_timestamp)
     {
-        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
-        return 0;
+        /* 读取时间戳 */
+        snprintf(data_key, sizeof(data_key), "d%uts", read_pos); // Key="dNts"
+        time_t time_stamp = 0;
+        size_t len = ef_get_env_blob(data_key, &time_stamp, sizeof(time_stamp), NULL);
+        if (len != sizeof(time_stamp))
+        {
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
+            return 0;
+        }
+        
+        /* 时间戳编码成JSON格式并写入缓冲区 */
+        struct tm* local_time = localtime(&time_stamp);
+        json_data_len += rt_snprintf((json_data_buf + json_data_len), (json_buf_len - json_data_len), 
+            "\"ts\":\"%04d%02d%02d%02d%02d%02d\",", (local_time->tm_year + 1900), (local_time->tm_mon + 1), 
+            local_time->tm_mday, local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
     }
-	
-    /* 时间戳编码成JSON格式并写入缓冲区 */
-    struct tm* local_time = localtime(&time_stamp);
-    json_data_len = rt_snprintf(json_data_buf, json_buf_len, "{\"ts\":\"%04d%02d%02d%02d%02d%02d\",", 
-        (local_time->tm_year + 1900), (local_time->tm_mon + 1), local_time->tm_mday,
-        local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
-#else
-	json_data_len = rt_snprintf(json_data_buf, json_buf_len, "{");
-#endif
 	
     /* 读取UARTX数据 */
     int x = 1;
@@ -461,16 +464,66 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
         for (i = 0; i < cfg->uart_x_cfg[x - 1].variablecnt; ++i)
         {
             /* 每个寄存器16bit */
-            uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 寄存器个数
-            uint16_t data_bytes = reg_num * sizeof(uint16_t); // 字节数
-            
+            uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 变量寄存器个数
+            uint8_t data_type = cfg->uart_x_cfg[x - 1].type[i]; // 变量类型
+            uint8_t* var_data = (data_buf + data_read_pos); // 变量数据地址
+            uint16_t data_bytes = reg_num * sizeof(uint16_t); // 变量数据字节数
+            data_read_pos += data_bytes; // 指向下一个变量起始
+#ifndef TEST_NEW_FETURE
             char hex_str_buf[128] = "";
-            util_to_hex_str(data_buf + data_read_pos, // 取得变量对应的采集值
-                data_bytes, hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
+            util_to_hex_str(var_data, data_bytes, hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
             json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
                 "\"%s\":\"%s\",", cfg->uart_x_cfg[x - 1].variable[i], hex_str_buf);
-            
-            data_read_pos += data_bytes; // 指向下一个采集值起始
+#else
+            switch (data_type)
+            {
+                case 0x00: // 有符号16位int
+                {
+                    RT_ASSERT(data_bytes >= sizeof(int16_t));
+                    int16_t* int16_data= (int16_t*)var_data; // TODO字节序?
+                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":\"%d\",", cfg->uart_x_cfg[x - 1].variable[i], (int)(*int16_data));
+                    break;
+                }
+                case 0x01: // 无符号16位int
+                {
+                    RT_ASSERT(data_bytes >= sizeof(uint16_t));
+                    uint16_t* uint16_data= (uint16_t*)var_data; // TODO字节序?
+                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":\"%u\",", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(*uint16_data));
+                    break;
+                }
+                case 0x02: // 有符号32位int
+                {
+                    RT_ASSERT(data_bytes >= sizeof(int32_t));
+                    int32_t* int32_data= (int32_t*)var_data; // TODO字节序?
+                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":\"%d\",", cfg->uart_x_cfg[x - 1].variable[i], *int32_data);
+                    break;
+                }
+                case 0x03: // 无符号32位int
+                {
+                    RT_ASSERT(data_bytes >= sizeof(uint32_t));
+                    uint32_t* uint32_data= (uint32_t*)var_data; // TODO字节序?
+                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":\"%u\",", cfg->uart_x_cfg[x - 1].variable[i], *uint32_data);
+                    break;
+                }
+                case 0x04: // IEEE754浮点数
+                {
+                    RT_ASSERT(data_bytes >= sizeof(float));
+                    float* float_data = (float*)var_data; // TODO字节序?
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":\"%f\",", cfg->uart_x_cfg[x - 1].variable[i], *float_data);
+                    break;
+                }
+                default:
+                {
+                    RT_ASSERT(0);
+                    break;
+                }
+            }
+#endif
         }
 #if 0
         if (json_data_len < json_buf_len)
@@ -497,7 +550,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
  *
  * 返回实际读取数据字节数
  */
-uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len)
+uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len, bool need_timestamp)
 {
     LOG_D("%s(%u)", __FUNCTION__, n);
     
@@ -546,7 +599,7 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
     }
     
     /* 读取read_pos处的一条历史数据(JSON格式) */
-    json_data_len = read_history_pos_data_json(read_pos, json_data_buf, json_buf_len);
+    json_data_len = read_history_pos_data_json(read_pos, json_data_buf, json_buf_len, need_timestamp);
     
     return json_data_len;
 }
@@ -634,7 +687,7 @@ static uint32_t read_config_info_json(char* json_data_buf, uint32_t json_buf_len
         "{\"cycleSet\":\"%u\",\"acquisitionSet\":\"%u\",\"autoControlSet\":\"0\","
         "\"aIPSet\":\"%s\",\"aPortSet\":\"%u\",\"bIPSet\":\"%s\",\"bPortSet\":\"%u\","
         "\"rssi\":\"%d\",\"version\":\"%s\"}", cfg->cycle, cfg->acquisition, 
-        a_ip, cfg->a_port, b_ip, cfg->b_port,  rssi, SW_VERSION);
+        a_ip, cfg->a_port, b_ip, cfg->b_port, rssi, SW_VERSION);
     
     return (uint32_t)json_data_len;
 }
@@ -1087,7 +1140,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
 			get_clientid(), get_itemid(), time_stamp, id.len, id.c_str);
         
         /* 读取最新采集的数据(JSON格式) */
-        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
+        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
         if (read_len <= 0)
         {
             LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
@@ -1734,7 +1787,7 @@ static rt_err_t app_init()
     
     /* 配置项加载到内存 */
     {
-        bool ret = cfg_load();
+        ret = cfg_load();
         if (!ret)
         {
             LOG_E("%s cfg_load error!", __FUNCTION__);
@@ -1819,13 +1872,13 @@ static rt_err_t app_init()
         
         /* 设置服务器地址和端口 */
         {
-#if 0
+#ifndef TEST_NEW_FETURE
             char addr[32] = "";
             inet_ntoa_r(cfg->a_ip, addr, sizeof(addr));
             rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", addr, cfg->a_port);
 #else
-            //rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
-			rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://47.103.22.229:1883");
+            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
+			//rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://47.103.22.229:1883");
 #endif
             mq_client.uri = mqtt_server_url;
             LOG_D("%s mqtt_server_url %s", __FUNCTION__, mqtt_server_url);
@@ -1913,6 +1966,9 @@ static rt_err_t app_init()
 	rt_pin_mode(RS485_2_REN_PIN, PIN_MODE_OUTPUT);
 	rt_pin_mode(RS485_3_REN_PIN, PIN_MODE_OUTPUT);
 	rt_pin_mode(RS485_4_REN_PIN, PIN_MODE_OUTPUT);
+    
+    /* 成功完成初始化 */
+    ret = RT_EOK;
     
 __exit:
     
@@ -2009,7 +2065,7 @@ static rt_err_t app_data_report(void)
 			get_clientid(), time_stamp, get_itemid());
         
         /* 读取最新采集的数据(JSON格式)  */
-        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
+        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
         if (read_len <= 0)
         {
             LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);

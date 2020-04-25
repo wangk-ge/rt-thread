@@ -47,6 +47,7 @@ typedef struct
     uint8_t stopbits; /* uartXstopbits: 停止位 */
     uint8_t slaveraddr; /* uartXslaveraddr: 从机地址 */
     uint8_t function; /* uartXfunction: 功能码 */
+    uint8_t* type; /* uartXtype: 变量类型 */
 } uart_x_config_info;
 
 /* 全部配置信息 */
@@ -69,6 +70,16 @@ typedef struct
 /*----------------------------------------------------------------------------*
 **                             Function Define                                *
 **----------------------------------------------------------------------------*/
+/*************************************************
+* Function: cfg_set_default
+* Description:  恢复默认Flash配置(不包括缓存中的配置)
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+bool cfg_set_default(void);
+
 /*************************************************
 * Function: cfg_load
 * Description:  从Flash加载配置项到内存

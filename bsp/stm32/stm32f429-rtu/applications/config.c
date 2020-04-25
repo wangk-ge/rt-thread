@@ -50,6 +50,11 @@ extern   "C"
 **----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*
+**                             Extern Function                                *
+**----------------------------------------------------------------------------*/
+extern void ef_get_default_env(ef_env const **default_env, size_t *default_env_size);
+
+/*----------------------------------------------------------------------------*
 **                             Local Vars                                     *
 **----------------------------------------------------------------------------*/
 
@@ -105,6 +110,11 @@ static void cfg_info_clear(void)
         if (cfg_info.uart_x_cfg[i].variable != NULL)
         {
             rt_free(cfg_info.uart_x_cfg[i].variable);
+        }
+        
+        if (cfg_info.uart_x_cfg[i].type != NULL)
+        {
+            rt_free(cfg_info.uart_x_cfg[i].type);
         }
     }
     
@@ -184,6 +194,23 @@ static bool cfg_load_uart_x(int x)
         snprintf(cfg_key, sizeof(cfg_key), "uart%dlength", x);
         len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].length, variablecnt * sizeof(uint16_t), NULL);
         if (len != variablecnt * sizeof(uint16_t))
+        {
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
+            ret = false;
+            goto __exit;
+        }
+        
+        /* type */
+        cfg_info.uart_x_cfg[index].type = (uint8_t*)rt_malloc(variablecnt * sizeof(uint8_t));
+        if (cfg_info.uart_x_cfg[index].type == NULL)
+        {
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(uint8_t));
+            ret = false;
+            goto __exit;
+        }
+        snprintf(cfg_key, sizeof(cfg_key), "uart%dtype", x);
+        len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].type, variablecnt * sizeof(uint8_t), NULL);
+        if (len != variablecnt * sizeof(uint8_t))
         {
             LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
             ret = false;
@@ -285,6 +312,39 @@ __exit:
 /*----------------------------------------------------------------------------*
 **                             Public Function                                *
 **----------------------------------------------------------------------------*/
+/*************************************************
+* Function: cfg_set_default
+* Description:  恢复默认Flash配置(不包括缓存中的配置)
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+bool cfg_set_default(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+
+    size_t default_env_set_size = 0;
+    const ef_env *default_env_set;
+    
+    /* 取得默认配置集 */
+    ef_get_default_env(&default_env_set, &default_env_set_size);
+    
+    /* 全部从新设置为默认配置 */
+    int i = 0;
+    for (i = 0; i < default_env_set_size; ++i)
+    {
+        EfErrCode ef_ret = ef_set_env_blob(default_env_set[i].key, default_env_set[i].value, default_env_set[i].value_len);
+        if (ef_ret != EF_NO_ERR)
+        {
+            LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, default_env_set[i].key, ef_ret);
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 /*************************************************
 * Function: cfg_load
 * Description:  从Flash加载配置项到内存
@@ -416,7 +476,7 @@ __exit:
     { // 加载失败
         /* 清除缓存的配置数据,释放内存 */
         cfg_info_clear();
-        //ef_env_set_default();
+        //cfg_set_default();
     }
     
     return ret;
@@ -469,17 +529,22 @@ void cfg_print(void)
         int j = 0;
         for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
         {
-            LOG_I("%s", cfg_info.uart_x_cfg[i].variable[j]);
+            LOG_I("  %s", cfg_info.uart_x_cfg[i].variable[j]);
         }
         LOG_I("uart%dstartaddr:", x);
         for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
         {
-            LOG_I("0x%04x", cfg_info.uart_x_cfg[i].startaddr[j]);
+            LOG_I("  0x%04x", cfg_info.uart_x_cfg[i].startaddr[j]);
         }
         LOG_I("uart%dlength:", x);
         for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
         {
-            LOG_I("0x%04x", cfg_info.uart_x_cfg[i].length[j]);
+            LOG_I("  0x%04x", cfg_info.uart_x_cfg[i].length[j]);
+        }
+        LOG_I("uart%dtype:", x);
+        for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
+        {
+            LOG_I("  0x%02x", cfg_info.uart_x_cfg[i].type[j]);
         }
         LOG_I("uart%dbaudrate: %u", x, cfg_info.uart_x_cfg[i].baudrate);
         LOG_I("uart%dwordlength: %u", x, cfg_info.uart_x_cfg[i].wordlength);

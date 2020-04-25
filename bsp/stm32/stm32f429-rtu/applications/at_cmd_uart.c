@@ -123,6 +123,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
     if (!ret)
     {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
         return AT_RESULT_FAILE;
     }
     
@@ -172,7 +173,7 @@ static at_result_t at_uartxvariablecnt_println(char uart_x)
     bool ret = get_variablecnt(uart_x, &var_cnt);
     if (!ret)
     {
-        //LOG_E("%s get_variablecnt error!");
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
         return AT_RESULT_FAILE;
     }
     
@@ -726,6 +727,7 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
     if (!ret)
     {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
         return AT_RESULT_FAILE;
     }
     
@@ -850,6 +852,7 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
     if (!ret)
     {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
         return AT_RESULT_FAILE;
     }
     
@@ -911,6 +914,131 @@ AT_CMD_EXPORT("AT+UART2LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_qu
 AT_CMD_EXPORT("AT+UART3LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 3);
 AT_CMD_EXPORT("AT+UART4LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 4);
 
+/* AT+UARTXTYPE 设置/读取UART X相关的数据类型列表(每个1字节,个数不定,最多20个) */
+
+static at_result_t at_uartxtype_println(char uart_x)
+{
+    /* 生成配置KEY值 */
+    char cfg_key[32] = "uartXtype";
+    cfg_key[STR_LEN("uart")] = uart_x;
+    
+    /* 读取配置 */
+    uint8_t type_list[20] = {0x00};
+    size_t data_size = 0;
+    size_t read_len = ef_get_env_blob(cfg_key, type_list, sizeof(type_list), &data_size);
+    if (read_len != data_size)
+    {
+        LOG_E("%s ef_get_env_blob(%s) error(read_len=%u)!", __FUNCTION__, cfg_key, read_len);
+        return AT_RESULT_FAILE;
+    }
+
+    at_server_printf("+UART%cTYPE: ", uart_x);
+    
+    /* 转换成字符串输出 */
+    size_t type_cnt = data_size / sizeof(type_list[0]);
+    int i = 0;
+    if (type_cnt > 0)
+    {
+        for (i = 0; i < (type_cnt - 1); ++i)
+        {
+            at_server_printf("0x%02x,", type_list[i]);
+        }
+        
+        at_server_printfln("0x%02x", type_list[i]);
+    }
+    
+    return AT_RESULT_OK;
+}
+
+static at_result_t at_uartxtype_query(const struct at_cmd *cmd)
+{
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    return at_uartxlength_println(uart_x);
+}
+
+static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args)
+{
+    c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
+    c_str_ref param_list[21] = {{0}};
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
+    if ((param_count < 1) || (param_count > 20))
+    {
+        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
+        return AT_RESULT_PARSE_FAILE;
+    }
+    
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 转换成u8数组并检查格式 */
+    uint8_t type_list[20] = {0x00};
+    int i = 0;
+    for (i = 0; i < param_count; ++i)
+    {
+        if (param_list[i].len <= 0)
+        {
+            LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        int32_t num = 0;
+        /* 
+            %i:整数，如果字符串以0x或者0X开头，则按16进制进行转换，
+            如果以0开头，则按8进制进行转换，否则按10进制转换，
+            需要一个类型为int*的的参数存放转换结果
+        */
+        rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &num);
+        if (ret != 1)
+        {
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        if ((num < 0x00) || (num > 0x04))
+        {
+            LOG_E("%s param[%d] not in range[0x00,0x04]!", __FUNCTION__, i);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        type_list[i] = (uint8_t)((uint32_t)num);
+    }
+    
+    /* 生成配置KEY值 */
+    char cfg_key[32] = "uartXtype";
+    cfg_key[STR_LEN("uart")] = uart_x;
+    
+    /* 保存配置 */
+    size_t list_len = (size_t)i;
+    EfErrCode ef_ret = ef_set_env_blob(cfg_key, type_list, list_len * sizeof(type_list[0]));
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        return AT_RESULT_FAILE;
+    }
+
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+UART1TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 4);
+
 /* AT+UARTXSETTINGINF 读取UART X相关的配置信息 */
 
 static at_result_t at_uartxsettinginf_exec(const struct at_cmd *cmd)
@@ -930,6 +1058,7 @@ static at_result_t at_uartxsettinginf_exec(const struct at_cmd *cmd)
     at_uartxfunction_println(uart_x);
     at_uartxstartaddr_println(uart_x);
     at_uartxlength_println(uart_x);
+    at_uartxtype_println(uart_x);
     
     return AT_RESULT_OK;
 }

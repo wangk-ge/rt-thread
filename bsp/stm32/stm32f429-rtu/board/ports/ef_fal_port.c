@@ -55,10 +55,10 @@ static const ef_env default_env_set[] = {
         {"acquisition", "\x05", 1}, // 默认值5
         {"cycle", "\x1E", 1}, // 默认值30
         /* uartXvariable */
-        {"uart1variable", STR_ITEM("temperature")},
-        {"uart2variable", STR_ITEM("temperature")},
-        {"uart3variable", STR_ITEM("temperature")},
-        {"uart4variable", STR_ITEM("temperature")},
+        {"uart1variable", STR_ITEM("temp1")},
+        {"uart2variable", STR_ITEM("temp2")},
+        {"uart3variable", STR_ITEM("temp3")},
+        {"uart4variable", STR_ITEM("temp4")},
         /* uartXvariablecnt */
         {"uart1variablecnt", "\x01", 1}, // 默认值1
         {"uart2variablecnt", "\x01", 1}, // 默认值1
@@ -104,6 +104,11 @@ static const ef_env default_env_set[] = {
         {"uart2length", "\x07\x00", 2}, // 默认值0x0007
         {"uart3length", "\x07\x00", 2}, // 默认值0x0007
         {"uart4length", "\x07\x00", 2}, // 默认值0x0007
+        /* uartXtype */
+        {"uart1type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
+        {"uart2type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
+        {"uart3type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
+        {"uart4type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
 };
 
 static char log_buf[RT_CONSOLEBUF_SIZE];
