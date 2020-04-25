@@ -148,7 +148,7 @@ static bool cfg_load_uart_x(int x)
     size_t len = ef_get_env_blob(cfg_key, &variablecnt, sizeof(variablecnt), NULL);
     if (len != sizeof(variablecnt))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         ret = false;
         goto __exit;
     }
@@ -160,7 +160,7 @@ static bool cfg_load_uart_x(int x)
         cfg_info.uart_x_cfg[index].startaddr = (uint16_t*)rt_malloc(variablecnt * sizeof(uint16_t));
         if (cfg_info.uart_x_cfg[index].startaddr == NULL)
         {
-            LOG_E("rt_malloc(%d) failed!", variablecnt * sizeof(uint16_t));
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(uint16_t));
             ret = false;
             goto __exit;
         }
@@ -168,7 +168,7 @@ static bool cfg_load_uart_x(int x)
         len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].startaddr, variablecnt * sizeof(uint16_t), NULL);
         if (len != variablecnt * sizeof(uint16_t))
         {
-            LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
             ret = false;
             goto __exit;
         }
@@ -177,7 +177,7 @@ static bool cfg_load_uart_x(int x)
         cfg_info.uart_x_cfg[index].length = (uint16_t*)rt_malloc(variablecnt * sizeof(uint16_t));
         if (cfg_info.uart_x_cfg[index].length == NULL)
         {
-            LOG_E("rt_malloc(%d) failed!", variablecnt * sizeof(uint16_t));
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(uint16_t));
             ret = false;
             goto __exit;
         }
@@ -185,7 +185,7 @@ static bool cfg_load_uart_x(int x)
         len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].length, variablecnt * sizeof(uint16_t), NULL);
         if (len != variablecnt * sizeof(uint16_t))
         {
-            LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
             ret = false;
             goto __exit;
         }
@@ -194,7 +194,7 @@ static bool cfg_load_uart_x(int x)
         cfg_info.uart_x_cfg[index].variable = (char**)rt_malloc(variablecnt * sizeof(char*)); // 分配变量列表内存
         if (cfg_info.uart_x_cfg[index].variable == NULL)
         {
-            LOG_E("rt_malloc(%d) failed!", variablecnt * sizeof(char*));
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(char*));
             ret = false;
             goto __exit;
         }
@@ -204,14 +204,14 @@ static bool cfg_load_uart_x(int x)
         ef_get_env_blob(cfg_key, NULL, 0, &data_len);
         if (data_len <= 0)
         { // 数据长度无效(不应该发生)
-            LOG_E("ef_get_env_blob(%s) data_len(%d)!", cfg_key, data_len);
+            LOG_E("%s ef_get_env_blob(%s) data_len(%d)!", __FUNCTION__, cfg_key, data_len);
             ret = false;
             goto __exit;
         }
         var_str_buf[index] = (char*)rt_malloc(data_len + 1); // 分配变量列表字符串内存
         if (var_str_buf[index] == NULL)
         {
-            LOG_E("rt_malloc(%d) failed!", (data_len + 1));
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, (data_len + 1));
             ret = false;
             goto __exit;
         }
@@ -219,7 +219,7 @@ static bool cfg_load_uart_x(int x)
         len = ef_get_env_blob(cfg_key, var_str_buf[index], data_len, NULL);
         if (len != data_len)
         {
-            LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
             ret = false;
             goto __exit;
         }
@@ -247,7 +247,7 @@ static bool cfg_load_uart_x(int x)
                 str[i] = '\0'; // 分隔符改成'\0'
                 if (j >= variablecnt)
                 { // 变量个数不匹配(不应该发生)
-                    LOG_E("split_cnt(%d)>variablecnt(%d)!", j, variablecnt);
+                    LOG_E("%s split_cnt(%d)>variablecnt(%d)!", __FUNCTION__, j, variablecnt);
                     ret = false;
                     goto __exit;
                 }
@@ -262,7 +262,7 @@ static bool cfg_load_uart_x(int x)
     len = ef_get_env_blob(cfg_key, &(cfg_info.uart_x_cfg[index].item), sizeof(cfg_info.uart_x_cfg[index].item), NULL); \
     if (len != sizeof(cfg_info.uart_x_cfg[index].item)) \
     { \
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key); \
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key); \
         ret = false; \
         goto __exit; \
     }
@@ -306,7 +306,7 @@ bool cfg_load(void)
     len = ef_get_env_blob(#item, &(cfg_info.item), sizeof(cfg_info.item), NULL); \
     if (len != sizeof(cfg_info.item)) \
     { \
-        LOG_E("ef_get_env_blob(%s) error!", #item); \
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, #item); \
         ret = false; \
         goto __exit; \
     }
@@ -331,7 +331,7 @@ bool cfg_load(void)
             cfg_info.productkey = rt_malloc(productkey_len + 1);
             if (cfg_info.productkey == RT_NULL)
             {
-                LOG_E("rt_malloc(%u) error!", productkey_len + 1);
+                LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, productkey_len + 1);
                 ret = false;
                 goto __exit;
             }
@@ -339,7 +339,7 @@ bool cfg_load(void)
             size_t len = ef_get_env_blob("productkey", cfg_info.productkey, productkey_len, RT_NULL);
             if (len != productkey_len)
             {
-                LOG_E("ef_get_env_blob(productkey) error!");
+                LOG_E("%s ef_get_env_blob(productkey) error!", __FUNCTION__);
                 ret = false;
                 goto __exit;
             }
@@ -356,7 +356,7 @@ bool cfg_load(void)
             cfg_info.devicecode = rt_malloc(devicecode_len + 1);
             if (cfg_info.devicecode == RT_NULL)
             {
-                LOG_E("rt_malloc(%u) error!", devicecode_len + 1);
+                LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, devicecode_len + 1);
                 ret = false;
                 goto __exit;
             }
@@ -364,7 +364,7 @@ bool cfg_load(void)
             size_t len = ef_get_env_blob("devicecode", cfg_info.devicecode, devicecode_len, RT_NULL);
             if (len != devicecode_len)
             {
-                LOG_E("ef_get_env_blob(devicecode) error!");
+                LOG_E("%s ef_get_env_blob(devicecode) error!", __FUNCTION__);
                 ret = false;
                 goto __exit;
             }
@@ -381,7 +381,7 @@ bool cfg_load(void)
             cfg_info.itemid = rt_malloc(itemid_len + 1);
             if (cfg_info.itemid == RT_NULL)
             {
-                LOG_E("rt_malloc(%u) error!", itemid_len + 1);
+                LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, itemid_len + 1);
                 ret = false;
                 goto __exit;
             }
@@ -389,7 +389,7 @@ bool cfg_load(void)
             size_t len = ef_get_env_blob("itemid", cfg_info.itemid, itemid_len, RT_NULL);
             if (len != itemid_len)
             {
-                LOG_E("ef_get_env_blob(itemid) error!");
+                LOG_E("%s ef_get_env_blob(itemid) error!", __FUNCTION__);
                 ret = false;
                 goto __exit;
             }
@@ -405,6 +405,7 @@ bool cfg_load(void)
             ret = cfg_load_uart_x(x);
             if (!ret)
             {
+                LOG_E("%s cfg_load_uart_x(%d) failed!", __FUNCTION__, x);
                 goto __exit;
             }
         }

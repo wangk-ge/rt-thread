@@ -39,7 +39,7 @@ static bool get_variablecnt(char uart_x, uint8_t *var_cnt)
     size_t len = ef_get_env_blob(cfg_key, &cnt, sizeof(cnt), RT_NULL);
     if (len != sizeof(cnt))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return false;
     }
     
@@ -67,7 +67,7 @@ static at_result_t at_uartxvariable_println(char uart_x)
         char *var_list = (char*)rt_malloc(data_len + 1);
         if (var_list == RT_NULL)
         {
-            LOG_E("rt_malloc(%u) failed!", data_len);
+            LOG_E("%s rt_malloc(%u) failed!", __FUNCTION__, data_len);
             return AT_RESULT_FAILE;
         }
         
@@ -78,7 +78,7 @@ static at_result_t at_uartxvariable_println(char uart_x)
             /* 释放内存 */
             rt_free(var_list);
             
-            LOG_E("ef_get_env_blob(%s) error(data_len=%u,read_len=%u)!", cfg_key, data_len, read_len);
+            LOG_E("%s ef_get_env_blob(%s) error(data_len=%u,read_len=%u)!", __FUNCTION__, cfg_key, data_len, read_len);
             return AT_RESULT_FAILE;
         }
         var_list[data_len] = '\0';
@@ -111,7 +111,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
     if ((param_count < 1) || (param_count > 20))
     {
-        LOG_E("strref_split() param number(%d)<20!", param_count);
+        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -129,7 +129,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     /* 变量个数检查 */
     if (param_count != cfg_var_cnt)
     {
-        LOG_E("param_count=%u cfg_var_cnt=%u!", param_count, cfg_var_cnt);
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
         return AT_RESULT_FAILE;
     }
     
@@ -139,7 +139,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     {
         if (param_list[i].len > 20)
         {
-            LOG_E("param[%d] format invalid!", i);
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
     }
@@ -152,7 +152,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, var_list, data_len);
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s) error(%d)!", cfg_key, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -172,7 +172,7 @@ static at_result_t at_uartxvariablecnt_println(char uart_x)
     bool ret = get_variablecnt(uart_x, &var_cnt);
     if (!ret)
     {
-        //LOG_E("get_variablecnt error!");
+        //LOG_E("%s get_variablecnt error!");
         return AT_RESULT_FAILE;
     }
     
@@ -197,13 +197,13 @@ static at_result_t at_uartxvariablecnt_setup(const struct at_cmd *cmd, const cha
     int argc = at_req_parse_args(args, req_expr, &cnt);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if (cnt > 20)
     {
-        LOG_E("client_id(%u)>20!", cnt);
+        LOG_E("%s client_id(%u)>20!", __FUNCTION__, cnt);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -219,7 +219,7 @@ static at_result_t at_uartxvariablecnt_setup(const struct at_cmd *cmd, const cha
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &cnt_val, sizeof(cnt_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,%u) error(%d)!", cfg_key, cnt_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,%u) error(%d)!", __FUNCTION__, cfg_key, cnt_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -244,7 +244,7 @@ static at_result_t at_uartxbaudrate_println(char uart_x)
     size_t len = ef_get_env_blob(cfg_key, &baudrate, sizeof(baudrate), RT_NULL);
     if (len != sizeof(baudrate))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return AT_RESULT_FAILE;
     }
     
@@ -269,7 +269,7 @@ static at_result_t at_uartxbaudrate_setup(const struct at_cmd *cmd, const char *
     int argc = at_req_parse_args(args, req_expr, &baudrate);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -286,7 +286,7 @@ static at_result_t at_uartxbaudrate_setup(const struct at_cmd *cmd, const char *
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &baudrate, sizeof(baudrate));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,%u) error(%d)!", cfg_key, baudrate, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,%u) error(%d)!", __FUNCTION__, cfg_key, baudrate, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -311,7 +311,7 @@ static at_result_t at_uartxwordlength_println(char uart_x)
     size_t len = ef_get_env_blob(cfg_key, &bits, sizeof(bits), RT_NULL);
     if (len != sizeof(bits))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return AT_RESULT_FAILE;
     }
     
@@ -336,14 +336,14 @@ static at_result_t at_uartxwordlength_setup(const struct at_cmd *cmd, const char
     int argc = at_req_parse_args(args, req_expr, &bits);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     // 检查数据位数有效性(5,6,7,8)
     if ((bits < 5) || (bits > 8))
     {
-        LOG_E("bits(%u) range[5,8]!", bits);
+        LOG_E("%s bits(%u) range[5,8]!", __FUNCTION__, bits);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -359,7 +359,7 @@ static at_result_t at_uartxwordlength_setup(const struct at_cmd *cmd, const char
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &bits_val, sizeof(bits_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,%u) error(%d)!", cfg_key, bits_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,%u) error(%d)!", __FUNCTION__, cfg_key, bits_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -384,7 +384,7 @@ static at_result_t at_uartxparity_println(char uart_x)
     size_t len = ef_get_env_blob(cfg_key, &parity, sizeof(parity), RT_NULL);
     if (len != sizeof(parity))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return AT_RESULT_FAILE;
     }
     
@@ -409,14 +409,14 @@ static at_result_t at_uartxparity_setup(const struct at_cmd *cmd, const char *ar
     int argc = at_req_parse_args(args, req_expr, &parity);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     // 检查数据位数有效性(0=无,1=奇,2=偶)
     if (parity > 2)
     {
-        LOG_E("parity(%u) range[0,2]!", parity);
+        LOG_E("%s parity(%u) range[0,2]!", __FUNCTION__, parity);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -432,7 +432,7 @@ static at_result_t at_uartxparity_setup(const struct at_cmd *cmd, const char *ar
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &parity_val, sizeof(parity_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,%u) error(%d)!", cfg_key, parity_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,%u) error(%d)!", __FUNCTION__, cfg_key, parity_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -457,7 +457,7 @@ static at_result_t at_uartxstopbits_println(char uart_x)
     size_t len = ef_get_env_blob(cfg_key, &bits, sizeof(bits), RT_NULL);
     if (len != sizeof(bits))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return AT_RESULT_FAILE;
     }
     
@@ -482,14 +482,14 @@ static at_result_t at_uartxstopbits_setup(const struct at_cmd *cmd, const char *
     int argc = at_req_parse_args(args, req_expr, &bits);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
     // 检查数据位数有效性(1,2)
     if ((bits != 1) && (bits != 2))
     {
-        LOG_E("stop_bits(%u) can only be 1 or 2!", bits);
+        LOG_E("%s stop_bits(%u) can only be 1 or 2!", __FUNCTION__, bits);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -505,7 +505,7 @@ static at_result_t at_uartxstopbits_setup(const struct at_cmd *cmd, const char *
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &bits_val, sizeof(bits_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,0x%x) error(%d)!", cfg_key, bits_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,0x%x) error(%d)!", __FUNCTION__, cfg_key, bits_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -530,7 +530,7 @@ static at_result_t at_uartxslaveraddr_println(char uart_x)
     size_t len = ef_get_env_blob(cfg_key, &addr, sizeof(addr), RT_NULL);
     if (len != sizeof(addr))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return AT_RESULT_FAILE;
     }
     
@@ -555,14 +555,14 @@ static at_result_t at_uartxslaveraddr_setup(const struct at_cmd *cmd, const char
     int argc = at_req_parse_args(args, req_expr, &addr);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     // 检查数据从机地址有效性
     if (addr > 0xFF)
     {
-        LOG_E("addr(0x%x) range[0,0xFF]!", addr);
+        LOG_E("%s addr(0x%x) range[0,0xFF]!", __FUNCTION__, addr);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -578,7 +578,7 @@ static at_result_t at_uartxslaveraddr_setup(const struct at_cmd *cmd, const char
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &addr_val, sizeof(addr_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,0x%02x) error(%d)!", cfg_key, addr_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,0x%02x) error(%d)!", __FUNCTION__, cfg_key, addr_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -603,7 +603,7 @@ static at_result_t at_uartxfunction_println(char uart_x)
     size_t len = ef_get_env_blob(cfg_key, &code, sizeof(code), RT_NULL);
     if (len != sizeof(code))
     {
-        LOG_E("ef_get_env_blob(%s) error!", cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
         return AT_RESULT_FAILE;
     }
     
@@ -628,14 +628,14 @@ static at_result_t at_uartxfunction_setup(const struct at_cmd *cmd, const char *
     int argc = at_req_parse_args(args, req_expr, &code);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     // 检查功能吗有效性
     if (code > 0xFF)
     {
-        LOG_E("code(0x%x) range[0,0xFF]!", code);
+        LOG_E("%s code(0x%x) range[0,0xFF]!", __FUNCTION__, code);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -651,7 +651,7 @@ static at_result_t at_uartxfunction_setup(const struct at_cmd *cmd, const char *
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, &code_val, sizeof(code_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s,0x%02x) error(%d)!", cfg_key, code_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s,0x%02x) error(%d)!", __FUNCTION__, cfg_key, code_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -677,7 +677,7 @@ static at_result_t at_uartxstartaddr_println(char uart_x)
     size_t read_len = ef_get_env_blob(cfg_key, addr_list, sizeof(addr_list), &data_size);
     if (read_len != data_size)
     {
-        LOG_E("ef_get_env_blob(%s) error(read_len=%u)!", cfg_key, read_len);
+        LOG_E("%s ef_get_env_blob(%s) error(read_len=%u)!", __FUNCTION__, cfg_key, read_len);
         return AT_RESULT_FAILE;
     }
 
@@ -714,7 +714,7 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
     if ((param_count < 1) || (param_count > 20))
     {
-        LOG_E("strref_split() param number(%d)<20!", param_count);
+        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -732,7 +732,7 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     /* 变量个数检查 */
     if (param_count != cfg_var_cnt)
     {
-        LOG_E("param_count=%u cfg_var_cnt=%u!", param_count, cfg_var_cnt);
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
         return AT_RESULT_FAILE;
     }
     
@@ -743,7 +743,7 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     {
         if (param_list[i].len <= 0)
         {
-            LOG_E("param[%d] is empty!", i);
+            LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         int32_t addr = 0;
@@ -755,12 +755,12 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
         rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &addr);
         if (ret != 1)
         {
-            LOG_E("param[%d] format invalid!", i);
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         if ((addr < 0) || (addr > 0xFFFF))
         {
-            LOG_E("param[%d] not in range[0x0000,0xFFFF]!", i);
+            LOG_E("%s param[%d] not in range[0x0000,0xFFFF]!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         addr_list[i] = (uint16_t)((uint32_t)addr);
@@ -775,7 +775,7 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, addr_list, list_len * sizeof(addr_list[0]));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s) error(%d)!", cfg_key, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -801,7 +801,7 @@ static at_result_t at_uartxlength_println(char uart_x)
     size_t read_len = ef_get_env_blob(cfg_key, num_list, sizeof(num_list), &data_size);
     if (read_len != data_size)
     {
-        LOG_E("ef_get_env_blob(%s) error(read_len=%u)!", cfg_key, read_len);
+        LOG_E("%s ef_get_env_blob(%s) error(read_len=%u)!", __FUNCTION__, cfg_key, read_len);
         return AT_RESULT_FAILE;
     }
 
@@ -838,7 +838,7 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
     if ((param_count < 1) || (param_count > 20))
     {
-        LOG_E("strref_split() param number(%d)<20!", param_count);
+        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -856,7 +856,7 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     /* 变量个数检查 */
     if (param_count != cfg_var_cnt)
     {
-        LOG_E("param_count=%u cfg_var_cnt=%u!", param_count, cfg_var_cnt);
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
         return AT_RESULT_FAILE;
     }
     
@@ -867,7 +867,7 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     {
         if (param_list[i].len <= 0)
         {
-            LOG_E("param[%d] is empty!", i);
+            LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         int32_t num = 0;
@@ -879,12 +879,12 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
         rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &num);
         if (ret != 1)
         {
-            LOG_E("param[%d] format invalid!", i);
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         if ((num < 0) || (num > 0xFFFF))
         {
-            LOG_E("param[%d] not in range[0x0000,0xFFFF]!", i);
+            LOG_E("%s param[%d] not in range[0x0000,0xFFFF]!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         num_list[i] = (uint16_t)((uint32_t)num);
@@ -899,7 +899,7 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     EfErrCode ef_ret = ef_set_env_blob(cfg_key, num_list, list_len * sizeof(num_list[0]));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s) error(%d)!", cfg_key, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
         return AT_RESULT_FAILE;
     }
 

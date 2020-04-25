@@ -556,7 +556,7 @@ static void tb22_init_thread_entry(void *parameter)
     struct at_device *device = (struct at_device *) parameter;
     struct at_client *client = device->client;
 
-    resp = at_create_resp(256, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
+    resp = at_create_resp(1024, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
     if (resp == RT_NULL)
     {
         LOG_E("no memory for resp create.");
@@ -619,6 +619,10 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E(">> AT+NCONFIG=PCO_IE_TYPE,PCO");
             goto __exit;
         }
+        
+        /* 输出配置信息 */
+        /* AT+NCONFIG? */
+        at_obj_exec_cmd(device->client, resp, "AT+NCONFIG?");
 
         /* reboot */
         at_obj_exec_cmd(device->client, resp, "AT+NRB");
@@ -804,6 +808,10 @@ static void tb22_init_thread_entry(void *parameter)
             result = -RT_ERROR;
             goto __exit;
         }
+        
+        /* 输出状态信息 */
+        /* AT+NUESTATS */
+        at_obj_exec_cmd(device->client, resp, "AT+NUESTATS=ALL");
         
         /* check the GPRS network IP address */
         for (i = 0; i < IPADDR_RETRY; i++)

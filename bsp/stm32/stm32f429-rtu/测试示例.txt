@@ -1,0 +1,21 @@
+
+配置查询示例
+平台发布主题: /sys/productKey1/deviceCode1/config/get
+平台发布数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","id":"W343Wwwe4"}
+平台订阅主题: /sys/productKey1/deviceCode1/config/get_reply
+
+配置设置示例
+平台发布主题: /sys/productKey1/deviceCode1/config/set
+平台发布数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","id":"W343Wwwe4","CycleSet":"80","AcquisitionSet":"10","AIPSet":"100.100.0.12","APortSet":"8028","BIPSet":"100.100.0.03","BPortSet":"8089","Restart":"0"}
+平台订阅主题: /sys/productKey1/deviceCode1/config/set_reply
+
+数据查询示例
+平台发布主题: /sys/productKey1/deviceCode1/telemetry/get
+平台发布数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","id":"W343Wwwe4"}
+平台订阅主题: /sys/productKey1/deviceCode1/telemetry/get_reply
+
+
+主动上报示例
+平台订阅主题: /sys/productKey1/deviceCode1/telemetry/real_time_data
+平台发布回复主题: /sys/productKey1/deviceCode1/telemetry/result
+平台发布回复数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","id":"W343Wwwe4","code":200,"message":"success","topic":"/sys/productKey1/deviceCode1/telemetry/real_time_data","data":{}}

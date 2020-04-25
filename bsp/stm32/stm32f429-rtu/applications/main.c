@@ -141,7 +141,7 @@ static rt_err_t app_send_msg(app_msg_type msg, void* msg_data)
     rt_err_t ret = rt_mq_send(app_msg_queue, &app_msg, sizeof(app_msg));
     if (ret != RT_EOK)
     {
-        LOG_E("app_send_msg() call rt_mq_send error(%d)", ret);
+        LOG_E("%s call rt_mq_send error(%d)", __FUNCTION__, ret);
     }
     return ret;
 }
@@ -153,7 +153,7 @@ static rt_err_t mqtt_send_publish_req(enum QoS qos, char *topic, char *payload, 
         (mqtt_publish_data_info*)rt_malloc(sizeof(mqtt_publish_data_info));
     if (app_msg_data == RT_NULL)
     {
-        LOG_E("rt_malloc(%u) failed!", sizeof(mqtt_publish_data_info));
+        LOG_E("%s(%u) failed!", __FUNCTION__, sizeof(mqtt_publish_data_info));
         return -RT_ENOMEM;
     }
     
@@ -166,7 +166,7 @@ static rt_err_t mqtt_send_publish_req(enum QoS qos, char *topic, char *payload, 
     {
         rt_free(app_msg_data);
         
-        LOG_E("app_send_msg(APP_MSG_MQTT_PUBLISH_REQ) error(%d)!", ret);
+        LOG_E("%s(APP_MSG_MQTT_PUBLISH_REQ) error(%d)!", __FUNCTION__, ret);
     }
     
     return ret;
@@ -180,14 +180,14 @@ int get_modem_rssi(int *rssi)
 }
 
 /* 取得客户端唯一编号 */
-static uint32_t get_clientid()
+static uint32_t get_clientid(void)
 {
     config_info *cfg = cfg_get();
     return cfg->client_id;
 }
 
 /* 取得产品编号 */
-static const char* get_productkey()
+static const char* get_productkey(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->productkey == NULL)
@@ -198,7 +198,7 @@ static const char* get_productkey()
 }
 
 /* 取得设备ID */
-static const char* get_devicecode()
+static const char* get_devicecode(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->devicecode == NULL)
@@ -209,7 +209,7 @@ static const char* get_devicecode()
 }
 
 /* 取得标签ID */
-static const char* get_itemid()
+static const char* get_itemid(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->itemid == NULL)
@@ -222,7 +222,7 @@ static const char* get_itemid()
 /* 采集UARTX数据 */
 static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_len)
 {
-    LOG_D("uart_x_data_acquisition(UART%d)", x);
+    LOG_D("%s(UART%d)", __FUNCTION__, x);
     
     /* 内部函数不做参数检查,由调用者保证参数有效性 */
     int index = x - 1;
@@ -247,7 +247,7 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
             cfg->uart_x_cfg[index].stopbits);
         if (mb_ctx == NULL)
         {
-            LOG_E("modbus_new_rtu error");
+            LOG_E("%s call modbus_new_rtu error!", __FUNCTION__);
             goto __exit;
         }
         
@@ -265,7 +265,7 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
         int iret = modbus_connect(mb_ctx);
         if (iret != 0)
         {
-            LOG_E("modbus_connect error(%d)", errno);
+            LOG_E("%s modbus_connect error(%d)!", __FUNCTION__, errno);
             goto __exit;
         }
         
@@ -281,7 +281,7 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
             int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, read_buf); // 读取寄存器数据
             if (read_bytes != length)
 			{
-				LOG_W("modbus_read_registers(0x%04x,%u) return(%u)!", startaddr, length, read_bytes);
+				LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u)!", __FUNCTION__, startaddr, length, read_bytes);
 			}
 			
             /* 保存到采集数据缓存 */
@@ -308,9 +308,9 @@ __exit:
 }
 
 /* 采集数据并保存到Flash */
-static rt_err_t data_acquisition_and_save()
+static rt_err_t data_acquisition_and_save(void)
 {
-    LOG_D("data_acquisition_and_save()");
+    LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
     uint8_t data_buf[256] = {0};
@@ -330,7 +330,7 @@ static rt_err_t data_acquisition_and_save()
     if (len != sizeof(fifo_info))
     {
         /* 加载FIFO队列失败,提示将会新建一个(第一次运行?) */
-        LOG_W("ef_get_env_blob(history_fifo_info) load fail, create new!");
+        LOG_W("%s ef_get_env_blob(history_fifo_info) load fail, create new!", __FUNCTION__);
     }
     
     /* 本次采集将保存在FIFO中的位置 */
@@ -350,7 +350,7 @@ static rt_err_t data_acquisition_and_save()
         if (ret != EF_NO_ERR)
         { // 保存失败
             /* 输出警告 */
-            LOG_W("ef_set_env_blob(%s) error!", data_key);
+            LOG_W("%s ef_set_env_blob(%s) error!", __FUNCTION__, data_key);
             /* 继续采集其他总线的数据 */
         }
     }
@@ -360,7 +360,7 @@ static rt_err_t data_acquisition_and_save()
     EfErrCode ef_ret = ef_set_env_blob(data_key, &now, sizeof(now));
     if (ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(%s) error!", data_key);
+        LOG_E("%s ef_set_env_blob(%s) error!", __FUNCTION__, data_key);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -386,7 +386,7 @@ static rt_err_t data_acquisition_and_save()
     ef_ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
     if (ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(history_fifo_info) error!");
+        LOG_E("%s ef_set_env_blob(history_fifo_info) error!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -407,7 +407,7 @@ __exit:
  */
 static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_buf, uint32_t json_buf_len)
 {
-    LOG_D("read_history_pos_data_json(%u)", read_pos);
+    LOG_D("%s(%u)", __FUNCTION__, read_pos);
     
     /* 缓冲区中已读取数据字节数 */
     uint32_t json_data_len = 0;
@@ -423,7 +423,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     size_t len = ef_get_env_blob(data_key, &time_stamp, sizeof(time_stamp), NULL);
     if (len != sizeof(time_stamp))
     {
-        LOG_E("ef_get_env_blob(%s) error!", data_key);
+        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
         return 0;
     }
     /* 时间戳编码成JSON格式并写入缓冲区 */
@@ -442,7 +442,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
         len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
         if (len <= 0)
         {
-            LOG_E("ef_get_env_blob(%s) error!", data_key);
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
             return 0;
         }
         
@@ -490,7 +490,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
  */
 uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len)
 {
-    LOG_D("read_history_data_json(%u)", n);
+    LOG_D("%s(%u)", __FUNCTION__, n);
     
     /* 缓冲区中已读取数据字节数 */
     uint32_t json_data_len = 0;
@@ -505,14 +505,14 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
     if (len != sizeof(fifo_info))
     {
         /* 加载FIFO队列失败(第一次运行?) */
-        LOG_E("ef_get_env_blob(history_fifo_info) load fail!");
+        LOG_E("%s ef_get_env_blob(history_fifo_info) load fail!", __FUNCTION__);
         return 0;
     }
     
     /* 状态检查 */
     if (fifo_info.length <= 0)
     { // 队列为空
-        LOG_E("history data is empty!");
+        LOG_E("%s history data is empty!", __FUNCTION__);
         return 0;
     }
     
@@ -520,13 +520,13 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
     if (n >= fifo_info.length)
     {
         /* 超范围 */
-        LOG_E("n(%u) not in range[0,%u]!", n, fifo_info.length - 1);
+        LOG_E("%s n(%u) not in range[0,%u]!", __FUNCTION__, n, fifo_info.length - 1);
         return 0;
     }
     
     /* 读取前第n条历史数据 */
 	n += 1;
-    uint32_t read_pos = fifo_info.head_pos;
+    uint32_t read_pos = fifo_info.head_pos; // head_pos指向空位置
     if (fifo_info.head_pos >= n)
     {
         read_pos = fifo_info.head_pos - n;
@@ -547,7 +547,7 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
  */
 rt_err_t clear_history_data(void)
 {
-    LOG_D("clear_history_data()");
+    LOG_D("%s()", __FUNCTION__);
 
     rt_err_t ret = RT_EOK;
     
@@ -564,7 +564,7 @@ rt_err_t clear_history_data(void)
     EfErrCode ef_ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(history_fifo_info) error(%d)!", ef_ret);
+        LOG_E("%s ef_set_env_blob(history_fifo_info) error(%d)!", __FUNCTION__, ef_ret);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -582,6 +582,8 @@ __exit:
  */
 uint32_t get_history_data_num(void)
 {
+    LOG_D("%s()", __FUNCTION__);
+    
     /* 读取历史数据队列信息 */
     history_fifo_info fifo_info = {
         .length = 0, // 队列长度
@@ -592,7 +594,7 @@ uint32_t get_history_data_num(void)
     if (len != sizeof(fifo_info))
     {
         /* 加载FIFO队列失败(第一次运行?) */
-        LOG_E("ef_get_env_blob(history_fifo_info) load fail!");
+        LOG_E("%s ef_get_env_blob(history_fifo_info) load fail!", __FUNCTION__);
         return 0;
     }
     
@@ -606,6 +608,8 @@ uint32_t get_history_data_num(void)
  */
 static uint32_t read_config_info_json(char* json_data_buf, uint32_t json_buf_len)
 {
+    LOG_D("%s()", __FUNCTION__);
+    
     config_info *cfg = cfg_get();
     char a_ip[32] = "";
     
@@ -633,6 +637,8 @@ static uint32_t read_config_info_json(char* json_data_buf, uint32_t json_buf_len
 static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *autocontrol, 
     c_str_ref *a_ip, c_str_ref *a_port, c_str_ref *b_ip, c_str_ref *b_port, c_str_ref *restart)
 {
+    LOG_D("%s()", __FUNCTION__);
+    
     /* 参数检查和转换 */
     
     /* cycle[可缺省] */
@@ -641,14 +647,14 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     {
         if (!strref_is_int(cycle))
         {
-            LOG_E("<cycle> not interger!");
+            LOG_E("%s <cycle> not interger!", __FUNCTION__);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
         cycle_val = strref_to_int(cycle);
         if ((cycle_val < 1) || (cycle_val > 180))
         {
-            LOG_E("<cycle>(%d) not in range[1,180]!", cycle_val);
+            LOG_E("%s <cycle>(%d) not in range[1,180]!", __FUNCTION__, cycle_val);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -660,14 +666,14 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     {
         if (!strref_is_int(acquisition))
         {
-            LOG_E("<acquisition> not interger!");
+            LOG_E("%s <acquisition> not interger!", __FUNCTION__);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
         acquisition_val = strref_to_int(acquisition);
         if ((acquisition_val < 1) || (acquisition_val > 30))
         {
-            LOG_E("<acquisition>(%d) not in range[1,30]!", acquisition_val);
+            LOG_E("%s <acquisition>(%d) not in range[1,30]!", __FUNCTION__, acquisition_val);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -679,14 +685,14 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     {
         if (!strref_is_int(autocontrol))
         {
-            LOG_E("<autocontrol> not interger!");
+            LOG_E("%s <autocontrol> not interger!", __FUNCTION__);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
         autocontrol_val = strref_to_int(autocontrol);
         if ((autocontrol_val < 0) || (autocontrol_val > 1))
         {
-            LOG_E("<autocontrol>(%d) not in range[0,1]!", autocontrol_val);
+            LOG_E("%s <autocontrol>(%d) not in range[0,1]!", __FUNCTION__, autocontrol_val);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -701,7 +707,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         a_ip_addr = inet_addr(a_ip_str);
         if (a_ip_addr == IPADDR_NONE)
         {
-            LOG_E("inet_addr(%s) error!", a_ip_str);
+            LOG_E("%s inet_addr(%s) error!", __FUNCTION__, a_ip_str);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -713,14 +719,14 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     {
         if (!strref_is_int(a_port))
         {
-            LOG_E("<a_port> not interger!");
+            LOG_E("%s <a_port> not interger!", __FUNCTION__);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
         a_port_val = strref_to_int(a_port);
         if ((a_port_val < 0) || (a_port_val > 65535))
         {
-            LOG_E("<a_port>(%d) not in range[0,65535]!", a_port_val);
+            LOG_E("%s <a_port>(%d) not in range[0,65535]!", __FUNCTION__, a_port_val);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -735,7 +741,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         b_ip_addr = inet_addr(b_ip_str);
         if (b_ip_addr == IPADDR_NONE)
         {
-            LOG_E("inet_addr(%s) error!", b_ip_str);
+            LOG_E("%s inet_addr(%s) error!", __FUNCTION__, b_ip_str);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -747,14 +753,14 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     {
         if (!strref_is_int(b_port))
         {
-            LOG_E("<b_port> not interger!");
+            LOG_E("%s <b_port> not interger!", __FUNCTION__);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
         b_port_val = strref_to_int(b_port);
         if ((b_port_val < 0) || (b_port_val > 65535))
         {
-            LOG_E("<a_port>(%d) not in range[0,65535]!", b_port_val);
+            LOG_E("%s <a_port>(%d) not in range[0,65535]!", __FUNCTION__, b_port_val);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -766,14 +772,14 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     {
         if (!strref_is_int(restart))
         {
-            LOG_E("<restart> not interger!");
+            LOG_E("%s <restart> not interger!", __FUNCTION__);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
         restart_val = strref_to_int(restart);
         if ((restart_val < 0) || (restart_val > 1))
         {
-            LOG_E("<restart>(%d) not in range[0,1]!", restart_val);
+            LOG_E("%s <restart>(%d) not in range[0,1]!", __FUNCTION__, restart_val);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -787,7 +793,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         EfErrCode ef_ret = ef_set_env_blob("cycle", &cycle_val, sizeof(cycle_val));
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(cycle,0x%x) error(%d)!", cycle_val, ef_ret);
+            LOG_E("%s ef_set_env_blob(cycle,0x%x) error(%d)!", __FUNCTION__, cycle_val, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -799,7 +805,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         EfErrCode ef_ret = ef_set_env_blob("acquisition", &acquisition_val, sizeof(acquisition_val));
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(acquisition,0x%x) error(%d)!", acquisition_val, ef_ret);
+            LOG_E("%s ef_set_env_blob(acquisition,0x%x) error(%d)!", __FUNCTION__, acquisition_val, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -811,7 +817,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         EfErrCode ef_ret = ef_set_env_blob("a_ip", &a_ip_addr, sizeof(a_ip_addr));
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(a_ip,0x%x) error(%d)!", a_ip_addr, ef_ret);
+            LOG_E("%s ef_set_env_blob(a_ip,0x%x) error(%d)!", __FUNCTION__, a_ip_addr, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -823,7 +829,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         EfErrCode ef_ret = ef_set_env_blob("a_port", &a_port_val, sizeof(a_port_val));
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(a_port,0x%x) error(%d)!", a_port_val, ef_ret);
+            LOG_E("%s ef_set_env_blob(a_port,0x%x) error(%d)!", __FUNCTION__, a_port_val, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -835,7 +841,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         EfErrCode ef_ret = ef_set_env_blob("b_ip", &b_ip_addr, sizeof(b_ip_addr));
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(b_ip,0x%x) error(%d)!", b_ip_addr, ef_ret);
+            LOG_E("%s ef_set_env_blob(b_ip,0x%x) error(%d)!", __FUNCTION__, b_ip_addr, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -847,7 +853,7 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
         EfErrCode ef_ret = ef_set_env_blob("b_port", &b_port_val, sizeof(b_port_val));
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(b_port,0x%x) error(%d)!", b_port_val, ef_ret);
+            LOG_E("%s ef_set_env_blob(b_port,0x%x) error(%d)!", __FUNCTION__, b_port_val, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -859,7 +865,8 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
 
 static void tbss_netdev_status_callback(struct netdev *netdev, enum netdev_cb_type type)
 {
-    LOG_D("tbss_netdev_status_callback(%d)", type);
+    LOG_D("%s(%d)", __FUNCTION__, type);
+    
     switch (type)
     {
         case NETDEV_CB_ADDR_IP:                 /* IP address */
@@ -904,14 +911,14 @@ static void tbss_netdev_status_callback(struct netdev *netdev, enum netdev_cb_ty
 
 static void report_timer_timeout(void *parameter)
 {
-    LOG_D("report_timer_timeout()");
+    LOG_D("%s()", __FUNCTION__);
     
     app_send_msg(APP_MSG_DATA_REPORT_REQ, RT_NULL); // 发送数据主动上报请求
 }
 
 static void acquisition_timer_timeout(void *parameter)
 {
-    LOG_D("acquisition_timer_timeout()");
+    LOG_D("%s()", __FUNCTION__);
     
     app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
 }
@@ -919,7 +926,8 @@ static void acquisition_timer_timeout(void *parameter)
 static void mqtt_sub_default_callback(mqtt_client *client, message_data *msg)
 {
     *((char *)msg->message->payload + msg->message->payloadlen) = '\0';
-    LOG_D("mqtt sub default callback: %.*s %.*s",
+    LOG_D("%s mqtt sub default callback: %.*s %.*s",
+               __FUNCTION__,
                msg->topic_name->lenstring.len,
                msg->topic_name->lenstring.data,
                msg->message->payloadlen,
@@ -928,30 +936,30 @@ static void mqtt_sub_default_callback(mqtt_client *client, message_data *msg)
 
 static void mqtt_connect_callback(mqtt_client *client)
 {
-    LOG_D("mqtt_connect_callback!");
+    LOG_D("%s()", __FUNCTION__);
 }
 
 static void mqtt_online_callback(mqtt_client *client)
 {
-    LOG_D("mqtt_online_callback!");
+    LOG_D("%s()", __FUNCTION__);
     
     /* 启动定时上报 */
     rt_err_t ret = rt_timer_start(report_timer);
     if (RT_EOK != ret)
     {
-        LOG_E("start report timer failed(%d)!", ret);
+        LOG_E("%s start report timer failed(%d)!", __FUNCTION__, ret);
     }
 }
 
 static void mqtt_offline_callback(mqtt_client *client)
 {
-    LOG_D("mqtt_offline_callback!");
+    LOG_D("%s()", __FUNCTION__);
     
     /* 停止定时上报 */
     rt_err_t ret = rt_timer_stop(report_timer);
     if (RT_EOK != ret)
     {
-        LOG_E("stop report timer failed(%d)!", ret);
+        LOG_E("%s stop report timer failed(%d)!", __FUNCTION__, ret);
     }
 }
 
@@ -969,7 +977,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     rt_err_t ret = RT_EOK;
     int i = 0;
     
-    LOG_I("topic_telemetry_get_handler %s %s", msg->topic_name->cstring, json_str);
+    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, json_str);
     
     /* 解析JSON字符串 */
     jsmn_parser json_paser;
@@ -978,7 +986,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
     if (list_len == JSMN_ERROR_PART)
     {
-        LOG_E("jsmn_parse failed!");
+        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1027,19 +1035,19 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     /* 检查productKey和deviceCode */
     if (strref_str_cmp(get_productkey(), &productkey) != 0)
     {
-        LOG_E("productkey check failed!");
+        LOG_E("%s productkey check failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_str_cmp(get_devicecode(), &devicecode) != 0)
     {
-        LOG_E("devicecode check failed!");
+        LOG_E("%s devicecode check failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_is_empty(&id))
     {
-        LOG_E("id is empty!");
+        LOG_E("%s id is empty!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1048,7 +1056,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
     if (topic_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", MQTT_TOPIC_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1056,7 +1064,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
     if (json_data_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", JSON_DATA_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1071,7 +1079,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
         if (read_len <= 0)
         {
-            LOG_E("read_history_data_json(read_len=%d) failed!", read_len);
+            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -1089,7 +1097,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("mqtt_send_publish_req() error(%d)!", ret);
+            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1126,7 +1134,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     rt_err_t ret = RT_EOK;
     int i = 0;
     
-    LOG_I("topic_config_get_handler %s %s", msg->topic_name->cstring, json_str);
+    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, json_str);
     
     /* 解析JSON字符串 */
     jsmn_parser json_paser;
@@ -1135,7 +1143,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
     if (list_len == JSMN_ERROR_PART)
     {
-        LOG_E("jsmn_parse failed!");
+        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1184,19 +1192,19 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     /* 检查productKey和deviceCode */
     if (strref_str_cmp(get_productkey(), &productkey) != 0)
     {
-        LOG_E("productkey check failed!");
+        LOG_E("%s productkey check failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_str_cmp(get_devicecode(), &devicecode) != 0)
     {
-        LOG_E("devicecode check failed!");
+        LOG_E("%s devicecode check failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_is_empty(&id))
     {
-        LOG_E("id is empty!");
+        LOG_E("%s id is empty!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1205,7 +1213,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
     if (topic_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", MQTT_TOPIC_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1213,7 +1221,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
     if (json_data_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", JSON_DATA_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1228,7 +1236,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
         uint32_t read_len = read_config_info_json(json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
         if (read_len <= 0)
         {
-            LOG_E("read_config_info_json(read_len=%d) failed!", read_len);
+            LOG_E("%s read_config_info_json(read_len=%d) failed!", __FUNCTION__, read_len);
             
             json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
                 "{\"Status\":\"500\",\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"requestId\":\"%.*s\"}", 
@@ -1247,13 +1255,13 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
         
         /* 发布/sys/${productKey}/${deviceCode}/config/get_reply响应 */
         rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/get_reply", get_productkey(), get_devicecode());
-        LOG_D("publish(%s) %s", topic_buf, json_data_buf);
+        LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
         ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("mqtt_send_publish_req() error(%d)!", ret);
+            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1276,7 +1284,8 @@ __exit:
     }
 }
 
-const char* cfg_ret_code_get_message(int cfg_ret_code)
+/* 取得set_reply错误码对应的文本描述 */
+static const char* cfg_ret_code_get_message(int cfg_ret_code)
 {
     switch (cfg_ret_code)
     {
@@ -1317,7 +1326,7 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     int cfg_ret_code = 0;
     int i = 0;
     
-    LOG_I("topic_config_set_handler %s %s", msg->topic_name->cstring, json_str);
+    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, json_str);
     
     /* 解析JSON字符串 */
     jsmn_parser json_paser;
@@ -1326,7 +1335,7 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
     if (list_len == JSMN_ERROR_PART)
     {
-        LOG_E("jsmn_parse failed!");
+        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1439,25 +1448,25 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     /* 检查productKey和deviceCode */
     if (strref_str_cmp(get_productkey(), &productkey) != 0)
     {
-        LOG_E("productkey check failed!");
+        LOG_E("%s productkey check failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_str_cmp(get_devicecode(), &devicecode) != 0)
     {
-        LOG_E("devicecode check failed!");
+        LOG_E("%s devicecode check failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_is_empty(&id))
     {
-        LOG_E("id is empty!");
+        LOG_E("%s id is empty!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
     if (strref_is_empty(&operationdate))
     {
-        LOG_E("operationdate is empty!");
+        LOG_E("%s operationdate is empty!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1470,7 +1479,7 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
     if (topic_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", MQTT_TOPIC_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1478,7 +1487,7 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
     if (json_data_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", JSON_DATA_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1497,13 +1506,13 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
         
         /* 发布/sys/${productKey}/${deviceCode}/config/set_reply响应 */
         rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/set_reply", get_productkey(), get_devicecode());
-        LOG_D("publish(%s) %s", topic_buf, json_data_buf);
+        LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
         ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("mqtt_send_publish_req() error(%d)!", ret);
+            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1550,7 +1559,7 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
     c_str_ref data = {0, NULL}; // data
     int i = 0;
     
-    LOG_I("topic_telemetry_result_handler %s %s", msg->topic_name->cstring, json_str);
+    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, json_str);
     
     /* 解析JSON字符串 */
     jsmn_parser json_paser;
@@ -1559,7 +1568,7 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
     if (list_len == JSMN_ERROR_PART)
     {
-        LOG_E("jsmn_parse failed!");
+        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
         goto __exit;
     }
     
@@ -1643,12 +1652,12 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
     /* 检查productKey和deviceCode */
     if (strref_str_cmp(get_productkey(), &productkey) != 0)
     {
-        LOG_E("productkey check failed!");
+        LOG_E("%s productkey check failed!", __FUNCTION__);
         goto __exit;
     }
     if (strref_str_cmp(get_devicecode(), &devicecode) != 0)
     {
-        LOG_E("devicecode check failed!");
+        LOG_E("%s devicecode check failed!", __FUNCTION__);
         goto __exit;
     }
     
@@ -1660,7 +1669,7 @@ __exit:
 
 static void app_deinit()
 {
-    LOG_D("app_deinit()");
+    LOG_D("%s()", __FUNCTION__);
     
     if (RT_NULL != history_fifo_mutex)
     {
@@ -1686,7 +1695,7 @@ static void app_deinit()
 
 static rt_err_t app_init()
 {
-    LOG_D("app_init()");
+    LOG_D("%s()", __FUNCTION__);
     config_info *cfg = NULL;
     rt_err_t ret = RT_EOK;
     
@@ -1695,7 +1704,7 @@ static rt_err_t app_init()
         int iret = fal_init();
         if (iret < 0)
         {
-            LOG_E("fal init error(%d)!", iret);
+            LOG_E("%s fal init error(%d)!", __FUNCTION__, iret);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -1706,7 +1715,7 @@ static rt_err_t app_init()
         EfErrCode ef_err = easyflash_init();
         if (ef_err != EF_NO_ERR)
         {
-            LOG_E("easyflash init error(%d)!", ef_err);
+            LOG_E("%s easyflash init error(%d)!", __FUNCTION__, ef_err);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -1717,7 +1726,7 @@ static rt_err_t app_init()
         bool ret = cfg_load();
         if (!ret)
         {
-            //LOG_E("cfg_load error!");
+            LOG_E("%s cfg_load error!", __FUNCTION__);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -1737,7 +1746,7 @@ static rt_err_t app_init()
     history_fifo_mutex = rt_mutex_create("history_fifo", RT_IPC_FLAG_FIFO);
     if (RT_NULL == history_fifo_mutex)
     {
-        LOG_E("create history fifo mutex failed!");
+        LOG_E("%s create history fifo mutex failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1746,7 +1755,7 @@ static rt_err_t app_init()
     app_msg_queue = rt_mq_create("app_mq", sizeof(app_message), APP_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
     if (RT_NULL == app_msg_queue)
     {
-        LOG_E("create app message queue failed!");
+        LOG_E("%s create app message queue failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1757,7 +1766,7 @@ static rt_err_t app_init()
                             RT_TIMER_FLAG_PERIODIC);
     if (RT_NULL == report_timer)
     {
-        LOG_E("create report timer failed!");
+        LOG_E("%s create report timer failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1768,7 +1777,7 @@ static rt_err_t app_init()
                             RT_TIMER_FLAG_PERIODIC);
     if (RT_NULL == acquisition_timer)
     {
-        LOG_E("create acquisition timer failed!");
+        LOG_E("%s create acquisition timer failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1784,7 +1793,7 @@ static rt_err_t app_init()
         mq_client.buf = rt_calloc(1, mq_client.buf_size);
         if (mq_client.buf == NULL)
         {
-            LOG_E("no memory for MQTT client buffer!");
+            LOG_E("%s no memory for MQTT client buffer!", __FUNCTION__);
             ret = -RT_ENOMEM;
             goto __exit;
         }
@@ -1792,7 +1801,7 @@ static rt_err_t app_init()
         mq_client.readbuf = rt_calloc(1, mq_client.readbuf_size);
         if (mq_client.readbuf == NULL)
         {
-            LOG_E("no memory for MQTT client read buffer!");
+            LOG_E("%s no memory for MQTT client read buffer!", __FUNCTION__);
             ret = -RT_ENOMEM;
             goto __exit;
         }
@@ -1807,7 +1816,7 @@ static rt_err_t app_init()
             rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
 #endif
             mq_client.uri = mqtt_server_url;
-            LOG_D("mqtt_server_url %s", mqtt_server_url);
+            LOG_D("%s mqtt_server_url %s", __FUNCTION__, mqtt_server_url);
         }
         
         /* generate the random client ID */
@@ -1819,7 +1828,7 @@ static rt_err_t app_init()
         mq_client.condata.clientID.cstring = mqtt_client_id;
         //mq_client.condata.username.cstring = "";
         //mq_client.condata.password.cstring = "";
-        mq_client.condata.keepAliveInterval = 30;
+        mq_client.condata.keepAliveInterval = 120;
         mq_client.condata.cleansession = 1;
 
         /* config MQTT will param. */
@@ -1868,11 +1877,11 @@ static rt_err_t app_init()
         mq_client.default_message_handlers = mqtt_sub_default_callback;
         
         /* 设置其他MQTT参数初值 */
-        mq_client.keepalive_interval = 60; // keepalive间隔，以秒为单位
+        mq_client.keepalive_interval = 120; // keepalive间隔，以秒为单位
         mq_client.keepalive_count = 3; // keepalive次数，超过该次数无应答，则关闭连接
-        mq_client.connect_timeout = 30; // 连接超时，以秒为单位
+        mq_client.connect_timeout = 60; // 连接超时，以秒为单位
         mq_client.reconnect_interval = 5; // 重新连接间隔，以秒为单位
-        mq_client.msg_timeout = 30; // 消息通信超时，以秒为单位，根据网络情况，不能为0
+        mq_client.msg_timeout = 60; // 消息通信超时，以秒为单位，根据网络情况，不能为0
     }
     
     /* 监听网络就绪事件 */
@@ -1880,7 +1889,7 @@ static rt_err_t app_init()
         struct netdev *net_dev = netdev_get_by_name(TB22_DEVICE_NAME);
         if (RT_NULL == net_dev)
         {
-            LOG_E("get net device(%s) failed!", TB22_DEVICE_NAME);
+            LOG_E("%s get net device(%s) failed!", __FUNCTION__, TB22_DEVICE_NAME);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -1937,12 +1946,12 @@ __exit:
 /* 启动MQTT客户端 */
 static rt_err_t mqtt_client_start(void)
 {
-    LOG_D("mqtt_client_start()");
+    LOG_D("%s()", __FUNCTION__);
     
     int ret = paho_mqtt_start(&mq_client, MQTT_CLIENT_THREAD_STACK_SIZE, MQTT_CLIENT_THREAD_PRIORITY);
     if (ret != PAHO_SUCCESS)
     {
-       LOG_E("paho_mqtt_start() error(%d)", ret);
+       LOG_E("%s paho_mqtt_start() error(%d)", __FUNCTION__, ret);
        return -RT_ERROR;
     }
     
@@ -1952,12 +1961,12 @@ static rt_err_t mqtt_client_start(void)
 /* 停止MQTT客户端 */
 static rt_err_t mqtt_client_stop(rt_int32_t timeout)
 {
-    LOG_D("mqtt_client_stop() timeout=%d", timeout);
+    LOG_D("%s() timeout=%d", __FUNCTION__, timeout);
     
     int ret = paho_mqtt_stop(&mq_client, timeout);
     if (ret != PAHO_SUCCESS)
     {
-       LOG_E("paho_mqtt_stop() error(%d)", ret);
+       LOG_E("%s paho_mqtt_stop() error(%d)", __FUNCTION__, ret);
        return -RT_ERROR;
     }
     
@@ -1967,14 +1976,14 @@ static rt_err_t mqtt_client_stop(rt_int32_t timeout)
 /* 上报数据 */
 static rt_err_t app_data_report(void)
 {
-    LOG_D("app_data_report()");
+    LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
 
     char* json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
     if (json_data_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", JSON_DATA_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
         ret = -RT_ENOMEM;
         goto __exit;
     }
@@ -1989,7 +1998,7 @@ static rt_err_t app_data_report(void)
         uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len);
         if (read_len <= 0)
         {
-            LOG_E("read_history_data_json(read_len=%d) failed!", read_len);
+            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -2003,11 +2012,11 @@ static rt_err_t app_data_report(void)
         {
             char topic_buf[MQTT_TOPIC_BUF_LEN] = "";
             rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_devicecode());
-            LOG_D("publish(%s) %s", topic_buf, json_data_buf);
+            LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
             int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, topic_buf, json_data_buf, json_data_len);
             if (mqtt_ret != PAHO_SUCCESS)
             {
-                LOG_E("mqtt publish(%s) error(%d)", topic_buf, mqtt_ret);
+                LOG_E("%s mqtt publish(%s) error(%d)", __FUNCTION__, topic_buf, mqtt_ret);
                 ret = -RT_ERROR;
                 goto __exit;
             }
@@ -2026,11 +2035,34 @@ __exit:
 
 /* 请求采集数据 */
 
-void req_data_acquisition(void)
+rt_err_t req_data_acquisition(void)
 {
-	LOG_D("req_data_acquisition");
+	LOG_D("%s()", __FUNCTION__);
+    
+    /* 检查是否已连接到MQTT服务器 */
+    if (!paho_mqtt_is_connected(&mq_client))
+    {
+        LOG_E("%s mqtt is not connect!", __FUNCTION__);
+        return -RT_ERROR;
+    }
 	
-	app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
+	return app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
+}
+
+/* 请求上报数据 */
+
+rt_err_t req_data_report(void)
+{
+	LOG_D("%s()", __FUNCTION__);
+    
+    /* 检查是否已连接到MQTT服务器 */
+    if (!paho_mqtt_is_connected(&mq_client))
+    {
+        LOG_E("%s mqtt is not connect!", __FUNCTION__);
+        return -RT_ERROR;
+    }
+	
+	return app_send_msg(APP_MSG_DATA_REPORT_REQ, RT_NULL); // 发送数据上报请求
 }
 
 int main(void)
@@ -2039,7 +2071,7 @@ int main(void)
     rt_err_t ret = app_init();
     if (ret != RT_EOK)
     {
-        LOG_E("app_init error(%d)!", ret);
+        LOG_E("%s app_init error(%d)!", __FUNCTION__, ret);
         goto __exit;
     }
     
@@ -2050,7 +2082,7 @@ int main(void)
         ret = rt_mq_recv(app_msg_queue, &app_msg, sizeof(app_msg), RT_WAITING_FOREVER);
         if (RT_EOK != ret)
         { // 出现严重错误
-            LOG_E("recv app msg failed(%d)!", ret);
+            LOG_E("%s recv app msg failed(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
         
@@ -2065,13 +2097,20 @@ int main(void)
                 ret = mqtt_client_start();
                 if (ret != RT_EOK)
                 { // 出现严重错误
-                    LOG_E("mqtt_client_start failed(%d)!", ret);
+                    LOG_E("%s mqtt_client_start failed(%d)!", __FUNCTION__, ret);
                     goto __exit;
                 }
                 break;
             }
             case APP_MSG_DATA_REPORT_REQ: // 数据主动上报请求
             {
+                /* 检查是否已连接到MQTT服务器 */
+                if (!paho_mqtt_is_connected(&mq_client))
+                {
+                    LOG_W("%s mqtt is not connect!", __FUNCTION__);
+                    break;
+                }
+                
                 /* 主动上报数据 */
                 app_data_report();
                 break;
@@ -2088,7 +2127,7 @@ int main(void)
                     (mqtt_publish_data_info*)app_msg.msg_data;
                 if (pub_data_info == RT_NULL)
                 {
-                    LOG_E("recv mqtt_publish_data_info is empty!");
+                    LOG_E("%s recv mqtt_publish_data_info is empty!", __FUNCTION__);
                     break;
                 }
                 
@@ -2101,12 +2140,12 @@ int main(void)
                         pub_data_info->payload, pub_data_info->length);
                     if (mqtt_ret != PAHO_SUCCESS)
                     {
-                        LOG_E("mqtt publish(%s) error(%d)!", pub_data_info->topic, ret);
+                        LOG_E("%s mqtt publish(%s) error(%d)!", __FUNCTION__, pub_data_info->topic, ret);
                     }
                 }
                 else
                 {
-                    LOG_E("mqtt publish topic or data is empty!");
+                    LOG_E("%s mqtt publish topic or data is empty!", __FUNCTION__);
                 }
                 
                 /* 释放内存 */
@@ -2123,7 +2162,7 @@ int main(void)
             }
             default:
             {
-                LOG_W("recv unknown msg(%u)!", app_msg.msg);
+                LOG_W("%s recv unknown msg(%u)!", __FUNCTION__, app_msg.msg);
                 break;
             }
         }

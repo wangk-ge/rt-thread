@@ -483,9 +483,14 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         RT_ASSERT(device_socket == sock);
         cur_pkt_size = len;
         
+        /* 
+         * 进行正常数据传输业务时，在业务数据交互过程中，若60s后未收到下行数据，
+         * 则判定本次数据业务因超时而失败，再次尝试发送数据；
+         * 若3次尝试均超时失败，则进入异常处理流程(由应用层选择是否重试发送)
+         */
         /* waiting OK or failed result */
         event = TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL;
-        event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(30 * 1000), RT_EVENT_FLAG_OR);
+        event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(60 * 1000), RT_EVENT_FLAG_OR);
         if (event_result < 0)
         {
             LOG_E("%s device socket(%d) wait sned OK|FAIL timeout.", device->name, device_socket);

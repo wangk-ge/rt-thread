@@ -36,7 +36,7 @@ extern int get_modem_rssi(int *rssi);
 /* 恢复默认配置 */
 static EfErrCode set_default_config(void)
 {
-    LOG_D("set_default_config()");
+    LOG_D("%s()", __FUNCTION__);
     
     extern void ef_get_default_env(ef_env const **default_env, size_t *default_env_size);
     size_t default_env_set_size = 0;
@@ -52,7 +52,7 @@ static EfErrCode set_default_config(void)
         EfErrCode ret = ef_set_env_blob(default_env_set[i].key, default_env_set[i].value, default_env_set[i].value_len);
         if (ret != EF_NO_ERR)
         {
-            LOG_E("ef_set_env_blob(%s) error!", default_env_set[i].key);
+            LOG_E("%s ef_set_env_blob(%s) error!", __FUNCTION__, default_env_set[i].key);
             return ret;
         }
     }
@@ -70,7 +70,7 @@ static at_result_t at_clientid_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("client_id", &client_id, sizeof(client_id), RT_NULL);
     if (len != sizeof(client_id))
     {
-        LOG_E("ef_get_env_blob(client_id) error!");
+        LOG_E("%s ef_get_env_blob(client_id) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -87,21 +87,21 @@ static at_result_t at_clientid_setup(const struct at_cmd *cmd, const char *args)
     int argc = at_req_parse_args(args, req_expr, &client_id);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     /* 0000000000-0099999999 */
     if (client_id > 99999999)
     {
-        LOG_E("client_id(%u)>99999999!", client_id);
+        LOG_E("%s client_id(%u)>99999999!", __FUNCTION__, client_id);
         return AT_RESULT_CHECK_FAILE;
     }
     
     EfErrCode ef_ret = ef_set_env_blob("client_id", &client_id, sizeof(client_id));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(client_id,%u) error(%d)!", client_id, ef_ret);
+        LOG_E("%s ef_set_env_blob(client_id,%u) error(%d)!", __FUNCTION__, client_id, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -118,7 +118,7 @@ static at_result_t at_aip_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("a_ip", &ip_addr, sizeof(ip_addr), RT_NULL);
     if (len != sizeof(ip_addr))
     {
-        LOG_E("ef_get_env_blob(a_ip) error!");
+        LOG_E("%s ef_get_env_blob(a_ip) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -126,7 +126,7 @@ static at_result_t at_aip_query(const struct at_cmd *cmd)
     char *ip_ret = inet_ntoa_r(ip_addr, ip, sizeof(ip));
     if (ip_ret == RT_NULL)
     {
-        LOG_E("inet_ntoa_r(0x%x) error!", ip_addr);
+        LOG_E("%s inet_ntoa_r(0x%x) error!", __FUNCTION__, ip_addr);
         return AT_RESULT_FAILE;
     }
     
@@ -143,28 +143,28 @@ static at_result_t at_aip_setup(const struct at_cmd *cmd, const char *args)
 
     if (rt_strlen(args) > sizeof(ip))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(ip));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(ip));
         return AT_RESULT_CHECK_FAILE;
     }
 
     int argc = at_req_parse_args(args, req_expr, ip);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     in_addr_t ip_addr = inet_addr(ip);
     if (ip_addr == IPADDR_NONE)
     {
-        LOG_E("inet_addr(%s) error!", ip);
+        LOG_E("%s inet_addr(%s) error!", __FUNCTION__, ip);
         return AT_RESULT_CHECK_FAILE;
     }
     
     EfErrCode ef_ret = ef_set_env_blob("a_ip", &ip_addr, sizeof(in_addr_t));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(a_ip,0x%x) error(%d)!", ip_addr, ef_ret);
+        LOG_E("%s ef_set_env_blob(a_ip,0x%x) error(%d)!", __FUNCTION__, ip_addr, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -181,7 +181,7 @@ static at_result_t at_aport_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("a_port", &port, sizeof(port), RT_NULL);
     if (len != sizeof(port))
     {
-        LOG_E("ef_get_env_blob(a_port) error!");
+        LOG_E("%s ef_get_env_blob(a_port) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -198,13 +198,13 @@ static at_result_t at_aport_setup(const struct at_cmd *cmd, const char *args)
     int argc = at_req_parse_args(args, req_expr, &port);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if (port > 65535)
     {
-        LOG_E("<port>(%u)>65535!", port);
+        LOG_E("%s <port>(%u)>65535!", __FUNCTION__, port);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -212,7 +212,7 @@ static at_result_t at_aport_setup(const struct at_cmd *cmd, const char *args)
     EfErrCode ef_ret = ef_set_env_blob("a_port", &port_val, sizeof(port_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(a_port,%u) error(%d)!", port_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(a_port,%u) error(%d)!", __FUNCTION__, port_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -229,7 +229,7 @@ static at_result_t at_bip_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("b_ip", &ip_addr, sizeof(ip_addr), RT_NULL);
     if (len != sizeof(ip_addr))
     {
-        LOG_E("ef_get_env_blob(b_ip) error!");
+        LOG_E("%s ef_get_env_blob(b_ip) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -237,7 +237,7 @@ static at_result_t at_bip_query(const struct at_cmd *cmd)
     char *ip_ret = inet_ntoa_r(ip_addr, ip, sizeof(ip));
     if (ip_ret == RT_NULL)
     {
-        LOG_E("inet_ntoa_r(0x%x) error!", ip_addr);
+        LOG_E("%s inet_ntoa_r(0x%x) error!", __FUNCTION__, ip_addr);
         return AT_RESULT_FAILE;
     }
     
@@ -254,28 +254,28 @@ static at_result_t at_bip_setup(const struct at_cmd *cmd, const char *args)
 
     if (rt_strlen(args) > sizeof(ip))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(ip));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(ip));
         return AT_RESULT_CHECK_FAILE;
     }
 
     int argc = at_req_parse_args(args, req_expr, ip);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     in_addr_t ip_addr = inet_addr(ip);
     if (ip_addr == IPADDR_NONE)
     {
-        LOG_E("inet_addr(%s) error!", ip);
+        LOG_E("%s inet_addr(%s) error!", __FUNCTION__, ip);
         return AT_RESULT_CHECK_FAILE;
     }
     
     EfErrCode ef_ret = ef_set_env_blob("b_ip", &ip_addr, sizeof(in_addr_t));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(b_ip,0x%x) error(%d)!", ip_addr, ef_ret);
+        LOG_E("%s ef_set_env_blob(b_ip,0x%x) error(%d)!", __FUNCTION__, ip_addr, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -292,7 +292,7 @@ static at_result_t at_bport_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("b_port", &port, sizeof(port), RT_NULL);
     if (len != sizeof(port))
     {
-        LOG_E("ef_get_env_blob(b_port) error!");
+        LOG_E("%s ef_get_env_blob(b_port) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -309,13 +309,13 @@ static at_result_t at_bport_setup(const struct at_cmd *cmd, const char *args)
     int argc = at_req_parse_args(args, req_expr, &port);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if (port > 65535)
     {
-        LOG_E("<port>(%u)>65535!", port);
+        LOG_E("%s <port>(%u)>65535!", __FUNCTION__, port);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -323,7 +323,7 @@ static at_result_t at_bport_setup(const struct at_cmd *cmd, const char *args)
     EfErrCode ef_ret = ef_set_env_blob("b_port", &port_val, sizeof(port_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(b_port,%u) error(%d)!", port_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(b_port,%u) error(%d)!", __FUNCTION__, port_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -340,7 +340,7 @@ static at_result_t at_acquisition_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("acquisition", &minutes, sizeof(minutes), RT_NULL);
     if (len != sizeof(minutes))
     {
-        LOG_E("ef_get_env_blob(acquisition) error!");
+        LOG_E("%s ef_get_env_blob(acquisition) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -357,13 +357,13 @@ static at_result_t at_acquisition_setup(const struct at_cmd *cmd, const char *ar
     int argc = at_req_parse_args(args, req_expr, &minutes);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if ((minutes < 1) || (minutes > 30))
     {
-        LOG_E("<minutes>(%u) not in range[1,30]!", minutes);
+        LOG_E("%s <minutes>(%u) not in range[1,30]!", __FUNCTION__, minutes);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -371,7 +371,7 @@ static at_result_t at_acquisition_setup(const struct at_cmd *cmd, const char *ar
     EfErrCode ef_ret = ef_set_env_blob("acquisition", &minutes_val, sizeof(minutes_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(acquisition,%u) error(%d)!", minutes_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(acquisition,%u) error(%d)!", __FUNCTION__, minutes_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -388,7 +388,7 @@ static at_result_t at_cycle_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("cycle", &minutes, sizeof(minutes), RT_NULL);
     if (len != sizeof(minutes))
     {
-        LOG_E("ef_get_env_blob(cycle) error!");
+        LOG_E("%s ef_get_env_blob(cycle) error!", __FUNCTION__);
         return AT_RESULT_FAILE;
     }
     
@@ -405,13 +405,13 @@ static at_result_t at_cycle_setup(const struct at_cmd *cmd, const char *args)
     int argc = at_req_parse_args(args, req_expr, &minutes);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if ((minutes < 1) || (minutes > 180))
     {
-        LOG_E("<minutes>(%u) not in range[1,180]!", minutes);
+        LOG_E("%s <minutes>(%u) not in range[1,180]!", __FUNCTION__, minutes);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -419,7 +419,7 @@ static at_result_t at_cycle_setup(const struct at_cmd *cmd, const char *args)
     EfErrCode ef_ret = ef_set_env_blob("cycle", &minutes_val, sizeof(minutes_val));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(cycle,%u) error(%d)!", minutes_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(cycle,%u) error(%d)!", __FUNCTION__, minutes_val, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -435,7 +435,7 @@ static at_result_t at_clr_exec(const struct at_cmd *cmd)
     rt_err_t ret = clear_history_data();
     if (ret != RT_EOK)
     {
-        //LOG_E("clear_history_data() error(%d)!", ret);
+        LOG_E("%s clear_history_data() error(%d)!", __FUNCTION__, ret);
         return AT_RESULT_FAILE;
     }
     
@@ -450,7 +450,7 @@ static at_result_t at_deft_exec(const struct at_cmd *cmd)
     EfErrCode ef_ret = set_default_config();
     if (ef_ret != EF_NO_ERR)
     {
-        //LOG_E("set_default_config error(%d)!", ef_ret);
+        LOG_E("%s set_default_config() error(%d)!", __FUNCTION__, ef_ret);
         return AT_RESULT_FAILE;
     }
     
@@ -498,14 +498,14 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
     int argc = at_req_parse_args(args, req_expr, &n);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     char* json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
     if (json_data_buf == NULL)
     {
-        LOG_E("rt_malloc(%d) failed!", JSON_DATA_BUF_LEN);
+        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -537,7 +537,7 @@ static at_result_t at_rssi_exec(const struct at_cmd *cmd)
     int ret = get_modem_rssi(&rssi);
     if (ret != RT_EOK)
     {
-        LOG_E("get_modem_rssi error(%d)!", ret);
+        LOG_E("%s get_modem_rssi error(%d)!", __FUNCTION__, ret);
         return AT_RESULT_FAILE;
     }
     

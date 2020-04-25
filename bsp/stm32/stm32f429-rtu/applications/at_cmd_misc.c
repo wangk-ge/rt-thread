@@ -15,6 +15,8 @@
 #include <easyflash.h>
 #include <netdev_ipaddr.h>
 #include <at.h>
+#include <at_device.h>
+#include "common.h"
 
 #define LOG_TAG              "main.at_cmd_misc"
 #define LOG_LVL              LOG_LVL_DBG
@@ -24,7 +26,66 @@
 extern uint32_t get_history_data_num(void);
 
 /* 请求采集数据 */
-extern void req_data_acquisition(void);
+extern rt_err_t req_data_acquisition(void);
+
+/* 请求上报数据 */
+extern rt_err_t req_data_report(void);
+
+/* 执行TB22模组AT指令 */
+static rt_err_t exec_tb22at(const char *at_str, size_t str_len)
+{
+    int i = 0;
+    rt_err_t ret = RT_EOK;
+    struct at_device *device = RT_NULL;
+    at_response_t resp = RT_NULL;
+    
+    if (str_len <= 0)
+    {
+        LOG_E("%s str_len=%d!", __FUNCTION__, str_len);
+        ret = -RT_ENOMEM;
+        goto __exit;
+    }
+
+    device = at_device_get_by_name(AT_DEVICE_NAMETYPE_DEVICE, TB22_DEVICE_NAME);
+    if (device == RT_NULL)
+    {
+        LOG_E("%s at_device_get_by_name(%s) return NULL!", __FUNCTION__, TB22_DEVICE_NAME);
+        ret = -RT_ENOMEM;
+        goto __exit;
+    }
+
+    resp = at_create_resp(1024, 0, rt_tick_from_millisecond(5000));
+    if (resp == RT_NULL)
+    {
+        LOG_E("%s no memory for resp create.", __FUNCTION__);
+        ret = -RT_ENOMEM;
+        goto __exit;
+    }
+    
+    /* 执行AT命令 */
+    ret = at_obj_exec_cmd(device->client, resp, "%.*s", str_len, at_str);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(%.*s) error(%d)!", __FUNCTION__, str_len, at_str, ret);
+        goto __exit;
+    }
+    
+    for (i = 1; i <= resp->line_counts; ++i)
+    {
+        /* line number, start from '1' */
+        const char *resp_line_str = at_resp_get_line(resp, i);
+        
+        at_server_printfln("+TB22AT: %s", resp_line_str);
+    }
+    
+__exit:
+    if (resp)
+    {
+        at_delete_resp(resp);
+    }
+    
+    return ret;
+}
 
 /* AT+DATETIME 读取当前日期时间 */
 
@@ -74,21 +135,21 @@ static at_result_t at_productkey_setup(const struct at_cmd *cmd, const char *arg
 
     if (rt_strlen(args) > sizeof(key))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(key));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(key));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, key);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
     EfErrCode ef_ret = ef_set_env_blob("productkey", key, rt_strlen(key));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(productkey,%s) error(%d)!", key, ef_ret);
+        LOG_E("%s ef_set_env_blob(productkey,%s) error(%d)!", __FUNCTION__, key, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -116,21 +177,21 @@ static at_result_t at_devicecode_setup(const struct at_cmd *cmd, const char *arg
 
     if (rt_strlen(args) > sizeof(devicecode))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(devicecode));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(devicecode));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, devicecode);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
     EfErrCode ef_ret = ef_set_env_blob("devicecode", devicecode, rt_strlen(devicecode));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(devicecode,%s) error(%d)!", devicecode, ef_ret);
+        LOG_E("%s ef_set_env_blob(devicecode,%s) error(%d)!", __FUNCTION__, devicecode, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -158,21 +219,21 @@ static at_result_t at_itemid_setup(const struct at_cmd *cmd, const char *args)
 
     if (rt_strlen(args) > sizeof(itemid))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(itemid));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(itemid));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, itemid);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
     EfErrCode ef_ret = ef_set_env_blob("itemid", itemid, rt_strlen(itemid));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("ef_set_env_blob(itemid,%s) error(%d)!", itemid, ef_ret);
+        LOG_E("%s ef_set_env_blob(itemid,%s) error(%d)!", __FUNCTION__, itemid, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -185,11 +246,31 @@ AT_CMD_EXPORT("AT+ITEMID", "=<id>", RT_NULL, at_itemid_query, at_itemid_setup, R
 
 static at_result_t at_testrd_exec(const struct at_cmd *cmd)
 {
-    req_data_acquisition();
+    rt_err_t ret = req_data_acquisition();
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s req_data_acquisition() error(%d)!", __FUNCTION__, ret);
+        return AT_RESULT_FAILE;
+    }
     
     return AT_RESULT_OK;
 }
 AT_CMD_EXPORT("AT+TESTRD", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_testrd_exec, 0);
+
+/* AT+TESTREPORT 立即上报数据 */
+
+static at_result_t at_testreport_exec(const struct at_cmd *cmd)
+{
+    rt_err_t ret = req_data_report();
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s req_data_report() error(%d)!", __FUNCTION__, ret);
+        return AT_RESULT_FAILE;
+    }
+    
+    return AT_RESULT_OK;
+}
+AT_CMD_EXPORT("AT+TESTREPORT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_testreport_exec, 0);
 
 /* AT+EFSETDEFAULT FLASH回复默认配置(包括擦除所有数据) */
 
@@ -198,7 +279,7 @@ static at_result_t at_efsetdefault_exec(const struct at_cmd *cmd)
     EfErrCode ef_ret = ef_env_set_default();
 	if (ef_ret != EF_NO_ERR)
 	{
-		LOG_E("ef_env_set_default() error(%d)!", ef_ret);
+		LOG_E("%s ef_env_set_default() error(%d)!", __FUNCTION__, ef_ret);
         return AT_RESULT_FAILE;
 	}
     
@@ -217,3 +298,22 @@ static at_result_t at_efprint_exec(const struct at_cmd *cmd)
     return AT_RESULT_OK;
 }
 AT_CMD_EXPORT("AT+EFPRINT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_efprint_exec, 0);
+
+/* AT+TB22AT 执行TB22模组AT指令 */
+
+static at_result_t at_tb22at_setup(const struct at_cmd *cmd, const char *args)
+{
+    const char *at_str = args + 1; // 跳过'='
+    size_t at_str_len = rt_strlen(args) - 1 - STR_LEN(AT_CMD_END_MARK); // 排除结尾符
+    
+    rt_err_t ret = exec_tb22at(at_str, at_str_len);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s exec_tb22at() error(%d)!", __FUNCTION__, ret);
+        return AT_RESULT_FAILE;
+    }
+    
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+TB22AT", "=<at>[,<p1>][,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p8>][,<p10>]", RT_NULL, RT_NULL, at_tb22at_setup, RT_NULL, 0);

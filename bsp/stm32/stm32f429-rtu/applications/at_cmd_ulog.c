@@ -52,7 +52,7 @@ static at_result_t at_ulog_tag_lvl_setup(const struct at_cmd *cmd, const char *a
     int argc = at_req_parse_args(args, req_expr, tag, &level);
     if ((argc < 1) || (argc > 2))
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1 or 2!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1 or 2!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -65,14 +65,14 @@ static at_result_t at_ulog_tag_lvl_setup(const struct at_cmd *cmd, const char *a
     {
         if (level > LOG_FILTER_LVL_ALL)
         {
-            LOG_E("<level>(%d)>%d!", level, LOG_FILTER_LVL_ALL);
+            LOG_E("%s <level>(%d)>%d!", __FUNCTION__, level, LOG_FILTER_LVL_ALL);
             return AT_RESULT_CHECK_FAILE;
         }
         
         int ret = ulog_tag_lvl_filter_set(tag, level);
         if (ret != RT_EOK)
         {
-            LOG_E("ulog_tag_lvl_filter_set(%s,%d) error(%d)!", tag, level, ret);
+            LOG_E("%s ulog_tag_lvl_filter_set(%s,%d) error(%d)!", __FUNCTION__, tag, level, ret);
             return AT_RESULT_FAILE;
         }
     }
@@ -103,14 +103,14 @@ static at_result_t at_ulog_global_tag_setup(const struct at_cmd *cmd, const char
 
     if (rt_strlen(args) > sizeof(tag))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(tag));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(tag));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, tag);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
@@ -139,13 +139,13 @@ static at_result_t at_ulog_global_lvl_setup(const struct at_cmd *cmd, const char
     int argc = at_req_parse_args(args, req_expr, &level, &save);
     if ((argc < 1) || (argc > 2))
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1 or 2!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1 or 2!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
     if (level > LOG_FILTER_LVL_ALL)
     {
-        LOG_E("<level>(%d)>%d!", level, LOG_FILTER_LVL_ALL);
+        LOG_E("%s <level>(%d)>%d!", __FUNCTION__, level, LOG_FILTER_LVL_ALL);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -153,7 +153,7 @@ static at_result_t at_ulog_global_lvl_setup(const struct at_cmd *cmd, const char
     {
         if (save > 1)
         {
-            LOG_E("<save>(%d) !=0 or 1!", save);
+            LOG_E("%s <save>(%d) !=0 or 1!", __FUNCTION__, save);
             return AT_RESULT_CHECK_FAILE;
         }
 
@@ -163,7 +163,7 @@ static at_result_t at_ulog_global_lvl_setup(const struct at_cmd *cmd, const char
             EfErrCode ef_ret = ef_set_env_blob("ulog_glb_lvl", &level_val, 1);
             if (ef_ret != EF_NO_ERR)
             {
-                LOG_E("ef_set_env_blob(ulog_glb_lvl,%u) error(%d)!", level_val, ef_ret);
+                LOG_E("%s ef_set_env_blob(ulog_glb_lvl,%u) error(%d)!", __FUNCTION__, level_val, ef_ret);
                 return AT_RESULT_FAILE;
             }
         }
@@ -197,14 +197,14 @@ static at_result_t at_ulog_global_kw_setup(const struct at_cmd *cmd, const char 
 
     if (rt_strlen(args) > sizeof(keyword))
     {
-        LOG_E("rt_strlen(args)>%d!", sizeof(keyword));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(keyword));
         return AT_RESULT_CHECK_FAILE;
     }
     
     int argc = at_req_parse_args(args, req_expr, keyword);
     if (argc != 1)
     {
-        LOG_E("at_req_parse_args(%s) argc(%d)!=1!", req_expr, argc);
+        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
 
