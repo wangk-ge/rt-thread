@@ -161,6 +161,12 @@
 /* IoT - internet of things */
 
 #define MQTT_DEBUG
+#define PKG_USING_WEBCLIENT
+#define WEBCLIENT_DEBUG
+#define WEBCLIENT_USING_FILE_DOWMLOAD
+#define WEBCLIENT_NOT_USE_TLS
+#define PKG_USING_WEBCLIENT_LATEST_VERSION
+#define PKG_WEBCLIENT_VER_NUM 0x99999
 #define PKG_USING_MYMQTT
 #define PKG_USING_MYMQTT_LATEST_VERSION
 #define MQTT_MAX_MESSAGE_HANDLERS 4
@@ -189,6 +195,11 @@
 
 /* IoT Cloud */
 
+#define PKG_USING_OTA_DOWNLOADER
+#define OTA_DOWNLOADER_DEBUG
+#define PKG_USING_HTTP_OTA
+#define PKG_HTTP_OTA_URL "http://xxx/xxx/rtthread.rbl"
+#define PKG_USING_OTA_DOWNLOADER_LATEST_VERSION
 
 /* security packages */
 

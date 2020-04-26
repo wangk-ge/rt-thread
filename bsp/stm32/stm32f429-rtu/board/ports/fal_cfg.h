@@ -23,6 +23,7 @@
 #define FLASH_SIZE_GRANULARITY_16K   (4 * 16 * 1024)
 #define FLASH_SIZE_GRANULARITY_64K   (64 * 1024)
 #define FLASH_SIZE_GRANULARITY_128K  (7 * 128 * 1024)
+#define FLASH_SIZE_GRANULARITY_128K  (7 * 128 * 1024)
 #define FLASH_SIZE_NOR_FLASH0        (16 * 1024 * 1024)
 
 #define STM32_FLASH_START_ADRESS_16K  STM32_FLASH_START_ADRESS
@@ -51,6 +52,7 @@ extern struct fal_flash_dev nor_flash0;
     {FAL_PART_MAGIC_WROD, "bootloader", "onchip_flash_16k",  0, FLASH_SIZE_GRANULARITY_16K , 0}, \
     {FAL_PART_MAGIC_WROD, "param",      "onchip_flash_64k",  0, FLASH_SIZE_GRANULARITY_64K , 0}, \
     {FAL_PART_MAGIC_WROD, "app",        "onchip_flash_128k", 0, FLASH_SIZE_GRANULARITY_128K, 0}, \
+    {FAL_PART_MAGIC_WROD, "download",   "onchip_flash_128k", 0, FLASH_SIZE_GRANULARITY_128K, 0}, \
     {FAL_PART_MAGIC_WORD, "easyflash",  NOR_FLASH_DEV_NAME,  0, FLASH_SIZE_NOR_FLASH0,       0}, \
 }
 

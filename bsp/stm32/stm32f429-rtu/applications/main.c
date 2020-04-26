@@ -482,7 +482,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                     RT_ASSERT(data_bytes >= sizeof(int16_t));
                     int16_t* int16_data= (int16_t*)var_data; // TODO字节序?
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":\"%d\",", cfg->uart_x_cfg[x - 1].variable[i], (int)(*int16_data));
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(*int16_data));
                     break;
                 }
                 case 0x01: // 无符号16位int
@@ -490,7 +490,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                     RT_ASSERT(data_bytes >= sizeof(uint16_t));
                     uint16_t* uint16_data= (uint16_t*)var_data; // TODO字节序?
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":\"%u\",", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(*uint16_data));
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(*uint16_data));
                     break;
                 }
                 case 0x02: // 有符号32位int
@@ -498,7 +498,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                     RT_ASSERT(data_bytes >= sizeof(int32_t));
                     int32_t* int32_data= (int32_t*)var_data; // TODO字节序?
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":\"%d\",", cfg->uart_x_cfg[x - 1].variable[i], *int32_data);
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], *int32_data);
                     break;
                 }
                 case 0x03: // 无符号32位int
@@ -506,7 +506,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                     RT_ASSERT(data_bytes >= sizeof(uint32_t));
                     uint32_t* uint32_data= (uint32_t*)var_data; // TODO字节序?
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":\"%u\",", cfg->uart_x_cfg[x - 1].variable[i], *uint32_data);
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], *uint32_data);
                     break;
                 }
                 case 0x04: // IEEE754浮点数
@@ -514,7 +514,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                     RT_ASSERT(data_bytes >= sizeof(float));
                     float* float_data = (float*)var_data; // TODO字节序?
                     json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":\"%f\",", cfg->uart_x_cfg[x - 1].variable[i], *float_data);
+                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], *float_data);
                     break;
                 }
                 default:
