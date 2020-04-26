@@ -101,7 +101,9 @@
         <sRunDeb>0</sRunDeb>
         <sLrtime>0</sLrtime>
         <bEvRecOn>1</bEvRecOn>
-        <nTsel>5</nTsel>
+        <bSchkAxf>0</bSchkAxf>
+        <bTchkAxf>0</bTchkAxf>
+        <nTsel>6</nTsel>
         <sDll></sDll>
         <sDllPa></sDllPa>
         <sDlgDll></sDlgDll>
@@ -115,6 +117,31 @@
         <pMon>STLink\ST-LINKIII-KEIL_SWO.dll</pMon>
       </DebugOpt>
       <TargetDriverDllRegistry>
+        <SetRegEntry>
+          <Number>0</Number>
+          <Key>ARMRTXEVENTFLAGS</Key>
+          <Name>-L70 -Z18 -C0 -M0 -T1</Name>
+        </SetRegEntry>
+        <SetRegEntry>
+          <Number>0</Number>
+          <Key>DLGTARM</Key>
+          <Name>(1010=-1,-1,-1,-1,0)(1007=-1,-1,-1,-1,0)(1008=-1,-1,-1,-1,0)(1009=-1,-1,-1,-1,0)(1012=-1,-1,-1,-1,0)</Name>
+        </SetRegEntry>
+        <SetRegEntry>
+          <Number>0</Number>
+          <Key>ARMDBGFLAGS</Key>
+          <Name></Name>
+        </SetRegEntry>
+        <SetRegEntry>
+          <Number>0</Number>
+          <Key>ST-LINKIII-KEIL_SWO</Key>
+          <Name>-U -O206 -SF10000 -C0 -A0 -I0 -HNlocalhost -HP7184 -P1 -N00("ARM CoreSight SW-DP (ARM Core") -D00(2BA01477) -L00(0) -TO131090 -TC10000000 -TT10000000 -TP21 -TDS8007 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -FO7 -FD20000000 -FC1000 -FN1 -FF0STM32F4xx_1024.FLM -FS08000000 -FL0100000 -FP0($$Device:STM32F429IGTx$CMSIS\Flash\STM32F4xx_1024.FLM)</Name>
+        </SetRegEntry>
+        <SetRegEntry>
+          <Number>0</Number>
+          <Key>DLGUARM</Key>
+          <Name>(105=-1,-1,-1,-1,0)</Name>
+        </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
           <Key>UL2CM3</Key>
@@ -133,12 +160,12 @@
       <DebugFlag>
         <trace>0</trace>
         <periodic>0</periodic>
-        <aLwin>0</aLwin>
+        <aLwin>1</aLwin>
         <aCover>0</aCover>
         <aSer1>0</aSer1>
         <aSer2>0</aSer2>
         <aPa>0</aPa>
-        <viewmode>0</viewmode>
+        <viewmode>1</viewmode>
         <vrSel>0</vrSel>
         <aSym>0</aSym>
         <aTbox>0</aTbox>
@@ -171,6 +198,7 @@
       <pMultCmdsp></pMultCmdsp>
       <DebugDescription>
         <Enable>1</Enable>
+        <EnableFlashSeq>0</EnableFlashSeq>
         <EnableLog>0</EnableLog>
         <Protocol>2</Protocol>
         <DbgClock>10000000</DbgClock>
@@ -356,7 +384,7 @@
 
   <Group>
     <GroupName>Applications</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -472,7 +500,7 @@
 
   <Group>
     <GroupName>Drivers</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -655,7 +683,7 @@
   </Group>
 
   <Group>
-    <GroupName>libmodbus</GroupName>
+    <GroupName>EasyFlash</GroupName>
     <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
@@ -667,8 +695,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>packages\libmodbus-latest\src\modbus.c</PathWithFileName>
-      <FilenameWithoutPath>modbus.c</FilenameWithoutPath>
+      <PathWithFileName>packages\EasyFlash-latest\src\easyflash.c</PathWithFileName>
+      <FilenameWithoutPath>easyflash.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -679,8 +707,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>packages\libmodbus-latest\src\modbus-data.c</PathWithFileName>
-      <FilenameWithoutPath>modbus-data.c</FilenameWithoutPath>
+      <PathWithFileName>packages\EasyFlash-latest\src\ef_cmd.c</PathWithFileName>
+      <FilenameWithoutPath>ef_cmd.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -691,58 +719,14 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>packages\libmodbus-latest\src\modbus-rtu.c</PathWithFileName>
-      <FilenameWithoutPath>modbus-rtu.c</FilenameWithoutPath>
-      <RteFlg>0</RteFlg>
-      <bShared>0</bShared>
-    </File>
-  </Group>
-
-  <Group>
-    <GroupName>EasyFlash</GroupName>
-    <tvExp>0</tvExp>
-    <tvExpOptDlg>0</tvExpOptDlg>
-    <cbSel>0</cbSel>
-    <RteFlg>0</RteFlg>
-    <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>41</FileNumber>
-      <FileType>1</FileType>
-      <tvExp>0</tvExp>
-      <tvExpOptDlg>0</tvExpOptDlg>
-      <bDave2>0</bDave2>
-      <PathWithFileName>packages\EasyFlash-latest\src\easyflash.c</PathWithFileName>
-      <FilenameWithoutPath>easyflash.c</FilenameWithoutPath>
-      <RteFlg>0</RteFlg>
-      <bShared>0</bShared>
-    </File>
-    <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>42</FileNumber>
-      <FileType>1</FileType>
-      <tvExp>0</tvExp>
-      <tvExpOptDlg>0</tvExpOptDlg>
-      <bDave2>0</bDave2>
-      <PathWithFileName>packages\EasyFlash-latest\src\ef_cmd.c</PathWithFileName>
-      <FilenameWithoutPath>ef_cmd.c</FilenameWithoutPath>
-      <RteFlg>0</RteFlg>
-      <bShared>0</bShared>
-    </File>
-    <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>43</FileNumber>
-      <FileType>1</FileType>
-      <tvExp>0</tvExp>
-      <tvExpOptDlg>0</tvExpOptDlg>
-      <bDave2>0</bDave2>
       <PathWithFileName>packages\EasyFlash-latest\src\ef_env.c</PathWithFileName>
       <FilenameWithoutPath>ef_env.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>44</FileNumber>
+      <GroupNumber>5</GroupNumber>
+      <FileNumber>41</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -753,8 +737,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>45</FileNumber>
+      <GroupNumber>5</GroupNumber>
+      <FileNumber>42</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -765,8 +749,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>46</FileNumber>
+      <GroupNumber>5</GroupNumber>
+      <FileNumber>43</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -777,8 +761,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>47</FileNumber>
+      <GroupNumber>5</GroupNumber>
+      <FileNumber>44</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -789,8 +773,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>6</GroupNumber>
-      <FileNumber>48</FileNumber>
+      <GroupNumber>5</GroupNumber>
+      <FileNumber>45</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -809,8 +793,8 @@
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
     <File>
-      <GroupNumber>7</GroupNumber>
-      <FileNumber>49</FileNumber>
+      <GroupNumber>6</GroupNumber>
+      <FileNumber>46</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -821,8 +805,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>7</GroupNumber>
-      <FileNumber>50</FileNumber>
+      <GroupNumber>6</GroupNumber>
+      <FileNumber>47</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -833,8 +817,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>7</GroupNumber>
-      <FileNumber>51</FileNumber>
+      <GroupNumber>6</GroupNumber>
+      <FileNumber>48</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -845,8 +829,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>7</GroupNumber>
-      <FileNumber>52</FileNumber>
+      <GroupNumber>6</GroupNumber>
+      <FileNumber>49</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -857,8 +841,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>7</GroupNumber>
-      <FileNumber>53</FileNumber>
+      <GroupNumber>6</GroupNumber>
+      <FileNumber>50</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -877,14 +861,58 @@
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
     <File>
-      <GroupNumber>8</GroupNumber>
-      <FileNumber>54</FileNumber>
+      <GroupNumber>7</GroupNumber>
+      <FileNumber>51</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
       <PathWithFileName>packages\jsmn-latest\src\jsmn.c</PathWithFileName>
       <FilenameWithoutPath>jsmn.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+  </Group>
+
+  <Group>
+    <GroupName>libmodbus</GroupName>
+    <tvExp>0</tvExp>
+    <tvExpOptDlg>0</tvExpOptDlg>
+    <cbSel>0</cbSel>
+    <RteFlg>0</RteFlg>
+    <File>
+      <GroupNumber>8</GroupNumber>
+      <FileNumber>52</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>packages\libmodbus-latest\src\modbus.c</PathWithFileName>
+      <FilenameWithoutPath>modbus.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>8</GroupNumber>
+      <FileNumber>53</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>packages\libmodbus-latest\src\modbus-data.c</PathWithFileName>
+      <FilenameWithoutPath>modbus-data.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>8</GroupNumber>
+      <FileNumber>54</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>packages\libmodbus-latest\src\modbus-rtu.c</PathWithFileName>
+      <FilenameWithoutPath>modbus-rtu.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -1051,7 +1079,7 @@
   </Group>
 
   <Group>
-    <GroupName>WebClient</GroupName>
+    <GroupName>TinyCrypt</GroupName>
     <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
@@ -1063,8 +1091,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>packages\webclient-latest\src\webclient.c</PathWithFileName>
-      <FilenameWithoutPath>webclient.c</FilenameWithoutPath>
+      <PathWithFileName>packages\tinycrypt-latest\src\tiny_aes.c</PathWithFileName>
+      <FilenameWithoutPath>tiny_aes.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -1075,46 +1103,14 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>packages\webclient-latest\src\webclient_file.c</PathWithFileName>
-      <FilenameWithoutPath>webclient_file.c</FilenameWithoutPath>
-      <RteFlg>0</RteFlg>
-      <bShared>0</bShared>
-    </File>
-  </Group>
-
-  <Group>
-    <GroupName>TinyCrypt</GroupName>
-    <tvExp>0</tvExp>
-    <tvExpOptDlg>0</tvExpOptDlg>
-    <cbSel>0</cbSel>
-    <RteFlg>0</RteFlg>
-    <File>
-      <GroupNumber>12</GroupNumber>
-      <FileNumber>69</FileNumber>
-      <FileType>1</FileType>
-      <tvExp>0</tvExp>
-      <tvExpOptDlg>0</tvExpOptDlg>
-      <bDave2>0</bDave2>
-      <PathWithFileName>packages\tinycrypt-latest\src\tiny_aes.c</PathWithFileName>
-      <FilenameWithoutPath>tiny_aes.c</FilenameWithoutPath>
-      <RteFlg>0</RteFlg>
-      <bShared>0</bShared>
-    </File>
-    <File>
-      <GroupNumber>12</GroupNumber>
-      <FileNumber>70</FileNumber>
-      <FileType>1</FileType>
-      <tvExp>0</tvExp>
-      <tvExpOptDlg>0</tvExpOptDlg>
-      <bDave2>0</bDave2>
       <PathWithFileName>packages\tinycrypt-latest\src\tiny_base64.c</PathWithFileName>
       <FilenameWithoutPath>tiny_base64.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>12</GroupNumber>
-      <FileNumber>71</FileNumber>
+      <GroupNumber>11</GroupNumber>
+      <FileNumber>69</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -1125,8 +1121,8 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>12</GroupNumber>
-      <FileNumber>72</FileNumber>
+      <GroupNumber>11</GroupNumber>
+      <FileNumber>70</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -1137,14 +1133,46 @@
       <bShared>0</bShared>
     </File>
     <File>
-      <GroupNumber>12</GroupNumber>
-      <FileNumber>73</FileNumber>
+      <GroupNumber>11</GroupNumber>
+      <FileNumber>71</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
       <PathWithFileName>packages\tinycrypt-latest\src\tiny_sha2.c</PathWithFileName>
       <FilenameWithoutPath>tiny_sha2.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+  </Group>
+
+  <Group>
+    <GroupName>WebClient</GroupName>
+    <tvExp>0</tvExp>
+    <tvExpOptDlg>0</tvExpOptDlg>
+    <cbSel>0</cbSel>
+    <RteFlg>0</RteFlg>
+    <File>
+      <GroupNumber>12</GroupNumber>
+      <FileNumber>72</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>packages\webclient-latest\src\webclient.c</PathWithFileName>
+      <FilenameWithoutPath>webclient.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>12</GroupNumber>
+      <FileNumber>73</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>packages\webclient-latest\src\webclient_file.c</PathWithFileName>
+      <FilenameWithoutPath>webclient_file.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <rtthread.h>
 
 #include "util.h"
 #include "strref.h"
@@ -131,6 +132,77 @@ uint32_t util_to_hex_str(const uint8_t* data, size_t data_len,
     hex_str_buf[j] = '\0';
 
     /* 返回实际转换的数据长度 */
+    return convert_len;
+}
+
+/*************************************************
+* Function: hex_char_to_byte
+* Description: convert hex char to byte data(Example: '0'->0x00,'A'->0x0A)
+* Author: 
+* Returns: the byte data
+* Parameter:
+*  hex_char hex char
+* History:
+*************************************************/
+rt_inline uint8_t hex_char_to_byte(char hex_char)
+{
+    uint8_t byte_val = 0;
+    
+    if ((hex_char >= '0') && (hex_char <= '9'))
+    {
+        byte_val = hex_char - '0';
+    }
+    else if ((hex_char >= 'a') && (hex_char <= 'f'))
+    {
+        byte_val = 0x0A + (hex_char - 'a');
+    }
+    else if ((hex_char >= 'A') && (hex_char <= 'F'))
+    {
+        byte_val = 0x0A + (hex_char - 'A');
+    } // else 非法字符
+    
+    return byte_val;
+}
+
+/*************************************************
+* Function: from_hex_str
+* Description: convert hex string to byte data(can be convert in place)
+* Author: 
+* Returns: the byte data length of convert success
+* Parameter:
+*  hex_str hex string to convert
+*  str_len string length (in bytes)
+*  data_buf buffer to byte data
+*  buf_len buffer length (in bytes)
+* History:
+*************************************************/
+uint32_t from_hex_str(const char* hex_str, size_t str_len, 
+    uint8_t* data_buf, size_t buf_len)
+{
+    if ((NULL == data_buf)
+        || (buf_len <=0 ))
+    { // 缓冲区无效
+        return 0;
+    }
+    
+    if ((NULL == hex_str)
+        || (str_len <=0 ))
+    { // 数据为空
+        return 0;
+    }
+    
+    uint32_t convert_len = MIN(buf_len, (str_len / 2));
+    uint32_t i = 0;
+    uint32_t j = 0;
+    for (i = 0; i < convert_len; ++i)
+    {
+        char hight_char = hex_str[j++];
+        char low_char = hex_str[j++];
+        uint8_t high_byte = hex_char_to_byte(hight_char);
+        uint8_t low_byte = hex_char_to_byte(low_char);
+        data_buf[i] = (high_byte << 4) | low_byte;
+    }
+    
     return convert_len;
 }
 
