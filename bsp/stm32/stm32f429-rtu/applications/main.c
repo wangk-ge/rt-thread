@@ -135,6 +135,7 @@ char topic_telemetry_get[MQTT_TOPIC_BUF_LEN] = "";
 char topic_config_get[MQTT_TOPIC_BUF_LEN] = "";
 char topic_config_set[MQTT_TOPIC_BUF_LEN] = "";
 char topic_telemetry_result[MQTT_TOPIC_BUF_LEN] = "";
+char topic_upgrade_update[MQTT_TOPIC_BUF_LEN] = "";
 
 /* 发送消息到主消息循环 */
 static rt_err_t app_send_msg(app_msg_type msg, void* msg_data)
@@ -1731,6 +1732,347 @@ __exit:
     return;
 }
 
+static const char* get_upgrade_progress_desc(int step)
+{
+    switch (step)
+    {
+        case -1:
+            break;
+        case -2:
+            break;
+        case -3:
+            break;
+        case 1:
+            break;
+        case 2:
+            break;
+        case 200:
+            break;
+    }
+    return "";
+}
+
+/* 发送升级进度回复消息 */
+static void send_upgrade_progress(c_str_ref* req_id, int step)
+{
+    
+}
+
+/* 执行OTA下载和升级 */
+static int http_ota_fw_download(const char* uri, unsigned char sign_md5[16], c_str_ref* req_id)
+{
+    int ret = 0, resp_status;
+    int file_size = 0, length, total_length = 0;
+    rt_uint8_t *buffer_read = RT_NULL;
+    struct webclient_session* session = RT_NULL;
+    const struct fal_partition * dl_part = RT_NULL;
+    tiny_md5_context md5_ctx;
+    unsigned char md5[16] = {0};
+
+    /* create webclient session and set header response size */
+    session = webclient_session_create(GET_HEADER_BUFSZ);
+    if (!session)
+    {
+        LOG_E("open uri failed.");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    /* send GET request by default header */
+    if ((resp_status = webclient_get(session, uri)) != 200)
+    {
+        LOG_E("webclient GET request failed, response(%d) error.", resp_status);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    file_size = webclient_content_length_get(session);
+    rt_kprintf("http file_size:%d\n",file_size);
+
+    if (file_size == 0)
+    {
+        LOG_E("Request file size is 0!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    else if (file_size < 0)
+    {
+        LOG_E("webclient GET request type is chunked.");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    /* Get download partition information and erase download partition data */
+    if ((dl_part = fal_partition_find("download")) == RT_NULL)
+    {
+        LOG_E("Firmware download failed! Partition (%s) find error!", "download");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    LOG_I("Start erase flash (%s) partition!", dl_part->name);
+
+    if (fal_partition_erase(dl_part, 0, file_size) < 0)
+    {
+        LOG_E("Firmware download failed! Partition (%s) erase error!", dl_part->name);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    LOG_I("Erase flash (%s) partition success!", dl_part->name);
+
+    buffer_read = web_malloc(HTTP_OTA_BUFF_LEN);
+    if (buffer_read == RT_NULL)
+    {
+        LOG_E("No memory for http ota!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    memset(buffer_read, 0x00, HTTP_OTA_BUFF_LEN);
+
+    LOG_I("OTA file size is (%d)", file_size);
+    
+    tiny_md5_starts(&md5_ctx);
+
+    do
+    {
+        length = webclient_read(session, buffer_read, file_size - total_length > HTTP_OTA_BUFF_LEN ?
+                            HTTP_OTA_BUFF_LEN : file_size - total_length);   
+        if (length > 0)
+        {
+            /* Write the data to the corresponding partition address */
+            if (fal_partition_write(dl_part, total_length, buffer_read, length) < 0)
+            {
+                LOG_E("Firmware download failed! Partition (%s) write data error!", dl_part->name);
+                ret = -RT_ERROR;
+                goto __exit;
+            }
+            total_length += length;
+            
+            tiny_md5_update(&md5_ctx, buffer_read, length);
+
+            print_progress(total_length, file_size);
+        }
+        else
+        {
+            LOG_E("Exit: server return err (%d)!", length);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+
+    } while(total_length != file_size);
+    
+    tiny_md5_finish(&md5_ctx, md5);
+    
+    if (memcmp(md5, sign_md5, sizeof(md5)) != 0)
+    {
+        LOG_E("Exit: md5 check failed!");
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    ret = RT_EOK;
+
+    //if (total_length == file_size)
+    {
+        if (session != RT_NULL)
+            webclient_close(session);
+        if (buffer_read != RT_NULL)
+            web_free(buffer_read);
+
+        LOG_I("Download firmware to flash success.");
+        LOG_I("System now will restart...");
+
+        rt_thread_delay(rt_tick_from_millisecond(5));
+
+        /* Reset the device, Start new firmware */
+        extern void rt_hw_cpu_reset(void);
+        rt_hw_cpu_reset();
+    }
+
+__exit:
+    if (session != RT_NULL)
+        webclient_close(session);
+    if (buffer_read != RT_NULL)
+        web_free(buffer_read);
+
+    return ret;
+}
+
+static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
+{
+    (void) client;
+    const char *json_str = (const char*)(msg->message->payload);
+    size_t json_str_len = msg->message->payloadlen;
+    c_str_ref productkey = {0, NULL}; // productKey
+    c_str_ref devicecode = {0, NULL}; // deviceCode
+    c_str_ref operationdate = {0, NULL}; // operationDate
+    c_str_ref id = {0, NULL}; // id
+    c_str_ref data = {0, NULL}; // data
+    c_str_ref size = {0, NULL}; // size
+    c_str_ref version = {0, NULL}; // version
+    c_str_ref url = {0, NULL}; // url
+    c_str_ref md5 = {0, NULL}; // md5
+    c_str_ref sign = {0, NULL}; // sign
+    c_str_ref signmethod = {0, NULL}; // signMethod
+    int i = 0;
+    
+    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, json_str);
+    
+    /* 解析JSON字符串 */
+    {
+        jsmn_parser json_paser;
+        jsmn_init(&json_paser);
+        jsmntok_t tok_list[32];
+        int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
+        if (list_len == JSMN_ERROR_PART)
+        {
+            LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+            goto __exit;
+        }
+        
+        for (i = 0; i < list_len; ++i)
+        {
+            const char *token_str = json_str + tok_list[i].start;
+            int token_str_len = tok_list[i].end - tok_list[i].start;
+            
+            if (JSMN_STRING == tok_list[i].type)
+            {
+                if ((token_str_len == STR_LEN("productKey")) 
+                    && (0 == memcmp(token_str, "productKey", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    productkey.c_str = json_str + tok_list[i].start;
+                    productkey.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("deviceCode")) 
+                    && (0 == memcmp(token_str, "deviceCode", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    devicecode.c_str = json_str + tok_list[i].start;
+                    devicecode.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("operationDate")) 
+                    && (0 == memcmp(token_str, "operationDate", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    operationdate.c_str = json_str + tok_list[i].start;
+                    operationdate.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("id")) 
+                    && (0 == memcmp(token_str, "id", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    id.c_str = json_str + tok_list[i].start;
+                    id.len = tok_list[i].end - tok_list[i].start;
+                }
+            }
+            else if (JSMN_OBJECT == tok_list[i].type)
+            {
+                if ((token_str_len == STR_LEN("data")) 
+                    && (0 == memcmp(token_str, "data", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    data.c_str = json_str + tok_list[i].start;
+                    data.len = tok_list[i].end - tok_list[i].start;
+                }
+            }
+        }
+    }
+    
+    /* 检查productKey和deviceCode */
+    if (strref_str_cmp(get_productkey(), &productkey) != 0)
+    {
+        LOG_E("%s productkey check failed!", __FUNCTION__);
+        goto __exit;
+    }
+    if (strref_str_cmp(get_devicecode(), &devicecode) != 0)
+    {
+        LOG_E("%s devicecode check failed!", __FUNCTION__);
+        goto __exit;
+    }
+    
+    /* 解析data */
+    {
+        jsmn_parser json_paser;
+        jsmn_init(&json_paser);
+        jsmntok_t tok_list[8];
+        int list_len = jsmn_parse(&json_paser, data.c_str, data.len, tok_list, ARRAY_SIZE(tok_list));
+        if (list_len == JSMN_ERROR_PART)
+        {
+            LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+            goto __exit;
+        }
+        
+        for (i = 0; i < list_len; ++i)
+        {
+            const char *token_str = json_str + tok_list[i].start;
+            int token_str_len = tok_list[i].end - tok_list[i].start;
+            
+            if (JSMN_STRING == tok_list[i].type)
+            {
+                if ((token_str_len == STR_LEN("size")) 
+                    && (0 == memcmp(token_str, "size", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    size.c_str = json_str + tok_list[i].start;
+                    size.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("version")) 
+                    && (0 == memcmp(token_str, "version", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    version.c_str = json_str + tok_list[i].start;
+                    version.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("url")) 
+                    && (0 == memcmp(token_str, "url", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    url.c_str = json_str + tok_list[i].start;
+                    url.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("md5")) 
+                    && (0 == memcmp(token_str, "md5", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    md5.c_str = json_str + tok_list[i].start;
+                    md5.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("sign")) 
+                    && (0 == memcmp(token_str, "sign", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    sign.c_str = json_str + tok_list[i].start;
+                    sign.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("signmethod")) 
+                    && (0 == memcmp(token_str, "signmethod", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    signmethod.c_str = json_str + tok_list[i].start;
+                    signmethod.len = tok_list[i].end - tok_list[i].start;
+                }
+            }
+        }
+    }
+    
+    // TODO
+    
+__exit:
+    return;
+}
+
 static void app_deinit()
 {
     LOG_D("%s()", __FUNCTION__);
@@ -1941,6 +2283,13 @@ static rt_err_t app_init()
         mq_client.message_handlers[3].topicFilter = topic_telemetry_result;
         mq_client.message_handlers[3].callback = topic_telemetry_result_handler;
         mq_client.message_handlers[3].qos = QOS0;
+        
+        /* 订阅/sys/${productKey}/${deviceCode}/upgrade/update主题,接收主动上报服务器响应 */
+        rt_snprintf(topic_upgrade_update, sizeof(topic_upgrade_update), "/sys/%s/%s/upgrade/update", get_productkey(), get_devicecode());
+        LOG_D("subscribe %s", topic_upgrade_update);
+        mq_client.message_handlers[4].topicFilter = topic_upgrade_update;
+        mq_client.message_handlers[4].callback = topic_upgrade_update_handler;
+        mq_client.message_handlers[4].qos = QOS0;
 
         /* set default subscribe event callback */
         mq_client.default_message_handlers = mqtt_sub_default_callback;

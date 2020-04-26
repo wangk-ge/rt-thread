@@ -120,7 +120,7 @@ AT_CMD_EXPORT("AT+HISTORYDATANUM", RT_NULL, RT_NULL, at_history_data_num_query, 
 
 static at_result_t at_productkey_query(const struct at_cmd *cmd)
 {
-    char key[32] = "";
+    char key[64] = "";
     size_t len = ef_get_env_blob("productkey", key, sizeof(key) - 1, RT_NULL);
     key[len] = '\0';
     at_server_printfln("+PRODUCTKEY: %s", key);
@@ -130,7 +130,7 @@ static at_result_t at_productkey_query(const struct at_cmd *cmd)
 
 static at_result_t at_productkey_setup(const struct at_cmd *cmd, const char *args)
 {
-    char key[32] = "";
+    char key[64] = "";
     char *req_expr = "=%s";
 
     if (rt_strlen(args) > sizeof(key))
@@ -162,7 +162,7 @@ AT_CMD_EXPORT("AT+PRODUCTKEY", "=<key>", RT_NULL, at_productkey_query, at_produc
 
 static at_result_t at_devicecode_query(const struct at_cmd *cmd)
 {
-    char devicecode[32] = "";
+    char devicecode[64] = "";
     size_t len = ef_get_env_blob("devicecode", devicecode, sizeof(devicecode) - 1, RT_NULL);
     devicecode[len] = '\0';
     at_server_printfln("+DEVICECODE: %s", devicecode);
@@ -172,7 +172,7 @@ static at_result_t at_devicecode_query(const struct at_cmd *cmd)
 
 static at_result_t at_devicecode_setup(const struct at_cmd *cmd, const char *args)
 {
-    char devicecode[32] = "";
+    char devicecode[64] = "";
     char *req_expr = "=%s";
 
     if (rt_strlen(args) > sizeof(devicecode))
@@ -204,7 +204,7 @@ AT_CMD_EXPORT("AT+DEVICECODE", "=<id>", RT_NULL, at_devicecode_query, at_devicec
 
 static at_result_t at_itemid_query(const struct at_cmd *cmd)
 {
-    char itemid[32] = "";
+    char itemid[64] = "";
     size_t len = ef_get_env_blob("itemid", itemid, sizeof(itemid) - 1, RT_NULL);
     itemid[len] = '\0';
     at_server_printfln("+ITEMID: %s", itemid);
@@ -214,7 +214,7 @@ static at_result_t at_itemid_query(const struct at_cmd *cmd)
 
 static at_result_t at_itemid_setup(const struct at_cmd *cmd, const char *args)
 {
-    char itemid[32] = "";
+    char itemid[64] = "";
     char *req_expr = "=%s";
 
     if (rt_strlen(args) > sizeof(itemid))
