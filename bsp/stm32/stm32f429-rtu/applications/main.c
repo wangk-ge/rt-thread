@@ -42,6 +42,7 @@ typedef enum
     APP_MSG_MQTT_PUBLISH_REQ, // MQTT发布数据请求
     APP_MSG_MQTT_CLIENT_ONLINE, // MQTT客户端器上线
     APP_MSG_MQTT_CLIENT_OFFLINE, // MQTT客户端器下线
+    APP_MSG_HTTP_OTA_THREAD_QUIT, // HTTP OTA线程已退出
 } app_msg_type;
 
 /* RS485设备名 */
@@ -75,6 +76,12 @@ typedef enum
 /* MQTT客户端线程优先级(优先级必须高于主线程) */
 #define MQTT_CLIENT_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY - 1)
 
+/* HTTP OTA线程优先级(优先级低于主线程) */
+#define HTTP_OTA_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY + 1)
+
+/* HTTP OTA线程栈大小 */
+#define HTTP_OTA_THREAD_STACK_SIZE (4096)
+
 /* 历史数据FIFO队列信息(头部插入、尾部删除) */
 typedef struct
 {
@@ -98,6 +105,16 @@ typedef struct
     char *payload; // 数据
     size_t length; // 数据长度
 } mqtt_publish_data_info;
+
+/* http OTA升级请求信息 */
+typedef struct
+{
+    char url[256];
+    uint8_t md5[16];
+    char req_id[32];
+    char version[16];
+    int firmware_size;
+} http_ota_info;
 
 /* RS485接口信息 */
 typedef struct
@@ -126,6 +143,11 @@ static rt_mq_t app_msg_queue = RT_NULL;
 static rt_timer_t report_timer = RT_NULL;
 /* 定时采集定时器 */
 static rt_timer_t acquisition_timer = RT_NULL;
+
+/* HTTP OTA线程 */
+static rt_thread_t http_ota_thread = RT_NULL;
+/* HTTP OTA互斥锁(用于保护http_ota_thread变量) */
+static rt_mutex_t http_ota_mutex = RT_NULL;
 
 /* mqtt client */
 static mqtt_client mq_client;
@@ -158,7 +180,7 @@ static rt_err_t app_send_msg(app_msg_type msg, void* msg_data)
 }
 
 /* 请求(主线程)执行MQTT数据发布 */
-static rt_err_t mqtt_send_publish_req(enum QoS qos, char *topic, char *payload, size_t length)
+static rt_err_t send_mqtt_publish_req(enum QoS qos, char *topic, char *payload, size_t length)
 {
     mqtt_publish_data_info *app_msg_data = 
         (mqtt_publish_data_info*)rt_malloc(sizeof(mqtt_publish_data_info));
@@ -1157,10 +1179,10 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         LOG_D("publish(%s) %s", topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
+            LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1321,10 +1343,10 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
         LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
+            LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1572,10 +1594,10 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
         LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
+            LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1698,10 +1720,7 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
                 topic.c_str = json_str + tok_list[i].start;
                 topic.len = tok_list[i].end - tok_list[i].start;
 			}
-		}
-        else if (JSMN_OBJECT == tok_list[i].type)
-        {
-            if ((token_str_len == STR_LEN("data")) 
+            else if ((token_str_len == STR_LEN("data")) 
 				&& (0 == memcmp(token_str, "data", token_str_len)))
 			{
                 ++i; // 指向Value
@@ -1709,7 +1728,7 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
                 data.c_str = json_str + tok_list[i].start;
                 data.len = tok_list[i].end - tok_list[i].start;
 			}
-        }
+		}
     }
     
     /* 检查productKey和deviceCode */
@@ -1793,10 +1812,10 @@ static rt_err_t send_upgrade_progress(c_str_ref* req_id, int step)
         LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = mqtt_send_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
         if (ret != RT_EOK)
         {
-            LOG_E("%s mqtt_send_publish_req() error(%d)!", __FUNCTION__, ret);
+            LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
             goto __exit;
         }
     }
@@ -1911,11 +1930,135 @@ static void check_and_report_ota_process(void)
     }
 }
 
+/* HTTP OTA固件下载和升级线程 */
+static void http_ota_thread_proc(void *param)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    http_ota_info *ota_info = (http_ota_info*)param;
+    RT_ASSERT(ota_info != RT_NULL);
+    
+    c_str_ref id = {strlen(ota_info->req_id), ota_info->req_id};
+    c_str_ref version = {strlen(ota_info->version), ota_info->version};
+    
+    /* 下载并校验OTA固件(耗时操作) */
+    int ret = http_ota_fw_download(ota_info->url, ota_info->firmware_size, ota_info->md5);
+    switch (ret)
+    {
+        case 0: // 下载并校验成功
+        {
+            /* 上报下载成功 */
+            send_upgrade_progress(&id, 1);
+            
+            /* 上报校验成功 */
+            send_upgrade_progress(&id, 2);
+            
+            /* 保存已下载待升级的OTA固件版本号,用于重启升级后验证是否升级成功 */
+            rt_err_t ret = save_ota_version(&version, &id);
+            if (ret != RT_EOK)
+            {
+                send_upgrade_progress(&id, -3); // 直接上报升级失败
+                break;
+            }
+
+            /* 重启系统进行升级 */
+            http_ota_reboot();
+            break;
+        }
+        case -1: // 下载失败
+        {
+            /* 上报下载失败 */
+            send_upgrade_progress(&id, -1);
+            break;
+        }
+        case -2: // 校验失败
+        {
+            /* 上报校验失败 */
+            send_upgrade_progress(&id, -2);
+            break;
+        }
+        default:
+        {
+            RT_ASSERT(0);
+            break;
+        }
+    }
+    
+    rt_free(ota_info);
+    
+    app_send_msg(APP_MSG_MQTT_CLIENT_ONLINE, RT_NULL); // HTTP OTA线程已退出
+}
+
+/* 执行HTTP OTA请求 */
+static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req_id, c_str_ref *version, int firmware_size)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    http_ota_info *ota_info = RT_NULL;
+    
+    rt_mutex_take(http_ota_mutex, RT_WAITING_FOREVER);
+    
+    if (http_ota_thread != RT_NULL)
+    { // HTTP OTA请求正在处理中(不允许重复请求)
+        LOG_E("%s http ota is in processing!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    ota_info = (http_ota_info*)rt_malloc(sizeof(http_ota_info));
+    if (ota_info == RT_NULL)
+    {
+        LOG_E("%s rt_malloc(%u) failed!", __FUNCTION__, sizeof(http_ota_info));
+        ret = -RT_ENOMEM;
+        goto __exit;
+    }
+    
+    strref_str_cpy(ota_info->url, sizeof(ota_info->url), url);
+    memcpy(ota_info->md5, md5, sizeof(ota_info->md5));
+    strref_str_cpy(ota_info->req_id, sizeof(ota_info->req_id), req_id);
+    strref_str_cpy(ota_info->version, sizeof(ota_info->version), version);
+    ota_info->firmware_size = firmware_size;
+    
+    /* 创建HTTP OTA线程 */
+    http_ota_thread = rt_thread_create("http_ota", http_ota_thread_proc, 
+        (void*)ota_info, HTTP_OTA_THREAD_STACK_SIZE, HTTP_OTA_THREAD_PRIORITY, 10);
+    if (http_ota_thread == RT_NULL)
+    {
+        LOG_E("%s rt_thread_create(http_ota) failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 启动HTTP OTA线程 */
+    ret = rt_thread_startup(http_ota_thread);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s rt_thread_startup() failed(%d)!", __FUNCTION__, ret);
+    }
+    
+__exit:
+    if (ret != RT_EOK)
+    {
+        if (ota_info != RT_NULL)
+        {
+            rt_free(ota_info);
+        }
+        if (http_ota_thread != RT_NULL)
+        {
+            rt_thread_delete(http_ota_thread);
+            http_ota_thread = RT_NULL;
+        }
+    }
+    
+    rt_mutex_release(http_ota_mutex);
+    
+    return ret;
+}
+
 static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
 {
     (void) client;
-    const char *json_str = (const char*)(msg->message->payload);
-    size_t json_str_len = msg->message->payloadlen;
     c_str_ref productkey = {0, NULL}; // productKey
     c_str_ref devicecode = {0, NULL}; // deviceCode
     c_str_ref operationdate = {0, NULL}; // operationDate
@@ -1931,10 +2074,12 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
     c_str_ref signmethod = {0, NULL}; // signMethod
     int i = 0;
     
-    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, json_str);
+    LOG_I("%s() %s %s", __FUNCTION__, msg->topic_name->cstring, msg->message->payload);
     
     /* 解析JSON字符串 */
     {
+        const char *json_str = (const char*)(msg->message->payload);
+        size_t json_str_len = msg->message->payloadlen;
         jsmn_parser json_paser;
         jsmn_init(&json_paser);
         jsmntok_t tok_list[32];
@@ -1984,6 +2129,14 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
                     id.c_str = json_str + tok_list[i].start;
                     id.len = tok_list[i].end - tok_list[i].start;
                 }
+                else if ((token_str_len == STR_LEN("code")) 
+                    && (0 == memcmp(token_str, "code", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    code.c_str = json_str + tok_list[i].start;
+                    code.len = tok_list[i].end - tok_list[i].start;
+                }
                 else if ((token_str_len == STR_LEN("message")) 
                     && (0 == memcmp(token_str, "message", token_str_len)))
                 {
@@ -1992,21 +2145,7 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
                     message.c_str = json_str + tok_list[i].start;
                     message.len = tok_list[i].end - tok_list[i].start;
                 }
-            }
-            else if (JSMN_PRIMITIVE == tok_list[i].type)
-            {
-                if ((token_str_len == STR_LEN("code")) 
-                    && (0 == memcmp(token_str, "code", token_str_len)))
-                {
-                    ++i; // 指向Value
-                    RT_ASSERT(i < list_len);
-                    code.c_str = json_str + tok_list[i].start;
-                    code.len = tok_list[i].end - tok_list[i].start;
-                }
-            }
-            else if (JSMN_OBJECT == tok_list[i].type)
-            {
-                if ((token_str_len == STR_LEN("data")) 
+                else if ((token_str_len == STR_LEN("data")) 
                     && (0 == memcmp(token_str, "data", token_str_len)))
                 {
                     ++i; // 指向Value
@@ -2034,9 +2173,9 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
         LOG_E("%s id is empty!", __FUNCTION__);
         goto __exit;
     }
-    if (strref_str_cmp("2000", &code) != 0)
+    if (strref_str_cmp("1000", &code) != 0)
     {
-        LOG_E("%s code is not 2000!", __FUNCTION__);
+        LOG_E("%s code is not 1000!", __FUNCTION__);
         goto __exit;
     }
     if (strref_is_empty(&data))
@@ -2047,10 +2186,12 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
     
     /* 解析data */
     {
+        const char *json_str = data.c_str;
+        size_t json_str_len = data.len;
         jsmn_parser json_paser;
         jsmn_init(&json_paser);
-        jsmntok_t tok_list[8];
-        int list_len = jsmn_parse(&json_paser, data.c_str, data.len, tok_list, ARRAY_SIZE(tok_list));
+        jsmntok_t tok_list[32];
+        int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
         if (list_len == JSMN_ERROR_PART)
         {
             LOG_E("%s jsmn_parse failed!", __FUNCTION__);
@@ -2064,7 +2205,15 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
             
             if (JSMN_STRING == tok_list[i].type)
             {
-                if ((token_str_len == STR_LEN("version")) 
+                if ((token_str_len == STR_LEN("size")) 
+                    && (0 == memcmp(token_str, "size", token_str_len)))
+                {
+                    ++i; // 指向Value
+                    RT_ASSERT(i < list_len);
+                    size.c_str = json_str + tok_list[i].start;
+                    size.len = tok_list[i].end - tok_list[i].start;
+                }
+                else if ((token_str_len == STR_LEN("version")) 
                     && (0 == memcmp(token_str, "version", token_str_len)))
                 {
                     ++i; // 指向Value
@@ -2096,24 +2245,13 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
                     sign.c_str = json_str + tok_list[i].start;
                     sign.len = tok_list[i].end - tok_list[i].start;
                 }
-                else if ((token_str_len == STR_LEN("signmethod")) 
-                    && (0 == memcmp(token_str, "signmethod", token_str_len)))
+                else if ((token_str_len == STR_LEN("signMethod")) 
+                    && (0 == memcmp(token_str, "signMethod", token_str_len)))
                 {
                     ++i; // 指向Value
                     RT_ASSERT(i < list_len);
                     signmethod.c_str = json_str + tok_list[i].start;
                     signmethod.len = tok_list[i].end - tok_list[i].start;
-                }
-            }
-            else if (JSMN_PRIMITIVE == tok_list[i].type)
-            {
-                if ((token_str_len == STR_LEN("size")) 
-                    && (0 == memcmp(token_str, "size", token_str_len)))
-                {
-                    ++i; // 指向Value
-                    RT_ASSERT(i < list_len);
-                    size.c_str = json_str + tok_list[i].start;
-                    size.len = tok_list[i].end - tok_list[i].start;
                 }
             }
         }
@@ -2128,6 +2266,11 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
     if (strref_is_empty(&version))
     {
         LOG_E("%s version is empty!", __FUNCTION__);
+        goto __exit;
+    }
+    if (strref_str_cmp(SW_VERSION, &version) == 0)
+    {
+        LOG_E("%s version(%.*s) was not change!", __FUNCTION__, version.len, version.c_str);
         goto __exit;
     }
     if (strref_is_empty(&url))
@@ -2151,12 +2294,8 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
         goto __exit;
     }
     
-    /* 执行固件升级并上报升级进度 */
-    {
-        int ret = 0;
-        char firmware_url[128] = "";
-        strref_str_cpy(firmware_url, sizeof(firmware_url), &url);
-        
+    /* 请求执行固件升级并上报升级进度 */
+    {   
         int firmware_size = strref_to_int(&size);
         if ((firmware_size < 0) || (firmware_size > (384 * 1024)))
         {
@@ -2167,47 +2306,13 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
         uint8_t md5_bytes[16] = {0x00};
         from_hex_str(md5.c_str, md5.len, md5_bytes, sizeof(md5_bytes));
         
-        /* 下载并校验OTA固件 */
-        ret = http_ota_fw_download(firmware_url, firmware_size, md5_bytes);
-        switch (ret)
+        /* 请求执行固件下载和升级(独立线程执行,回调函数不能阻塞) */
+        rt_err_t ret = do_http_ota_request(&url, md5_bytes, &id, &version, firmware_size);
+        if (ret != RT_EOK)
         {
-            case 0: // 下载并校验成功
-            {
-                /* 上报下载成功 */
-                send_upgrade_progress(&id, 1);
-                
-                /* 上报校验成功 */
-                send_upgrade_progress(&id, 2);
-                
-                /* 保存已下载待升级的OTA固件版本号,用于重启升级后验证是否升级成功 */
-                rt_err_t ret = save_ota_version(&version, &id);
-                if (ret != RT_EOK)
-                {
-                    send_upgrade_progress(&id, -3); // 直接上报升级失败
-                    break;
-                }
-
-                /* 重启系统进行升级 */
-                http_ota_reboot();
-                break;
-            }
-            case -1: // 下载失败
-            {
-                /* 上报下载失败 */
-                send_upgrade_progress(&id, -1);
-                break;
-            }
-            case -2: // 校验失败
-            {
-                /* 上报校验失败 */
-                send_upgrade_progress(&id, -2);
-                break;
-            }
-            default:
-            {
-                RT_ASSERT(0);
-                break;
-            }
+            LOG_E("%s do_http_ota_request() failed(%d)!", __FUNCTION__, ret);
+            
+            send_upgrade_progress(&id, -3); // 直接上报升级失败
         }
     }
     
@@ -2238,6 +2343,11 @@ static void app_deinit()
     {
         rt_timer_delete(acquisition_timer);
         acquisition_timer = RT_NULL;
+    }
+    if (RT_NULL != http_ota_mutex)
+    {
+        rt_mutex_delete(http_ota_mutex);
+        http_ota_mutex = RT_NULL;
     }
 }
 
@@ -2330,6 +2440,15 @@ static rt_err_t app_init()
     if (RT_NULL == acquisition_timer)
     {
         LOG_E("%s create acquisition timer failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 创建HTTP OTA互斥锁 */
+    http_ota_mutex = rt_mutex_create("http_ota", RT_IPC_FLAG_FIFO);
+    if (RT_NULL == http_ota_mutex)
+    {
+        LOG_E("%s create http_ota_mutex failed!", __FUNCTION__);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -2500,6 +2619,11 @@ __exit:
         {
             rt_timer_delete(acquisition_timer);
             acquisition_timer = RT_NULL;
+        }
+        if (RT_NULL != http_ota_mutex)
+        {
+            rt_mutex_delete(http_ota_mutex);
+            http_ota_mutex = RT_NULL;
         }
     }
     
@@ -2746,6 +2870,17 @@ int main(void)
                 {
                     LOG_E("%s stop report timer failed(%d)!", __FUNCTION__, ret);
                 }
+                break;
+            }
+            case APP_MSG_HTTP_OTA_THREAD_QUIT: // HTTP OTA线程已退出
+            {
+                rt_mutex_take(http_ota_mutex, RT_WAITING_FOREVER);
+                
+                /* 释放资源 */
+                rt_thread_delete(http_ota_thread);
+                http_ota_thread = RT_NULL;
+                
+                rt_mutex_release(http_ota_mutex);
                 break;
             }
             default:

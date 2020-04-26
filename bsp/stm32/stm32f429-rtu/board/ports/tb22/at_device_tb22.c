@@ -620,10 +620,12 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
         
+#if 0
         /* 输出配置信息 */
         /* AT+NCONFIG? */
         at_obj_exec_cmd(device->client, resp, "AT+NCONFIG?");
-
+#endif
+        
         /* reboot */
         at_obj_exec_cmd(device->client, resp, "AT+NRB");
         rt_thread_mdelay(5000);
@@ -809,9 +811,11 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
         
+#if 0
         /* 输出状态信息 */
         /* AT+NUESTATS */
         at_obj_exec_cmd(device->client, resp, "AT+NUESTATS=ALL");
+#endif
         
         /* check the GPRS network IP address */
         for (i = 0; i < IPADDR_RETRY; i++)

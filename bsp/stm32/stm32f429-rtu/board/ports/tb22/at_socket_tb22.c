@@ -33,6 +33,7 @@
 #if defined(AT_DEVICE_USING_TB22) && defined(AT_USING_SOCKET)
 
 #define TB22_MODULE_SEND_MAX_SIZE       1358 // AT+NSOSD最大传输1358字节
+#define TB22_MODULE_RECV_MAX_SIZE       512 // AT+NSORF最大的接收数据长度是1358字节
 
 /* set real event by current socket and current state */
 #define SET_EVENT(socket_index, event)       (((socket_index + 1) << 16) | (event))
@@ -851,36 +852,28 @@ static void tb22_socket_recv_thread_entry(void *parameter)
             int rem_len = recv_len; // 剩余数据长度
             while (rem_len > 0)
             { // 收取所有数据
-                int buf_len = (rem_len * 2) + 1; // 每个HEX占两个字节再加上字符串结尾'\0'
+                int req_read_len = MIN(TB22_MODULE_RECV_MAX_SIZE, rem_len); // 请求读取的长度(字节)
+                int buf_len = (req_read_len * 2) + 1; // 每个HEX占两个字节再加上字符串结尾'\0'
                 recv_buf = (char *)rt_calloc(1, buf_len);
                 if (recv_buf == RT_NULL)
                 {
-                    LOG_E("no memory for URC receive buffer(%d).", rem_len);
-                    /* read and clean the coming data */
-                    at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+                    LOG_E("no memory for URC receive buffer(%d).", buf_len);
                     break;
                 }
 
-                resp = at_create_resp((rem_len * 2) + 128, 0, rt_tick_from_millisecond(1000));
+                resp = at_create_resp((req_read_len * 2) + 128, 0, rt_tick_from_millisecond(10 * 1000));
                 if (resp == RT_NULL)
                 {
-                    LOG_E("no memory for resp create.");
-                    
                     rt_free(recv_buf);
-                    recv_buf = RT_NULL;
                     
-                    /* read and clean the coming data */
-                    at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
+                    LOG_E("no memory for resp create.");
                     break;
                 }
             
-                if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, rem_len) != RT_EOK)
+                if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, req_read_len) != RT_EOK)
                 {
                     rt_free(recv_buf);
                     recv_buf = RT_NULL;
-                    
-                    /* read and clean the coming data */
-                    at_obj_exec_cmd(device->client, RT_NULL, "AT+NSORF=%d,%d", device_socket, rem_len);
                     break;
                 }
                 
