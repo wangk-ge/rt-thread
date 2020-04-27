@@ -165,7 +165,7 @@ rt_inline uint8_t hex_char_to_byte(char hex_char)
 }
 
 /*************************************************
-* Function: from_hex_str
+* Function: util_from_hex_str
 * Description: convert hex string to byte data(can be convert in place)
 * Author: 
 * Returns: the byte data length of convert success
@@ -176,7 +176,7 @@ rt_inline uint8_t hex_char_to_byte(char hex_char)
 *  buf_len buffer length (in bytes)
 * History:
 *************************************************/
-uint32_t from_hex_str(const char* hex_str, size_t str_len, 
+uint32_t util_from_hex_str(const char* hex_str, size_t str_len, 
     uint8_t* data_buf, size_t buf_len)
 {
     if ((NULL == data_buf)

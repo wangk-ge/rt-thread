@@ -38,6 +38,9 @@
 #define TB22_THREAD_PRIORITY            (RT_THREAD_PRIORITY_MAX/2)
 #define TB22_NET_LED_PIN                GET_PIN(D, 14) // 网络连接状态指示LED控制GPIO(低电平点亮)
 
+#define TB22_AT_RESP_NUM           10  // at resp个数(用于内存池分配)
+#define TB22_AT_RESP_SIZE          128 // at resp大小(用于内存池分配)
+
 static int tb22_reset(struct at_device *device)
 {
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
@@ -56,7 +59,6 @@ static int tb22_reset(struct at_device *device)
 
 static int tb22_check_link_status(struct at_device *device)
 {
-    at_response_t resp = RT_NULL;
     struct at_device_tb22 *tb22 = RT_NULL;
     int result = -RT_ERROR;
     
@@ -76,13 +78,9 @@ static int tb22_check_link_status(struct at_device *device)
             rt_thread_mdelay(200);
         }
     }
-    
-    resp = at_create_resp(64, 0, rt_tick_from_millisecond(300));
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create.");
-        return(-RT_ERROR);
-    }
+	
+	at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
+    RT_ASSERT(resp);
 
     result = -RT_ERROR;
     if (at_obj_exec_cmd(device->client, resp, "AT+CGATT?") == RT_EOK)
@@ -97,7 +95,8 @@ static int tb22_check_link_status(struct at_device *device)
         }
     }
 
-    at_delete_resp(resp);    
+    tb22_free_at_resp(resp);
+	
     return(result);
 }
 
@@ -127,13 +126,8 @@ static int tb22_netdev_set_info(struct netdev *netdev)
     netdev_low_level_set_link_status(netdev, RT_TRUE);
     netdev_low_level_set_dhcp_status(netdev, RT_TRUE);
 
-    resp = at_create_resp(TB22_INFO_RESP_SIZE, 0, TB22_INFO_RESP_TIMOUT);
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create.");
-        result = -RT_ENOMEM;
-        goto __exit;
-    }
+	resp = tb22_alloc_at_resp(device, 0, TB22_INFO_RESP_TIMOUT);
+    RT_ASSERT(resp);
 
     /* set network interface device hardware address(IMEI) */
     {
@@ -244,7 +238,7 @@ static int tb22_netdev_set_info(struct netdev *netdev)
 __exit:
     if (resp)
     {
-        at_delete_resp(resp);
+        tb22_free_at_resp(resp);
     }
 
     return result;
@@ -367,14 +361,9 @@ static int tb22_netdev_set_dns_server(struct netdev *netdev, uint8_t dns_num, ip
         LOG_E("get device(%s) failed.", netdev->name);
         return -RT_ERROR;
     }
-
-    resp = at_create_resp(TB22_DNS_RESP_LEN, 0, TB22_DNS_RESP_TIMEOUT);
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create.");
-        result = -RT_ENOMEM;
-        goto __exit;
-    }
+	
+	resp = tb22_alloc_at_resp(device, 0, TB22_DNS_RESP_TIMEOUT);
+    RT_ASSERT(resp);
 
     /* send "AT+QIDNSCFG=<pri_dns>[,<sec_dns>]" commond to set dns servers */
     if (at_obj_exec_cmd(device->client, resp, "AT+QIDNSCFG=%d,%s", 
@@ -389,7 +378,7 @@ static int tb22_netdev_set_dns_server(struct netdev *netdev, uint8_t dns_num, ip
 __exit:
     if (resp)
     {
-        at_delete_resp(resp);
+        tb22_free_at_resp(resp);
     }
 
     return result;
@@ -424,12 +413,8 @@ static int tb22_netdev_ping(struct netdev *netdev, const char *host,
         return -RT_ERROR;
     }
 
-    resp = at_create_resp(TB22_PING_RESP_SIZE, 4, TB22_PING_TIMEOUT);
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create");
-        return -RT_ENOMEM;
-    }
+	resp = tb22_alloc_at_resp(device, 4, TB22_PING_TIMEOUT);
+    RT_ASSERT(resp);
 
     /* DNS resolve */
     struct in_addr inp;
@@ -482,7 +467,7 @@ static int tb22_netdev_ping(struct netdev *netdev, const char *host,
 __exit:
     if (resp)
     {
-        at_delete_resp(resp);
+        tb22_free_at_resp(resp);
     }
 
     return result;
@@ -556,14 +541,10 @@ static void tb22_init_thread_entry(void *parameter)
     struct at_device *device = (struct at_device *) parameter;
     struct at_client *client = device->client;
 
-    resp = at_create_resp(1024, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create.");
-        return;
-    }
-
     LOG_D("start init %s device.", device->name);
+	
+	resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
+	RT_ASSERT(resp);
 
     while (retry_num--)
     {
@@ -578,6 +559,8 @@ static void tb22_init_thread_entry(void *parameter)
             goto __exit;
         }
         
+		
+		
         /* disable echo */
         if (at_obj_exec_cmd(device->client, resp, "ATE0") != RT_EOK)
         {
@@ -895,7 +878,7 @@ static void tb22_init_thread_entry(void *parameter)
 
     if (resp)
     {
-        at_delete_resp(resp);
+        tb22_free_at_resp(resp);
     }
 
     if (result == RT_EOK)
@@ -920,12 +903,8 @@ static int tb22_get_csq(struct at_device *device, int* signal_strength, int *err
 {
     int ret = RT_EOK;
     
-    at_response_t resp = at_create_resp(256, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
-    if (resp == RT_NULL)
-    {
-        LOG_E("no memory for resp create.");
-        return -RT_ENOMEM;
-    }
+    at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(AT_DEFAULT_TIMEOUT));
+	RT_ASSERT(resp);
     
     ret = at_obj_exec_cmd(device->client, resp, "AT+CSQ");
     if (ret != RT_EOK)
@@ -946,7 +925,7 @@ static int tb22_get_csq(struct at_device *device, int* signal_strength, int *err
 __exit:
     if (resp)
     {
-        at_delete_resp(resp);
+        tb22_free_at_resp(resp);
     }
     
     return ret;
@@ -978,7 +957,16 @@ static int tb22_net_init(struct at_device *device)
 
 static int tb22_init(struct at_device *device)
 {
+	int ret = RT_EOK;
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
+	
+	tb22->at_resp_mp = rt_mp_create("tb22at_resp", TB22_AT_RESP_NUM, TB22_AT_RESP_SIZE);
+    if (tb22->at_resp_mp == RT_NULL)
+    {
+        LOG_E("no memory for tb22 at resp memory pool create.");
+        ret = -RT_ENOMEM;
+		goto __exit;
+    }
 
     /* initialize AT client */
     at_client_init(tb22->client_name, tb22->recv_bufsz);
@@ -986,8 +974,11 @@ static int tb22_init(struct at_device *device)
     device->client = at_client_get(tb22->client_name);
     if (device->client == RT_NULL)
     {
+		rt_mp_delete(tb22->at_resp_mp);
+		tb22->at_resp_mp = RT_NULL;
         LOG_E("get AT client(%s) failed.", tb22->client_name);
-        return -RT_ERROR;
+        ret = -RT_ERROR;
+		goto __exit;
     }
 
     /* register URC data execution function  */
@@ -999,8 +990,11 @@ static int tb22_init(struct at_device *device)
     device->netdev = tb22_netdev_add(tb22->device_name);
     if (device->netdev == RT_NULL)
     {
+		rt_mp_delete(tb22->at_resp_mp);
+		tb22->at_resp_mp = RT_NULL;
         LOG_E("add netdev(%s) failed.", tb22->device_name);
-        return -RT_ERROR;
+        ret = -RT_ERROR;
+		goto __exit;
     }
 
     /* initialize tb22 pin configuration */
@@ -1013,15 +1007,41 @@ static int tb22_init(struct at_device *device)
     rt_pin_write(TB22_NET_LED_PIN, PIN_HIGH);
 
     /* initialize tb22 device network */
-    return tb22_netdev_set_up(device->netdev);
+    ret = tb22_netdev_set_up(device->netdev);
+	if (ret != RT_EOK)
+	{
+		rt_mp_delete(tb22->at_resp_mp);
+		tb22->at_resp_mp = RT_NULL;
+		LOG_E("tb22_netdev_set_up failed.");
+	}
+	
+__exit:
+	if (ret != RT_EOK)
+	{
+		if (tb22->at_resp_mp)
+		{
+			rt_mp_delete(tb22->at_resp_mp);
+			tb22->at_resp_mp = RT_NULL;
+		}
+	}
+	
+	return ret;
 }
 
 static int tb22_deinit(struct at_device *device)
 {
     RT_ASSERT(device);
-    
+ 
+	struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
+	
     /* 关闭连接指示灯 */
     rt_pin_write(TB22_NET_LED_PIN, PIN_HIGH);
+	
+	if (tb22->at_resp_mp)
+	{
+		rt_mp_delete(tb22->at_resp_mp);
+		tb22->at_resp_mp = RT_NULL;
+	}
     
     return tb22_netdev_set_down(device->netdev);
 }
@@ -1075,6 +1095,36 @@ const struct at_device_ops tb22_device_ops =
     tb22_deinit,
     tb22_control,
 };
+
+/* 从内存池分配at_response_t对象 */
+at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, rt_int32_t timeout)
+{
+	RT_ASSERT(device);
+	
+	struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
+	RT_ASSERT(tb22->at_resp_mp);
+	
+	uint8_t *buf = (uint8_t*)rt_mp_alloc(tb22->at_resp_mp, RT_WAITING_FOREVER);
+	RT_ASSERT(buf);
+	
+	at_response_t resp = (at_response_t)buf;
+	resp->buf = (char *)(buf + sizeof(struct at_response));
+    resp->buf_size = TB22_AT_RESP_SIZE - sizeof(struct at_response);
+    resp->line_num = line_num;
+    resp->line_counts = 0;
+    resp->timeout = timeout;
+	
+	return resp;
+}
+
+/* 释放at_response_t对象 */
+void tb22_free_at_resp(at_response_t resp)
+{
+	if (resp != RT_NULL)
+	{
+		rt_mp_free(resp);
+	}
+}
 
 static int tb22_device_class_register(void)
 {

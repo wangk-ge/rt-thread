@@ -41,6 +41,11 @@
 #define AT_SOCKETS_NUM       AT_DEVICE_SOCKETS_NUM
 #endif
 
+/* The maximum number of socket recv packet structure in memory pool */
+#ifndef AT_SOCKET_RCV_PKT_CNT
+#define AT_SOCKET_RCV_PKT_CNT   (24)
+#endif
+        
 typedef enum {
     AT_EVENT_SEND,
     AT_EVENT_RECV,
@@ -78,11 +83,12 @@ struct at_socket *at_get_socket(int socket)
 }
 
 /* get a block to the AT socket receive list*/
-static size_t at_recvpkt_put(rt_slist_t *rlist, const char *ptr, size_t length)
+static size_t at_recvpkt_put(struct at_socket *sock, rt_slist_t *rlist, const char *ptr, size_t length)
 {
     at_recv_pkt_t pkt = RT_NULL;
 
-    pkt = (at_recv_pkt_t) rt_calloc(1, sizeof(struct at_recv_pkt));
+    //pkt = (at_recv_pkt_t) rt_calloc(1, sizeof(struct at_recv_pkt));
+    pkt = (at_recv_pkt_t) rt_mp_alloc(sock->recvpkt_mp, RT_WAITING_FOREVER);
     if (pkt == RT_NULL)
     {
         LOG_E("No memory for receive packet table!");
@@ -114,11 +120,13 @@ static int at_recvpkt_all_delete(rt_slist_t *rlist)
         pkt = rt_slist_entry(node, struct at_recv_pkt, list);
         if (pkt->buff)
         {
-            rt_free(pkt->buff);
+            //rt_free(pkt->buff);
+            rt_mp_free(pkt->buff);
         }
         if (pkt)
         {
-            rt_free(pkt);
+            //rt_free(pkt);
+            rt_mp_free(pkt);
             pkt = RT_NULL;
         }
     }
@@ -141,11 +149,13 @@ static int at_recvpkt_node_delete(rt_slist_t *rlist, rt_slist_t *node)
     pkt = rt_slist_entry(node, struct at_recv_pkt, list);
     if (pkt->buff)
     {
-        rt_free(pkt->buff);
+        //rt_free(pkt->buff);
+        rt_mp_free(pkt->buff);
     }
     if (pkt)
     {
-        rt_free(pkt);
+        //rt_free(pkt);
+        rt_mp_free(pkt);
         pkt = RT_NULL;
     }
 
@@ -365,7 +375,17 @@ static struct at_socket *alloc_socket_by_device(struct at_device *device)
         rt_sem_delete(sock->recv_notice);
         goto __err;
     }
-
+    
+    rt_snprintf(name, RT_NAME_MAX, "%s%d", "at_skt", idx);
+    /* create AT socket receive packet memory pool */
+    if((sock->recvpkt_mp = rt_mp_create(name, AT_SOCKET_RCV_PKT_CNT, sizeof(at_recv_pkt_t))) == RT_NULL)
+    {
+        LOG_E("No memory for socket receive packet memory pool create.");
+        rt_mutex_delete(sock->recv_lock);
+        rt_sem_delete(sock->recv_notice);
+        goto __err;
+    }
+    
     rt_mutex_release(at_slock);
     return sock;
 
@@ -457,8 +477,13 @@ static int free_socket(struct at_socket *sock)
     {
         at_recvpkt_all_delete(&sock->recvpkt_list);
     }
+    
+    if (sock->recvpkt_mp)
+    {
+        rt_mp_delete(sock->recvpkt_mp);
+    }
 
-    /* delect socket from socket list */
+    /* delete socket from socket list */
     {
         rt_base_t level;
         rt_slist_t *node = RT_NULL;
@@ -644,7 +669,7 @@ static void at_recv_notice_cb(struct at_socket *sock, at_socket_evt_t event, con
 
     /* put receive buffer to receiver packet list */
     rt_mutex_take(sock->recv_lock, RT_WAITING_FOREVER);
-    at_recvpkt_put(&(sock->recvpkt_list), buff, bfsz);
+    at_recvpkt_put(sock, &(sock->recvpkt_list), buff, bfsz);
     rt_mutex_release(sock->recv_lock);
 
     rt_sem_release(sock->recv_notice);
