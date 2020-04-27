@@ -34,7 +34,7 @@ extern "C" {
 #include <at_device.h>
 
 /* The maximum number of sockets supported by the TB22 device */
-#define AT_DEVICE_TB22_SOCKETS_NUM  7
+#define AT_DEVICE_TB22_SOCKETS_NUM  4
 
 struct at_device_tb22
 {

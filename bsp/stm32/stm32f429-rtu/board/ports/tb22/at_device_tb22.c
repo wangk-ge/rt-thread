@@ -39,7 +39,7 @@
 #define TB22_NET_LED_PIN                GET_PIN(D, 14) // 网络连接状态指示LED控制GPIO(低电平点亮)
 
 #define TB22_AT_RESP_NUM           10  // at resp个数(用于内存池分配)
-#define TB22_AT_RESP_SIZE          128 // at resp大小(用于内存池分配)
+#define TB22_AT_RESP_SIZE          256 // at resp大小(用于内存池分配)
 
 static int tb22_reset(struct at_device *device)
 {
@@ -1117,6 +1117,8 @@ at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, r
     resp->line_num = line_num;
     resp->line_counts = 0;
     resp->timeout = timeout;
+    
+    LOG_D("%s at_resp_mp=0x%08x, resp=0x%08x", __FUNCTION__, tb22->at_resp_mp, resp);
 	
 	return resp;
 }
@@ -1124,6 +1126,8 @@ at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, r
 /* 释放at_response_t对象 */
 void tb22_free_at_resp(at_response_t resp)
 {
+    LOG_D("%s resp=0x%08x", __FUNCTION__, resp);
+    
 	if (resp != RT_NULL)
 	{
 		rt_mp_free(resp);

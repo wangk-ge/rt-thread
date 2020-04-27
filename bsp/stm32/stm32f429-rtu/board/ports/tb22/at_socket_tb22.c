@@ -39,11 +39,11 @@
 
 #define TB22_SOCK_RECV_PACKET_NUM           24 // Socket接收包个数(用于内存池分配)
 #define TB22_SOCK_RECV_PACKET_SIZE          64 // Socket接收包大小(用于内存池分配)
-#define TB22_SOCK_RECV_THREAD_STACK_SIZE    2048
+#define TB22_SOCK_RECV_THREAD_STACK_SIZE    4096
 #define TB22_SOCK_RECV_THREAD_PRIORITY      (RT_THREAD_PRIORITY_MAX / 3 - 2) // 优先级应该高于at_client线程
 
 /* set real event by current socket and current state */
-#define SET_EVENT(socket_index, event)       (((socket_index + 1) << 16) | (event))
+#define SET_EVENT(socket_index, event)       ((event) << ((socket_index) * 5))
 
 #if !defined(MIN)
 #define MIN(a,b)    (((a) < (b)) ? (a) : (b))
@@ -53,12 +53,14 @@
 #define TO_HEX_CHAR(b) (((b) <= 0x09) ? ((b) + (uint8_t)'0') : (((b) - 0x0A) + (uint8_t)'A'))
 
 /* AT socket event type */
-#define TB22_EVENT_REQ_RECV_THREAD_QUIT (1L << 0) // 请求Socket接收线程退出
-#define TB22_EVENT_RECV_THREAD_QUIT     (1L << 1) // Socket接收线程已退出
-#define TB22_EVENT_REQ_RECV_DATA        (1L << 2) // 请求Socket接收线程接收数据
-#define TB22_EVENT_SEND_OK              (1L << 3) // 发送成功
-#define TB22_EVENT_SEND_FAIL            (1L << 4) // 发送失败
-#define TB22_EVENT_DOMAIN_OK            (1L << 5) // DNS解析成功
+#define TB22_EVENT_REQ_RECV_THREAD_QUIT ((uint32_t)0x00000001) // 请求Socket接收线程退出
+#define TB22_EVENT_RECV_THREAD_QUIT     ((uint32_t)0x00000002) // Socket接收线程已退出
+#define TB22_EVENT_REQ_RECV_DATA        ((uint32_t)0x00000004) // 请求Socket接收线程接收数据
+#define TB22_EVENT_SEND_OK              ((uint32_t)0x00000008) // 发送成功
+#define TB22_EVENT_SEND_FAIL            ((uint32_t)0x00000010) // 发送失败
+
+#define TB22_EVENT_DOMAIN_OK            ((uint32_t)0x00100000) // DNS解析成功
+
 
 /* 发送数据缓冲区大小(字节数) */
 #define TB22_SEND_BUF_SIZE             (TB22_MODULE_SEND_MAX_SIZE * 2)
@@ -68,6 +70,7 @@ struct tb22_sock_t {
     int index;
     int device_socket;
     struct at_device *device;
+    struct at_socket *socket;
     uint8_t sequence;
     rt_mp_t recv_buf_mp; // 接收数据内存池
     rt_thread_t recv_thread; // 接收线程
@@ -176,6 +179,7 @@ static void tb22_sock_recv_thread_entry(void *parameter)
     int socket_index = tb22_sock->index;
     struct at_device *device = tb22_sock->device;
     rt_event_t socket_event = device->socket_event;
+    struct at_socket *socket = tb22_sock->socket;
     
     while (1)
     {
@@ -189,24 +193,16 @@ static void tb22_sock_recv_thread_entry(void *parameter)
         }
         
         event_set = SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_THREAD_QUIT);
-        if (recved_event & event_set)
+        if ((recved_event & event_set) == event_set)
         {
             LOG_D("%s socket_index(%d) device_socket(%d) rt_event_recv(TB22_EVNET_REQ_RECV_THREAD_QUIT) quit.", __FUNCTION__, socket_index, device_socket);
             break;
         }
         
         event_set = SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_DATA);
-        if (recved_event & event_set)
+        if ((recved_event & event_set) == event_set)
         {
             LOG_D("%s socket_index(%d) device_socket(%d) rt_event_recv(TB22_EVNET_REQ_RECV_DATA)", __FUNCTION__, socket_index, device_socket);
-            
-            /* get at socket object by device socket descriptor */
-            struct at_socket *socket = at_get_socket_by_device_socket(device, device_socket);
-            if (socket == RT_NULL)
-            {
-                LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
-                continue;
-            }
             
             at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
             RT_ASSERT(resp);
@@ -220,7 +216,7 @@ static void tb22_sock_recv_thread_entry(void *parameter)
                 int sock = 0, port = 0, bytes_len = 0;
                 char ip[32] = "";
                 
-                if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, (sizeof(hex_str) - 1)) != RT_EOK)
+                if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, TB22_SOCK_RECV_PACKET_SIZE) != RT_EOK)
                 {
                     LOG_E("at_obj_exec_cmd failed!");
                     break;
@@ -252,14 +248,11 @@ static void tb22_sock_recv_thread_entry(void *parameter)
                     /* HEX格式字符串转换二进制数据(就地转换) */
                     uint32_t data_len = util_from_hex_str(hex_str, hex_str_len, 
                         (uint8_t*)recv_buf, (uint32_t)recv_buf_len);
-
-                    if (socket != RT_NULL)
+                    
+                    /* notice the receive buffer and buffer size */
+                    if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
                     {
-                        /* notice the receive buffer and buffer size */
-                        if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
-                        {
-                            at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)recv_buf, data_len);
-                        }
+                        at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)recv_buf, data_len);
                     }
                 }
                 
@@ -278,7 +271,7 @@ static void tb22_sock_recv_thread_entry(void *parameter)
 }
 
 /* 分配TB22 Socket */
-static struct tb22_sock_t* tb22_alloc_socket(struct at_device *device, int device_socket, int socket_index)
+static struct tb22_sock_t* tb22_alloc_socket(struct at_device *device, struct at_socket *socket, int device_socket, int socket_index)
 {
     char name[RT_NAME_MAX] = "";
     struct tb22_sock_t* tb22_sock = 
@@ -293,6 +286,7 @@ static struct tb22_sock_t* tb22_alloc_socket(struct at_device *device, int devic
     tb22_sock->device_socket = device_socket;
     tb22_sock->sequence = 1;
     tb22_sock->device = device;
+    tb22_sock->socket = socket;
     rt_snprintf(name, RT_NAME_MAX, "tb22_skt%d", socket_index);
     tb22_sock->recv_buf_mp = rt_mp_create(name, TB22_SOCK_RECV_PACKET_NUM, TB22_SOCK_RECV_PACKET_SIZE);
     if (tb22_sock->recv_buf_mp == RT_NULL)
@@ -460,7 +454,7 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
         goto __exit;
     }
     
-    tb22_sock = tb22_alloc_socket(device, device_socket, socket_index);
+    tb22_sock = tb22_alloc_socket(device, socket, device_socket, socket_index);
     if (tb22_sock == RT_NULL)
     {
         result = -RT_ENOMEM;
@@ -534,16 +528,12 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     int socket_index = tb22_sock->index;
     int device_socket = tb22_sock->device_socket;
     struct at_device *device = (struct at_device *) socket->device;
-    struct at_device_tb22 *tb22 = (struct at_device_tb22 *) device->user_data;
-    rt_mutex_t lock = device->client->lock;
+    //rt_mutex_t lock = device->client->lock;
     at_response_t resp = RT_NULL;
 
     RT_ASSERT(buff);
     
-    rt_mutex_take(lock, RT_WAITING_FOREVER);
-
-    /* set current socket for send URC event */
-    tb22->user_data = (void *) tb22_sock;
+    //rt_mutex_take(lock, RT_WAITING_FOREVER);
 
     /* clear socket send event */
     event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL);
@@ -592,7 +582,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
          * 若3次尝试均超时失败，则进入异常处理流程(由应用层选择是否重试发送)
          */
         /* waiting OK or failed result */
-        event = TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL;
+        event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL);
         event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(60 * 1000), RT_EVENT_FLAG_OR);
         if (event_result < 0)
         {
@@ -601,7 +591,8 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
             goto __exit;
         }
         /* check result */
-        if (event_result & TB22_EVENT_SEND_FAIL)
+        event = SET_EVENT(socket_index, TB22_EVENT_SEND_FAIL);
+        if ((event_result & event) == event)
         {
             LOG_E("%s device socket(%d) send failed.", device->name, device_socket);
             result = -RT_ERROR;
@@ -615,7 +606,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     }
 
 __exit:
-    rt_mutex_release(lock);
+    //rt_mutex_release(lock);
     
     if (resp)
     {
@@ -666,7 +657,7 @@ int tb22_domain_resolve(const char *name, char ip[16])
     /* clear TB22_EVENT_DOMAIN_OK */
     tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, 0, RT_EVENT_FLAG_OR);
     
-    tb22 = (struct at_device_tb22 *) device->user_data;
+    tb22 = (struct at_device_tb22 *)device->user_data;
     tb22->socket_data = ip;
 
     if (at_obj_exec_cmd(device->client, resp, "AT+MDNS=0,%s", name) != RT_EOK)
@@ -736,7 +727,7 @@ static void urc_send_func(struct at_client *client, const char *data, rt_size_t 
     int device_socket = 0, sequence = 0, status = 0;
     int socket_index = 0;
     struct at_device *device = RT_NULL;
-    struct at_device_tb22 *tb22 = RT_NULL;
+    struct at_socket *socket = RT_NULL;
     struct tb22_sock_t *tb22_sock = RT_NULL;
     char *client_name = client->device->parent.name;
 
@@ -750,22 +741,31 @@ static void urc_send_func(struct at_client *client, const char *data, rt_size_t 
         LOG_E("get device(%s) failed.", client_name);
         return;
     }
-    
-    tb22 = (struct at_device_tb22 *) device->user_data;
-    tb22_sock = (struct tb22_sock_t*)(tb22->user_data);
-    socket_index = tb22_sock->index;
 
     sscanf(data, "+NSOSTR:%d,%d,%d", &device_socket, &sequence, &status);
-    if (device_socket == tb22_sock->device_socket)
+    if (device_socket < 0)
     {
-        if (1 == status)
-        {
-            tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SEND_OK));
-        }
-        else if (0 == status)
-        {
-            tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SEND_FAIL));
-        }
+        LOG_E("invalid device_socket(%d) or data_len(%d).", device_socket);
+        return;
+    }
+    
+    /* get at socket object by device socket descriptor */
+    socket = at_get_socket_by_device_socket(device, device_socket);
+    if (socket == RT_NULL)
+    {
+        LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
+        return;
+    }
+    tb22_sock = (struct tb22_sock_t*)(socket->user_data);
+    socket_index = tb22_sock->index;
+    
+    if (1 == status)
+    { // 发送成功
+        tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SEND_OK));
+    }
+    else if (0 == status)
+    { // 发送失败
+        tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SEND_FAIL));
     }
 }
 
@@ -788,25 +788,34 @@ static void urc_close_func(struct at_client *client, const char *data, rt_size_t
     }
 
     sscanf(data, "+NSOCLI:%d", &device_socket);
+    if (device_socket < 0)
+    {
+        LOG_E("invalid device_socket(%d) or data_len(%d).", device_socket);
+        return;
+    }
     
     /* get at socket object by device socket descriptor */
     socket = at_get_socket_by_device_socket(device, device_socket);
-    if (socket != RT_NULL)
+    if (socket == RT_NULL)
     {
-        /* notice the socket is disconnect by remote */
-        if (at_evt_cb_set[AT_SOCKET_EVT_CLOSED])
-        {
-            at_evt_cb_set[AT_SOCKET_EVT_CLOSED](socket, AT_SOCKET_EVT_CLOSED, NULL, 0);
-        }
+        LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
+        return;
+    }
+    
+    /* notice the socket is disconnect by remote */
+    if (at_evt_cb_set[AT_SOCKET_EVT_CLOSED])
+    {
+        at_evt_cb_set[AT_SOCKET_EVT_CLOSED](socket, AT_SOCKET_EVT_CLOSED, NULL, 0);
     }
 }
 
 static void urc_recv_func(struct at_client *client, const char *data, rt_size_t size)
 {
     int device_socket = 0;
+    int socket_index = 0;
     rt_size_t data_len = 0;
     struct at_device *device = RT_NULL;
-    struct at_device_tb22 *tb22 = RT_NULL;
+    struct at_socket *socket = RT_NULL;
     struct tb22_sock_t *tb22_sock = RT_NULL;
     char *client_name = client->device->parent.name;
 
@@ -820,13 +829,9 @@ static void urc_recv_func(struct at_client *client, const char *data, rt_size_t 
         LOG_E("get device(%s) failed.", client_name);
         return;
     }
-
-    tb22 = (struct at_device_tb22 *)device->user_data;
-    tb22_sock = (struct tb22_sock_t*)(tb22->user_data);
     
     /* get the current socket and receive buffer size by receive data */
     sscanf(data, "+NSONMI:%d,%d", &device_socket, (int*)&data_len);
-
     if ((device_socket < 0) 
         || (data_len <= 0))
     {
@@ -834,8 +839,18 @@ static void urc_recv_func(struct at_client *client, const char *data, rt_size_t 
         return;
     }
     
+    /* get at socket object by device socket descriptor */
+    socket = at_get_socket_by_device_socket(device, device_socket);
+    if (socket == RT_NULL)
+    {
+        LOG_E("get at socket object by device socket descriptor(%d) failed.", device_socket);
+        return;
+    }
+    tb22_sock = (struct tb22_sock_t*)(socket->user_data);
+    socket_index = tb22_sock->index;
+    
     /* 请求Socket接收线程收取数据 */
-    tb22_socket_event_send(tb22_sock->device, SET_EVENT(tb22_sock->index, TB22_EVENT_REQ_RECV_DATA));
+    tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_DATA));
 }
 
 static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_t size)
@@ -856,7 +871,7 @@ static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_
         return;
     }
     
-    tb22 = (struct at_device_tb22 *) device->user_data;
+    tb22 = (struct at_device_tb22 *)device->user_data;
     if (tb22->socket_data == RT_NULL)
     {
         LOG_D("%s device socket_data no config.", tb22->device_name);

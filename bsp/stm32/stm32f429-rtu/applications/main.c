@@ -2727,13 +2727,6 @@ __exit:
 rt_err_t req_data_acquisition(void)
 {
 	LOG_D("%s()", __FUNCTION__);
-    
-    /* 检查是否已连接到MQTT服务器 */
-    if (!paho_mqtt_is_connected(&mq_client))
-    {
-        LOG_E("%s mqtt is not connect!", __FUNCTION__);
-        return -RT_ERROR;
-    }
 	
 	return app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
 }
