@@ -51,6 +51,9 @@ struct at_device_tb22
 
     rt_bool_t power_status;
     rt_bool_t sleep_status;
+    
+    /* at_response_t对象内存池 */
+    rt_mp_t at_resp_mp;
 };
 
 #ifdef AT_USING_SOCKET
@@ -60,6 +63,12 @@ int tb22_socket_init(struct at_device *device);
 
 /* tb22 device class socket register */
 int tb22_socket_class_register(struct at_device_class *class);
+
+/* 从内存池分配at_response_t对象 */
+at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, rt_int32_t timeout);
+
+/* 释放at_response_t对象 */
+void tb22_free_at_resp(at_response_t resp);
 
 #endif /* AT_USING_SOCKET */
 

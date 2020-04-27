@@ -100,7 +100,8 @@ struct at_socket
     rt_sem_t recv_notice;
     rt_mutex_t recv_lock;
     rt_slist_t recvpkt_list;
-
+    rt_mp_t recvpkt_mp; // recv packet memory pool
+    
     /* timeout to wait for send or received data in milliseconds */
     int32_t recv_timeout;
     int32_t send_timeout;

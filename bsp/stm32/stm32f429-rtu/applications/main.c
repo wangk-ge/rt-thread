@@ -2304,7 +2304,7 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
         }
         
         uint8_t md5_bytes[16] = {0x00};
-        from_hex_str(md5.c_str, md5.len, md5_bytes, sizeof(md5_bytes));
+        util_from_hex_str(md5.c_str, md5.len, md5_bytes, sizeof(md5_bytes));
         
         /* 请求执行固件下载和升级(独立线程执行,回调函数不能阻塞) */
         rt_err_t ret = do_http_ota_request(&url, md5_bytes, &id, &version, firmware_size);
