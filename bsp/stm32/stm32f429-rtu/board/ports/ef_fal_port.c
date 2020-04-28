@@ -48,10 +48,10 @@
 static const ef_env default_env_set[] = {
         {"ulog_glb_lvl", "\0", 1}, // ULOG全局日志level,默认值0
         {"client_id", "\0\0\0\0", 4}, // 默认值0000000000
-        {"a_ip", "\x2F\x67\x16\xE7", 4}, // 默认值47.103.22.229
+        {"a_ip", STR_ITEM("47.103.22.229")}, // 默认值47.103.22.229
         {"a_port", "\xB0\x75", 2}, // 默认值1883
-        {"b_ip", "\x2F\x6F\xBA\x34", 4}, // 默认值47.111.186.52
-        {"b_port", "\x70\x17", 2}, // 默认值6000
+        {"b_ip", STR_ITEM("47.103.22.229")}, // 默认值47.103.22.229
+        {"b_port", "\xB0\x75", 2}, // 默认值1883
         {"acquisition", "\x05", 1}, // 默认值5
         {"cycle", "\x1E", 1}, // 默认值30
         /* uartXvariable */
@@ -104,11 +104,20 @@ static const ef_env default_env_set[] = {
         {"uart2length", "\x07\x00", 2}, // 默认值0x0007
         {"uart3length", "\x07\x00", 2}, // 默认值0x0007
         {"uart4length", "\x07\x00", 2}, // 默认值0x0007
-        /* uartXtype */
-        {"uart1type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
-        {"uart2type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
-        {"uart3type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
-        {"uart4type", "\x04", 1}, // 默认值0x04(0x00:有符号16位int,0x01无符号16位int,0x02:有符号32位int,0x03:无符号32位int,0x04:IEEE754浮点数)
+        /* uartXtype
+         *  0x00=有符号16位int
+         *  0x01=无符号16位int
+         *  0x02=有符号32位int(ABCD)
+         *  0x03=有符号32位int(CDAB)
+         *  0x04=无符号32位int(ABCD)
+         *  0x05=无符号32位int(CDAB)
+         *  0x06=IEEE754浮点数(ABCD)
+         *  0x07=IEEE754浮点数(CDAB)
+         */
+        {"uart1type", "\x06", 1}, // 默认值0x06
+        {"uart2type", "\x06", 1}, // 默认值0x06
+        {"uart3type", "\x06", 1}, // 默认值0x06
+        {"uart4type", "\x06", 1}, // 默认值0x06
 };
 
 static char log_buf[RT_CONSOLEBUF_SIZE];

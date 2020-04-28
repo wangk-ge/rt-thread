@@ -312,15 +312,15 @@ static const char* get_itemid(void)
     return cfg->itemid;
 }
 
-/* 采集UARTX数据 */
-static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_len)
+/* 采集UARTX数据(返回读取的寄存器个数) */
+static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_len)
 {
     LOG_D("%s(UART%d)", __FUNCTION__, x);
     
     /* 内部函数不做参数检查,由调用者保证参数有效性 */
     int index = x - 1;
     
-    uint32_t data_len = 0; // 采集的数据长度(字节数)
+    uint32_t data_len = 0; // 采集的数据长度(寄存器个数)
     
     RT_ASSERT(index < ARRAY_SIZE(rs485_dev_infos));
     modbus_t *mb_ctx = rs485_dev_infos[index].mb_ctx;
@@ -329,6 +329,7 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
     config_info *cfg = cfg_get();
     
     /* 采集数据 */
+    memset(data_buf, 0, buf_len * sizeof(data_buf[0])); // 先清零
     int i = 0;
     uint8_t variablecnt = cfg->uart_x_cfg[index].variablecnt; // 变量个数
     for (i = 0; i < variablecnt; ++i)
@@ -336,24 +337,13 @@ static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_l
         uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
         uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
         /* Reads the holding registers of remote device and put the data into an array */
-        uint16_t read_buf[MODBUS_MAX_READ_REGISTERS] = {0}; // 读取数据缓冲区
-        memset(read_buf, 0, sizeof(read_buf)); // 先清零
-        int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, read_buf); // 读取寄存器数据
+        int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
         if (read_bytes != length)
         {
             LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u)!", __FUNCTION__, startaddr, length, read_bytes);
         }
         
-        /* 保存到采集数据缓存 */
-        int j = 0;
-        for (j = 0; j < length; ++j)
-        {
-            uint16_t data = read_buf[j];
-            RT_ASSERT(data_len < buf_len);
-            data_buf[data_len++] = (uint8_t)(data >> 8); // 高字节
-            RT_ASSERT(data_len < buf_len);
-            data_buf[data_len++] = (uint8_t)(data & 0x00FF); // 低字节
-        }
+        data_len += (uint32_t)length;
     }
     
     return data_len;
@@ -365,8 +355,8 @@ static rt_err_t data_acquisition_and_save(void)
     LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
-    uint8_t data_buf[256] = {0};
-    uint32_t data_len = 0;
+    uint16_t data_buf[MODBUS_RTU_MAX_ADU_LENGTH / 2] = {0};
+    uint32_t data_len = 0; // 读取的寄存器个数
     char data_key[16] = "";
     
     /* 确保互斥修改FIFO队列 */
@@ -394,11 +384,11 @@ static rt_err_t data_acquisition_and_save(void)
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
-        /* 采集UARTX数据 */
-        data_len = uart_x_data_acquisition(x, data_buf, sizeof(data_buf));
+        /* 采集UARTX数据(返回读取的寄存器个数) */
+        data_len = uart_x_data_acquisition(x, data_buf, ARRAY_SIZE(data_buf));
         /* 保存UARTX数据 */
         snprintf(data_key, sizeof(data_key), "u%dd%u", x, pos); // Key="uXdN"
-        EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, data_len);
+        EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, (data_len * sizeof(data_buf[0])));
         if (ret != EF_NO_ERR)
         { // 保存失败
             /* 输出警告 */
@@ -495,7 +485,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
         /* 读取保存的历史数据 */
-        uint8_t data_buf[128] = {0};
+        uint16_t data_buf[MODBUS_RTU_MAX_ADU_LENGTH / 2] = {0};
         snprintf(data_key, sizeof(data_key), "u%dd%u", x, read_pos); // Key="uXdN"
         int len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
         if (len <= 0)
@@ -516,12 +506,12 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
             /* 每个寄存器16bit */
             uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 变量寄存器个数
             uint8_t data_type = cfg->uart_x_cfg[x - 1].type[i]; // 变量类型
-            uint8_t* var_data = (data_buf + data_read_pos); // 变量数据地址
-            uint16_t data_bytes = reg_num * sizeof(uint16_t); // 变量数据字节数
-            data_read_pos += data_bytes; // 指向下一个变量起始
+            uint16_t *var_data = (data_buf + data_read_pos); // 变量数据地址
+            data_read_pos += reg_num; // 指向下一个变量起始
 #ifndef TEST_NEW_FETURE
-            char hex_str_buf[128] = "";
-            util_to_hex_str(var_data, data_bytes, hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
+            char hex_str_buf[MODBUS_RTU_MAX_ADU_LENGTH * 2 + 1] = "";
+            util_to_hex_str((const uint8_t*)var_data, reg_num * sizeof(var_data[0]), 
+                hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
             json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
                 "\"%s\":\"%s\",", cfg->uart_x_cfg[x - 1].variable[i], hex_str_buf);
 #else
@@ -529,42 +519,58 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
             {
                 case 0x00: // 有符号16位int
                 {
-                    RT_ASSERT(data_bytes >= sizeof(int16_t));
-                    int16_t* int16_data= (int16_t*)var_data; // TODO字节序?
+                    int16_t int16_data= (int16_t)var_data[0];
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(*int16_data));
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(int16_data));
                     break;
                 }
                 case 0x01: // 无符号16位int
                 {
-                    RT_ASSERT(data_bytes >= sizeof(uint16_t));
-                    uint16_t* uint16_data= (uint16_t*)var_data; // TODO字节序?
+                    uint16_t uint16_data= (uint16_t)var_data[0];
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(*uint16_data));
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(uint16_data));
                     break;
                 }
-                case 0x02: // 有符号32位int
+                case 0x02: // 有符号32位int(ABCD)
                 {
-                    RT_ASSERT(data_bytes >= sizeof(int32_t));
-                    int32_t* int32_data= (int32_t*)var_data; // TODO字节序?
+                    int32_t int32_data = modbus_get_long_abcd(var_data);
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], *int32_data);
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
                     break;
                 }
-                case 0x03: // 无符号32位int
+                case 0x03: // 有符号32位int(CDAB)
                 {
-                    RT_ASSERT(data_bytes >= sizeof(uint32_t));
-                    uint32_t* uint32_data= (uint32_t*)var_data; // TODO字节序?
+                    int32_t int32_data = modbus_get_long_cdab(var_data);
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], *uint32_data);
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
                     break;
                 }
-                case 0x04: // IEEE754浮点数
+                case 0x04: // 无符号32位int(ABCD)
                 {
-                    RT_ASSERT(data_bytes >= sizeof(float));
-                    float* float_data = (float*)var_data; // TODO字节序?
+                    uint32_t uint32_data = (uint32_t)modbus_get_long_abcd(var_data);
                     json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], *float_data);
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                    break;
+                }
+                case 0x05: // 无符号32位int(CDAB)
+                {
+                    uint32_t uint32_data = (uint32_t)modbus_get_long_cdab(var_data);
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                    break;
+                }
+                case 0x06: // IEEE754浮点数(ABCD)
+                {
+                    float float_data = modbus_get_float_abcd(var_data);
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    break;
+                }
+                case 0x07: // IEEE754浮点数(CDAB)
+                {
+                    float float_data = modbus_get_float_cdab(var_data);
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
                     break;
                 }
                 default:
@@ -723,21 +729,18 @@ static uint32_t read_config_info_json(char* json_data_buf, uint32_t json_buf_len
     LOG_D("%s()", __FUNCTION__);
     
     config_info *cfg = cfg_get();
-    char a_ip[32] = "";
-    
-    inet_ntoa_r(cfg->a_ip, a_ip, sizeof(a_ip));
-    char b_ip[32] = "";
-    
-    inet_ntoa_r(cfg->b_ip, b_ip, sizeof(b_ip));
     int rssi = 0;
-    
-    get_modem_rssi(&rssi);
+    int ret = get_modem_rssi(&rssi);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s get_modem_rssi failed(%d)!", __FUNCTION__, ret);
+    }
     
     rt_int32_t json_data_len = rt_snprintf(json_data_buf, json_buf_len, 
         "{\"cycleSet\":\"%u\",\"acquisitionSet\":\"%u\",\"autoControlSet\":\"0\","
         "\"aIPSet\":\"%s\",\"aPortSet\":\"%u\",\"bIPSet\":\"%s\",\"bPortSet\":\"%u\","
         "\"rssi\":\"%d\",\"version\":\"%s\"}", cfg->cycle, cfg->acquisition, 
-        a_ip, cfg->a_port, b_ip, cfg->b_port, rssi, SW_VERSION);
+        cfg->a_ip, cfg->a_port, cfg->b_ip, cfg->b_port, rssi, SW_VERSION);
     
     return (uint32_t)json_data_len;
 }
@@ -811,15 +814,28 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     }
     
     /* a_ip[可缺省] */
-    in_addr_t a_ip_addr = 0;
     if (!strref_is_empty(a_ip))
     {
-        char a_ip_str[32] = "";
-        strref_str_cpy(a_ip_str, sizeof(a_ip_str), a_ip);
-        a_ip_addr = inet_addr(a_ip_str);
-        if (a_ip_addr == IPADDR_NONE)
+        char a_ip_str[64] = "";
+        if (a_ip->len > (sizeof(a_ip_str) - 1))
         {
-            LOG_E("%s inet_addr(%s) error!", __FUNCTION__, a_ip_str);
+            LOG_E("%s length of addr(%.*s)>%d!", __FUNCTION__, a_ip->len, a_ip->c_str, (sizeof(a_ip_str) - 1));
+            /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
+            return 420;
+        }
+        
+        strref_str_cpy(a_ip_str, sizeof(a_ip_str), a_ip);
+        
+        /* 检查地址有效性 */
+        bool addr_valid = util_is_ip_valid(a_ip_str);
+        if (!addr_valid)
+        {
+            addr_valid = util_is_domainname_valid(a_ip_str);
+        }
+        
+        if (!addr_valid)
+        {
+            LOG_E("%s addr(%s) is invalid!", __FUNCTION__, a_ip_str);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -845,15 +861,28 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     }
     
     /* b_ip[可缺省] */
-    in_addr_t b_ip_addr = 0;
     if (!strref_is_empty(b_ip))
     {
-        char b_ip_str[32] = "";
-        strref_str_cpy(b_ip_str, sizeof(b_ip_str), b_ip);
-        b_ip_addr = inet_addr(b_ip_str);
-        if (b_ip_addr == IPADDR_NONE)
+        char b_ip_str[64] = "";
+        if (b_ip->len > (sizeof(b_ip_str) - 1))
         {
-            LOG_E("%s inet_addr(%s) error!", __FUNCTION__, b_ip_str);
+            LOG_E("%s length of addr(%.*s)>%d!", __FUNCTION__, b_ip->len, b_ip->c_str, (sizeof(b_ip_str) - 1));
+            /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
+            return 420;
+        }
+        
+        strref_str_cpy(b_ip_str, sizeof(b_ip_str), b_ip);
+        
+        /* 检查地址有效性 */
+        bool addr_valid = util_is_ip_valid(b_ip_str);
+        if (!addr_valid)
+        {
+            addr_valid = util_is_domainname_valid(b_ip_str);
+        }
+        
+        if (!addr_valid)
+        {
+            LOG_E("%s addr(%s) is invalid!", __FUNCTION__, b_ip_str);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -926,10 +955,10 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     /* a_ip */
     if (!strref_is_empty(a_ip))
     {
-        EfErrCode ef_ret = ef_set_env_blob("a_ip", &a_ip_addr, sizeof(a_ip_addr));
+        EfErrCode ef_ret = ef_set_env_blob("a_ip", a_ip->c_str, a_ip->len);
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("%s ef_set_env_blob(a_ip,0x%x) error(%d)!", __FUNCTION__, a_ip_addr, ef_ret);
+            LOG_E("%s ef_set_env_blob(a_ip,%.*s) error(%d)!", __FUNCTION__, a_ip->len, a_ip->c_str, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -950,10 +979,10 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     /* b_ip */
     if (!strref_is_empty(b_ip))
     {
-        EfErrCode ef_ret = ef_set_env_blob("b_ip", &b_ip_addr, sizeof(b_ip_addr));
+        EfErrCode ef_ret = ef_set_env_blob("b_ip", b_ip->c_str, b_ip->len);
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("%s ef_set_env_blob(b_ip,0x%x) error(%d)!", __FUNCTION__, b_ip_addr, ef_ret);
+            LOG_E("%s ef_set_env_blob(b_ip,%.*s) error(%d)!", __FUNCTION__, b_ip->len, b_ip->c_str, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -1063,6 +1092,62 @@ static void mqtt_offline_callback(mqtt_client *client)
     LOG_D("%s()", __FUNCTION__);
     
     app_send_msg(APP_MSG_MQTT_CLIENT_OFFLINE, RT_NULL); // MQTT客户端已下线
+}
+
+/* 上报数据 */
+static rt_err_t app_data_report(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    mqtt_publish_data_info *pub_info = mqtt_alloc_publish_data_info();
+    RT_ASSERT(pub_info != RT_NULL);
+    char* topic_buf = pub_info->topic;
+    char* json_data_buf = pub_info->payload;
+    
+    /* 编码JSON采集数据并发送 */
+    {
+		time_t time_stamp = time(RT_NULL); // 上报时间戳
+        rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
+            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
+			"\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
+			get_clientid(), time_stamp, get_itemid());
+        
+        /* 读取最新采集的数据(JSON格式)  */
+        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
+        if (read_len <= 0)
+        {
+            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+        json_data_len += read_len;
+        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
+        json_data_buf[json_data_len++] = '}';
+        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
+        json_data_buf[json_data_len] = '\0';
+        
+        /* 发布/sys/${productKey}/${deviceCode}/telemetry/real_time_data */
+        {
+            rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_devicecode());
+            LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
+            int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, topic_buf, json_data_buf, json_data_len);
+            if (mqtt_ret != PAHO_SUCCESS)
+            {
+                LOG_E("%s mqtt publish(%s) error(%d)", __FUNCTION__, topic_buf, mqtt_ret);
+                ret = -RT_ERROR;
+                goto __exit;
+            }
+        }
+    }
+    
+__exit:
+    if (pub_info != NULL)
+    {
+        mqtt_free_publish_data_info(pub_info);
+    }
+    
+    return ret;
 }
 
 static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
@@ -2532,14 +2617,8 @@ static rt_err_t app_init(void)
         
         /* 设置服务器地址和端口 */
         {
-#ifndef TEST_NEW_FETURE
-            char addr[32] = "";
-            inet_ntoa_r(cfg->a_ip, addr, sizeof(addr));
-            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", addr, cfg->a_port);
-#else
-            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
-			//rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://47.103.22.229:1883");
-#endif
+            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", cfg->a_ip, cfg->a_port);
+            //rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
             mq_client.uri = mqtt_server_url;
             LOG_D("%s mqtt_server_url %s", __FUNCTION__, mqtt_server_url);
         }
@@ -2714,62 +2793,6 @@ static rt_err_t mqtt_client_stop(rt_int32_t timeout)
     return RT_EOK;
 }
 
-/* 上报数据 */
-static rt_err_t app_data_report(void)
-{
-    LOG_D("%s()", __FUNCTION__);
-    
-    rt_err_t ret = RT_EOK;
-    mqtt_publish_data_info *pub_info = mqtt_alloc_publish_data_info();
-    RT_ASSERT(pub_info != RT_NULL);
-    char* topic_buf = pub_info->topic;
-    char* json_data_buf = pub_info->payload;
-    
-    /* 编码JSON采集数据并发送 */
-    {
-		time_t time_stamp = time(RT_NULL); // 上报时间戳
-        rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
-			"\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
-			get_clientid(), time_stamp, get_itemid());
-        
-        /* 读取最新采集的数据(JSON格式)  */
-        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
-        if (read_len <= 0)
-        {
-            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
-            ret = -RT_ERROR;
-            goto __exit;
-        }
-        json_data_len += read_len;
-        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
-        json_data_buf[json_data_len++] = '}';
-        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
-        json_data_buf[json_data_len] = '\0';
-        
-        /* 发布/sys/${productKey}/${deviceCode}/telemetry/real_time_data */
-        {
-            rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_devicecode());
-            LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
-            int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, topic_buf, json_data_buf, json_data_len);
-            if (mqtt_ret != PAHO_SUCCESS)
-            {
-                LOG_E("%s mqtt publish(%s) error(%d)", __FUNCTION__, topic_buf, mqtt_ret);
-                ret = -RT_ERROR;
-                goto __exit;
-            }
-        }
-    }
-    
-__exit:
-    if (pub_info != NULL)
-    {
-        mqtt_free_publish_data_info(pub_info);
-    }
-    
-    return ret;
-}
-
 /* 请求采集数据 */
 
 rt_err_t req_data_acquisition(void)
@@ -2802,6 +2825,14 @@ int main(void)
     if (ret != RT_EOK)
     {
         LOG_E("%s app_init error(%d)!", __FUNCTION__, ret);
+        goto __exit;
+    }
+    
+    /* 启动定时采集 */
+    ret = rt_timer_start(acquisition_timer);
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s start acquisition timer failed(%d)!", __FUNCTION__, ret);
         goto __exit;
     }
     
@@ -2925,6 +2956,13 @@ int main(void)
     }
     
 __exit:
+    
+    /* 停止定时采集 */
+    ret = rt_timer_stop(acquisition_timer);
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s stop acquisition timer failed(%d)!", __FUNCTION__, ret);
+    }
     
     LOG_D("main exit");
     

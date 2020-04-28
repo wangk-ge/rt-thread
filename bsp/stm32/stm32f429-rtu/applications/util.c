@@ -57,6 +57,169 @@ extern   "C"
 **                             Public Function                                *
 **----------------------------------------------------------------------------*/
 /*************************************************
+* Function: util_is_ip_valid
+* Description: 判断字符串是否为有效的IP地址
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+bool util_is_ip_valid(const char* ip)
+{
+	bool ret = false;
+#if 0
+	int n[4] = {0};
+	char c[4] = {0};
+
+	// 参数检查
+	if (NULL == ip || '\0' == ip[0])
+	{
+		ret = false;
+		goto __exit;
+	}
+
+	if (sscanf(ip, "%d%c%d%c%d%c%d%c",
+				 &n[0], &c[0], &n[1], &c[1],
+				 &n[2], &c[2], &n[3], &c[3]) == 7)
+	{
+		int i = 0;
+		for(i = 0; i < 3; ++i)
+		{
+			if (c[i] != '.')
+			{
+				ret = false;
+				goto __exit;
+			}
+		}
+		for(i = 0; i < 4; ++i)
+		{
+			if ((n[i] > 255) || (n[i] < 0))
+			{
+				ret = false;
+				goto __exit;
+			}
+		}
+		ret = true;
+	}
+#else
+	/* 分解为4个子串 */
+	c_str_ref str_ref_list[4] = {{0, NULL},};
+	uint32_t i = 0;
+	uint32_t list_len = 0;
+	
+	// 参数检查
+	if (NULL == ip || '\0' == ip[0])
+	{
+		ret = false;
+		goto __exit;
+	}
+	
+	// 第一个子串起始地址和长度初始化
+	str_ref_list[list_len].c_str = ip;
+	str_ref_list[list_len].len = 0;
+	while ('\0' != ip[i])
+	{
+		if ('.' == ip[i])
+		{
+			++list_len;
+			if (list_len >= ARRAY_SIZE(str_ref_list))
+			{ // 子串超过4个
+				ret = false;
+				goto __exit;
+			}
+			// 下一个子串起始地址和长度初始化
+			str_ref_list[list_len].c_str = ip + i + 1;
+			str_ref_list[list_len].len = 0;
+		}
+		else
+		{
+			++(str_ref_list[list_len].len);
+		}
+		i++;
+	}
+	if (list_len < ARRAY_SIZE(str_ref_list))
+	{ // 最后一个子串
+		++list_len;
+	}
+
+	// 子串不足4个
+	if (ARRAY_SIZE(str_ref_list) != list_len)
+	{
+		ret = false;
+		goto __exit;
+	}
+
+	// 检查每个子串有效性
+	for (i = 0; i < list_len; ++i)
+	{
+		const c_str_ref* str_ref = &(str_ref_list[i]);
+		if ((str_ref->len <= 0) || (str_ref->len > 3))
+		{ // 子串长度无效
+			ret = false;
+			goto __exit;
+		}
+		uint32_t j = 0;
+		for (j = 0; j < str_ref->len; ++j)
+		{
+			if (!isdigit(str_ref->c_str[j]))
+			{ // 包含非数字字符
+				ret = false;
+				goto __exit;
+			}
+		}
+		int32_t tmp = atoi(str_ref->c_str);
+		if ((tmp > 255) || (tmp < 0))
+		{ // 超范围
+			ret = false;
+			goto __exit;
+		}
+	}
+	ret = true;
+#endif
+
+__exit:
+	return ret;
+}
+
+/*************************************************
+* Function: util_is_domainname_valid
+* Description: 判断字符串是否为有效的域名
+* Author:
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+bool util_is_domainname_valid(const char* domainname)
+{
+	bool ret = true;
+
+	/*
+			域名中只能包含以下字符：
+	　　26个字母(a~z)不区分大小写。
+	　　0、1、2、3、4、5、6、7、8、9。
+	　　"-" 中横线。
+	*/
+	uint32_t i = 0;
+	while ('\0' != domainname[i])
+	{
+		if (((domainname[i] >= 'A') && (domainname[i] <= 'Z'))
+			|| ((domainname[i] >= 'a') && (domainname[i] <= 'z'))
+			|| ((domainname[i] >= '0') && (domainname[i] <= '9'))
+			|| ('-' == domainname[i]) || ('.' == domainname[i]))
+		{ // 合法字符
+			i++;
+		}
+		else
+		{ // 非法字符
+			ret = false;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/*************************************************
 * Function: util_str_to_u32
 * Description: 字符串转32位无符号整数
 * Author: 
