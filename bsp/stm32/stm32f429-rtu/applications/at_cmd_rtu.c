@@ -18,21 +18,13 @@
 #include <at_device.h>
 #include "common.h"
 #include "config.h"
+#include "app.h"
 
 #define LOG_TAG              "main.at_cmd_rtu"
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-#define JSON_DATA_BUF_LEN (1024)
-
-/* 清空历史数据 */
-extern rt_err_t clear_history_data(void);
-
-/* 读取前n个时刻的一条历史数据(JSON格式) */
-extern uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len, bool need_timestamp);
-
-/* 取得模组信号强度指示 */
-extern int get_modem_rssi(int *rssi);
+#define JSON_DATA_BUF_LEN (APP_MP_BLOCK_SIZE)
 
 /* RTU相关AT指令 */
 
@@ -476,12 +468,8 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
         return AT_RESULT_PARSE_FAILE;
     }
     
-    char* json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        return AT_RESULT_PARSE_FAILE;
-    }
+    char* json_data_buf = (char*)app_mp_alloc();
+    RT_ASSERT(json_data_buf != NULL)
     
     /* 读取前n个时刻的一条历史数据(JSON格式)  */
     uint32_t read_len = read_history_data_json(n, json_data_buf, JSON_DATA_BUF_LEN, true);
@@ -496,7 +484,7 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
         at_server_printfln("+DATARD: ");
     }
     
-    rt_free(json_data_buf);
+    app_mp_free(json_data_buf);
     json_data_buf = NULL;
     
     return AT_RESULT_OK;

@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include "common.h"
 #include "strref.h"
+#include "app.h"
 
 #define LOG_TAG              "main.at_cmd_uart"
 #define LOG_LVL              LOG_LVL_DBG
@@ -58,36 +59,26 @@ static at_result_t at_uartxvariable_println(char uart_x)
     char cfg_key[32] = "uartXvariable";
     cfg_key[STR_LEN("uart")] = uart_x;
     
-    /* 取得配置数据长度 */
-    size_t data_len = 0;
-    ef_get_env_blob(cfg_key, RT_NULL, 0, &data_len);
-    if (data_len > 0)
+    /* 分配内存 */
+    char *var_list = (char*)app_mp_alloc();
+    RT_ASSERT(var_list != RT_NULL)
+    
+    /* 读取配置 */
+    size_t data_len = ef_get_env_blob(cfg_key, var_list, APP_MP_BLOCK_SIZE, RT_NULL);
+    if (data_len <= 0)
     {
-        /* 分配内存 */
-        char *var_list = (char*)rt_malloc(data_len + 1);
-        if (var_list == RT_NULL)
-        {
-            LOG_E("%s rt_malloc(%u) failed!", __FUNCTION__, data_len);
-            return AT_RESULT_FAILE;
-        }
-        
-        /* 读取配置 */
-        size_t read_len = ef_get_env_blob(cfg_key, var_list, data_len, RT_NULL);
-        if (read_len != data_len)
-        {
-            /* 释放内存 */
-            rt_free(var_list);
-            
-            LOG_E("%s ef_get_env_blob(%s) error(data_len=%u,read_len=%u)!", __FUNCTION__, cfg_key, data_len, read_len);
-            return AT_RESULT_FAILE;
-        }
-        var_list[data_len] = '\0';
-        
-        at_server_printfln("+UART%cVARIABLE: %s", uart_x, var_list);
-        
         /* 释放内存 */
-        rt_free(var_list);
+        app_mp_free(var_list);
+        
+        LOG_E("%s ef_get_env_blob(%s) error(data_len=%u)!", __FUNCTION__, cfg_key, data_len);
+        return AT_RESULT_FAILE;
     }
+    var_list[data_len] = '\0';
+    
+    at_server_printfln("+UART%cVARIABLE: %s", uart_x, var_list);
+    
+    /* 释放内存 */
+    app_mp_free(var_list);
 
     return AT_RESULT_OK;
 }
