@@ -973,13 +973,17 @@ static int tb22_init(struct at_device *device)
     }
 
     /* initialize AT client */
-    at_client_init(tb22->client_name, tb22->recv_bufsz);
+    ret = at_client_init(tb22->client_name, tb22->recv_bufsz);
+    if (ret != RT_EOK)
+    {
+        LOG_E("at_client_init(%s) failed(%d)!", tb22->client_name, ret);
+        //ret = -RT_ERROR;
+		goto __exit;
+    }
 
     device->client = at_client_get(tb22->client_name);
     if (device->client == RT_NULL)
     {
-		rt_mp_delete(tb22->at_resp_mp);
-		tb22->at_resp_mp = RT_NULL;
         LOG_E("get AT client(%s) failed.", tb22->client_name);
         ret = -RT_ERROR;
 		goto __exit;
@@ -987,15 +991,19 @@ static int tb22_init(struct at_device *device)
 
     /* register URC data execution function  */
 #ifdef AT_USING_SOCKET
-    tb22_socket_init(device);
+    ret = tb22_socket_init(device);
+    if (ret != RT_EOK)
+    {
+        LOG_E("tb22_socket_init failed(%d)!", ret);
+        //ret = -RT_ERROR;
+		goto __exit;
+    }
 #endif
 
     /* add tb22 device to the netdev list */
     device->netdev = tb22_netdev_add(tb22->device_name);
     if (device->netdev == RT_NULL)
     {
-		rt_mp_delete(tb22->at_resp_mp);
-		tb22->at_resp_mp = RT_NULL;
         LOG_E("add netdev(%s) failed.", tb22->device_name);
         ret = -RT_ERROR;
 		goto __exit;
@@ -1014,9 +1022,9 @@ static int tb22_init(struct at_device *device)
     ret = tb22_netdev_set_up(device->netdev);
 	if (ret != RT_EOK)
 	{
-		rt_mp_delete(tb22->at_resp_mp);
-		tb22->at_resp_mp = RT_NULL;
 		LOG_E("tb22_netdev_set_up failed.");
+        //ret = -RT_ERROR;
+		//goto __exit;
 	}
 	
 __exit:
@@ -1118,7 +1126,7 @@ at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, r
     resp->line_counts = 0;
     resp->timeout = timeout;
     
-    LOG_D("%s at_resp_mp=0x%08x, resp=0x%08x", __FUNCTION__, tb22->at_resp_mp, resp);
+    //LOG_D("%s at_resp_mp=0x%08x, resp=0x%08x", __FUNCTION__, tb22->at_resp_mp, resp);
 	
 	return resp;
 }
@@ -1126,7 +1134,7 @@ at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, r
 /* 释放at_response_t对象 */
 void tb22_free_at_resp(at_response_t resp)
 {
-    LOG_D("%s resp=0x%08x", __FUNCTION__, resp);
+    //LOG_D("%s resp=0x%08x", __FUNCTION__, resp);
     
 	if (resp != RT_NULL)
 	{
