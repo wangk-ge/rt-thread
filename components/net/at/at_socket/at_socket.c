@@ -89,6 +89,7 @@ static size_t at_recvpkt_put(struct at_socket *sock, rt_slist_t *rlist, const ch
 
     //pkt = (at_recv_pkt_t) rt_calloc(1, sizeof(struct at_recv_pkt));
     pkt = (at_recv_pkt_t) rt_mp_alloc(sock->recvpkt_mp, RT_WAITING_FOREVER);
+    memset(pkt, 0, sizeof(struct at_recv_pkt));
     if (pkt == RT_NULL)
     {
         LOG_E("No memory for receive packet table!");
@@ -378,7 +379,7 @@ static struct at_socket *alloc_socket_by_device(struct at_device *device)
     
     rt_snprintf(name, RT_NAME_MAX, "%s%d", "at_skt", idx);
     /* create AT socket receive packet memory pool */
-    if((sock->recvpkt_mp = rt_mp_create(name, AT_SOCKET_RCV_PKT_CNT, sizeof(at_recv_pkt_t))) == RT_NULL)
+    if((sock->recvpkt_mp = rt_mp_create(name, AT_SOCKET_RCV_PKT_CNT, sizeof(struct at_recv_pkt))) == RT_NULL)
     {
         LOG_E("No memory for socket receive packet memory pool create.");
         rt_mutex_delete(sock->recv_lock);
