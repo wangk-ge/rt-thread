@@ -27,6 +27,7 @@
 #include <rtthread.h>
 #include "common.h"
 #include "util.h"
+#include "strref.h"
 
 #include <at_device_tb22.h>
 
@@ -35,8 +36,8 @@
 
 #if defined(AT_DEVICE_USING_TB22) && defined(AT_USING_SOCKET)
 
-#define TB22_MODULE_SEND_MAX_SIZE           1460 // AT+NSOSD最大传输1358字节
-#define TB22_MODULE_RECV_MAX_SIZE           1460 // AT+NSORF最大传输1358字节
+#define TB22_MODULE_SEND_MAX_SIZE           512 // AT+NSOSD最大传输1358字节
+#define TB22_MODULE_RECV_MAX_SIZE           512 // AT+NSORF最大读取1358字节
 
 #define TB22_SOCK_RECV_PACKET_NUM           32 // Socket接收包个数(用于内存池分配)
 #define TB22_SOCK_RECV_PACKET_SIZE          64 // Socket接收包大小(用于内存池分配)
@@ -62,9 +63,9 @@
 
 
 /* 发送数据缓冲区大小(字节数) */
-#define TB22_SEND_BUF_SIZE             (TB22_MODULE_SEND_MAX_SIZE * 2)
+#define TB22_SOCK_SEND_BUF_SIZE             ((TB22_MODULE_SEND_MAX_SIZE * 2) + 1)
 /* 接收数据缓冲区大小(字节数) */
-#define TB22_RECV_BUF_SIZE             (TB22_MODULE_RECV_MAX_SIZE * 2)
+#define TB22_SOCK_RECV_BUF_SIZE             (sizeof(struct at_response) + (TB22_MODULE_RECV_MAX_SIZE * 2) + 128)
 
 /* TB22设备Socket信息 */
 struct tb22_sock_t {
@@ -86,10 +87,10 @@ static at_evt_cb_t at_evt_cb_set[] = {
 };
 
 /* 发送缓冲区 */
-static char at_send_buf[TB22_SEND_BUF_SIZE + 1] = "";
+static char at_sock_send_buf[TB22_SOCK_SEND_BUF_SIZE] = "";
 
 /* 接收缓冲区 */
-static char at_recv_buf[TB22_RECV_BUF_SIZE + 1] = "";
+static __align(4) char at_sock_recv_buf[TB22_SOCK_RECV_BUF_SIZE] = "";
 
 /* TB22设备Socket列表 */
 static struct tb22_sock_t tb22_sock_list[AT_DEVICE_TB22_SOCKETS_NUM];
@@ -172,49 +173,101 @@ static struct at_socket *at_get_socket_by_device_socket(struct at_device *device
 }
 
 /**
+ * init the at response object for socket recv at
+ *
+ */
+static at_response_t tb22_init_sock_recv_at_resp(rt_size_t line_num, rt_int32_t timeout)
+{
+    at_response_t resp = (at_response_t)at_sock_recv_buf;
+    memset(resp, 0, sizeof(struct at_response));
+	resp->buf = (char*)resp + sizeof(struct at_response);
+    resp->buf_size = sizeof(at_sock_recv_buf) - sizeof(struct at_response);
+    resp->line_num = line_num;
+    resp->timeout = timeout;
+    
+    //LOG_D("%s", __FUNCTION__);
+	
+	return resp;
+}
+
+/**
  * do sock recv work(run in socket recv thread)
  *
  */
 static void tb22_do_sock_recv_work(struct at_device *device, int socket_index)
 {
-    RT_ASSERT(socket_index < ARRAY_SIZE(device->sockets));
+    RT_ASSERT(socket_index < device->class->socket_num);
     
     struct at_device_tb22 *tb22 = (struct at_device_tb22*)(device->user_data);
     struct at_socket *socket = &(device->sockets[socket_index]);
     struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
-    RT_ASSERT(tb22_sock != RT_NULL);
+    if (tb22_sock == RT_NULL)
+    {
+        LOG_E("%s tb22_sock is NULL!", __FUNCTION__);
+        return;
+    }
     int device_socket = tb22_sock->device_socket;
     
     LOG_D("%s socket_index(%d) device_socket(%d)", __FUNCTION__, socket_index, device_socket);
     
-    /* 分配AT Response对象 */
-    at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
-    RT_ASSERT(resp);
+    /* 初始化AT Response对象 */
+    at_response_t resp = tb22_init_sock_recv_at_resp(0, rt_tick_from_millisecond(10 * 1000));
+    RT_ASSERT(resp != RT_NULL);
 
     /* 收取Socket数据 */
     while (1)
     { // 收取所有数据
-        int rem_len = 0; // 剩余数据长度
-        int sock = 0, port = 0, bytes_len = 0;
-        char ip[32] = "";
-        
         if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, TB22_MODULE_RECV_MAX_SIZE) != RT_EOK)
         {
             LOG_E("at_obj_exec_cmd failed!");
             break;
         }
         
-        // 每个HEX占两个字节再加上字符串结尾'\0'
-        if (at_resp_parse_line_args(resp, 2, "%d,%[^,],%d,%d,%[^,],%d", &sock, ip, &port, &bytes_len, at_recv_buf, &rem_len) <= 0)
+        LOG_I("%s line_counts=%d", __FUNCTION__, resp->line_counts);
+        
+        /* 找到<socket>,<ip_addr>,<port>,<length>,<data>,<remaining_length>这行响应 */
+        c_str_ref param_list[7] = {{0}};
+        uint32_t param_count = 0;
+        int sock = 0;
+        int i = 0;
+        for (i = 1; i <= resp->line_counts; ++i)
+        { // 为了处理相应中间夹杂着主动上报干扰的情况
+            const char* resp_line_buf = at_resp_get_line(resp, i);
+            if (resp_line_buf == RT_NULL)
+            {
+                continue;
+            }
+            
+            /* 拆分参数列表并检查参数个数 */
+            c_str_ref str_ref = { strlen(resp_line_buf), resp_line_buf };
+            param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
+            if (param_count == 6)
+            {
+                sock = strref_to_int(&(param_list[0]));
+                if(sock == device_socket)
+                {
+                    break;
+                }
+            }
+        }
+        
+        /* 是否找到有效的相应 */
+        if ((param_count != 6) || (sock != device_socket))
         {
-            LOG_E("at_resp_parse_line_args failed!");
+            LOG_E("%s response is invalid!", __FUNCTION__);
             break;
         }
-        RT_ASSERT(device_socket == sock);
+
+        int port = strref_to_int(&(param_list[2]));
+        int bytes_len = strref_to_int(&(param_list[3])); // 数据长度(字节数)
+        const char* hex_str = param_list[4].c_str; // 数据(HEX字符串格式)
+        uint32_t hex_str_len = (uint32_t)(param_list[4].len); // 数据长度(HEX字符串格式)
+        int rem_len = strref_to_int(&(param_list[5])); // 剩余数据长度
         
-        if (bytes_len <= 0)
+        if ((hex_str_len != (2 * bytes_len)) 
+            || (bytes_len <= 0))
         {
-            LOG_E("bytes_len(%d) is invalid!", bytes_len);
+            LOG_E("%s bytes_len(%d) is invalid!", __FUNCTION__, bytes_len);
             break;
         }
         
@@ -223,9 +276,9 @@ static void tb22_do_sock_recv_work(struct at_device *device, int socket_index)
         while (push_len < bytes_len)
         {
             /* 待推送的HEX格式字符串数据 */
-            const char* hex_str = at_recv_buf + push_len;
-            /* HEX格式字符串数据长度(每个HEX占两个字节) */
-            uint32_t hex_str_len = (uint32_t)((bytes_len - push_len) * 2);
+            const char* push_hex_str = hex_str + (push_len * 2);
+            /* 待推送的HEX格式字符串数据长度(每个HEX占两个字节) */
+            uint32_t push_hex_str_len = (uint32_t)((bytes_len - push_len) * 2);
             
             /* 在内存池分配一块接收缓冲区(固定大小TB22_SOCK_RECV_PACKET_SIZE) */
             uint32_t recv_buf_len = TB22_SOCK_RECV_PACKET_SIZE;
@@ -233,7 +286,7 @@ static void tb22_do_sock_recv_work(struct at_device *device, int socket_index)
             RT_ASSERT(recv_buf != RT_NULL);
             
             /* HEX格式字符串转换二进制数据 */
-            uint32_t data_len = util_from_hex_str(hex_str, hex_str_len, 
+            uint32_t data_len = util_from_hex_str(push_hex_str, push_hex_str_len, 
                 (uint8_t*)recv_buf, (uint32_t)recv_buf_len);
             
             /* 推送到上层(notice the receive buffer and buffer size) */
@@ -251,9 +304,6 @@ static void tb22_do_sock_recv_work(struct at_device *device, int socket_index)
             break;
         }
     }
-    
-    /* 释放AT Response对象 */
-    tb22_free_at_resp(resp);
 }
 
 /**
@@ -351,7 +401,7 @@ static int tb22_socket_close(struct at_socket *socket)
     int device_socket = tb22_sock->device_socket;
 
     at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
-    RT_ASSERT(resp);
+    RT_ASSERT(resp != RT_NULL);
     
     result = at_obj_exec_cmd(device->client, resp, "AT+NSOCL=%d", device_socket);
 
@@ -391,7 +441,7 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     struct at_device *device = (struct at_device *) socket->device;
     struct tb22_sock_t *tb22_sock = RT_NULL;
 
-    RT_ASSERT(ip);
+    RT_ASSERT(ip != RT_NULL);
     RT_ASSERT(port >= 0);
 
     if ( ! is_client)
@@ -405,7 +455,7 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     }
     
     resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
-    RT_ASSERT(resp);
+    RT_ASSERT(resp != RT_NULL);
         
     /* create socket */
     result = at_obj_exec_cmd(device->client, resp, "AT+NSOCR=STREAM,6,0,1");
@@ -492,7 +542,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     //rt_mutex_t lock = device->client->lock;
     at_response_t resp = RT_NULL;
 
-    RT_ASSERT(buff);
+    RT_ASSERT(buff != RT_NULL);
     
     //rt_mutex_take(lock, RT_WAITING_FOREVER);
 
@@ -513,13 +563,13 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         
         /* 数据转换成hex字符串 */
         cur_pkt_size = util_to_hex_str((const uint8_t*)buff + sent_size, cur_pkt_size, 
-            at_send_buf, sizeof(at_send_buf));
+            at_sock_send_buf, sizeof(at_sock_send_buf));
         
         resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
-        RT_ASSERT(resp);
+        RT_ASSERT(resp != RT_NULL);
     
         /* send the "AT+NSOSD" commands to AT server. */
-        if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_send_buf, tb22_sock->sequence) < 0)
+        if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_sock_send_buf, tb22_sock->sequence) < 0)
         {
             result = -RT_ERROR;
             goto __exit;
@@ -597,8 +647,8 @@ int tb22_domain_resolve(const char *name, char ip[16])
     struct at_device_tb22 *tb22 = RT_NULL;
     rt_mutex_t lock = RT_NULL;
 
-    RT_ASSERT(name);
-    RT_ASSERT(ip);
+    RT_ASSERT(name != RT_NULL);
+    RT_ASSERT(ip != RT_NULL);
 
     device = at_device_get_first_initialized();
     if (device == RT_NULL)
@@ -613,7 +663,7 @@ int tb22_domain_resolve(const char *name, char ip[16])
     
     /* the maximum response time is 60 seconds, but it set to 10 seconds is convenient to use. */
     at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
-    RT_ASSERT(resp);
+    RT_ASSERT(resp != RT_NULL);
 
     /* clear TB22_EVENT_DOMAIN_OK */
     tb22_socket_event_recv(device, TB22_EVENT_DOMAIN_OK, 0, RT_EVENT_FLAG_OR);
@@ -868,7 +918,7 @@ int tb22_socket_init(struct at_device *device)
 {
     int ret = RT_EOK;
     
-    RT_ASSERT(device);
+    RT_ASSERT(device != RT_NULL);
     
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
     
@@ -927,7 +977,7 @@ __err:
 
 int tb22_socket_class_register(struct at_device_class *class)
 {
-    RT_ASSERT(class);
+    RT_ASSERT(class != RT_NULL);
 
     class->socket_num = AT_DEVICE_TB22_SOCKETS_NUM;
     class->socket_ops = &tb22_socket_ops;

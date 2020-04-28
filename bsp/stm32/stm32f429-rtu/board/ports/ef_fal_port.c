@@ -49,9 +49,9 @@ static const ef_env default_env_set[] = {
         {"ulog_glb_lvl", "\0", 1}, // ULOG全局日志level,默认值0
         {"client_id", "\0\0\0\0", 4}, // 默认值0000000000
         {"a_ip", STR_ITEM("47.103.22.229")}, // 默认值47.103.22.229
-        {"a_port", "\xB0\x75", 2}, // 默认值1883
+        {"a_port", "\x5B\x07", 2}, // 默认值1883
         {"b_ip", STR_ITEM("47.103.22.229")}, // 默认值47.103.22.229
-        {"b_port", "\xB0\x75", 2}, // 默认值1883
+        {"b_port", "\x5B\x07", 2}, // 默认值1883
         {"acquisition", "\x05", 1}, // 默认值5
         {"cycle", "\x1E", 1}, // 默认值30
         /* uartXvariable */

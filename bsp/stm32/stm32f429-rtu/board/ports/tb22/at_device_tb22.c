@@ -38,8 +38,8 @@
 #define TB22_THREAD_PRIORITY            (RT_THREAD_PRIORITY_MAX/2)
 #define TB22_NET_LED_PIN                GET_PIN(D, 14) // 网络连接状态指示LED控制GPIO(低电平点亮)
 
-#define TB22_AT_RESP_NUM           10  // at resp个数(用于内存池分配)
-#define TB22_AT_RESP_SIZE          256 // at resp大小(用于内存池分配)
+#define TB22_AT_RESP_BLOCK_NUM           10  // at resp个数(用于内存池分配)
+#define TB22_AT_RESP_BLOCK_SIZE          128 // at resp大小(用于内存池分配)
 
 static int tb22_reset(struct at_device *device)
 {
@@ -964,7 +964,7 @@ static int tb22_init(struct at_device *device)
 	int ret = RT_EOK;
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
 	
-	tb22->at_resp_mp = rt_mp_create("tb22at_resp", TB22_AT_RESP_NUM, TB22_AT_RESP_SIZE);
+	tb22->at_resp_mp = rt_mp_create("tb22at_resp", TB22_AT_RESP_BLOCK_NUM, TB22_AT_RESP_BLOCK_SIZE);
     if (tb22->at_resp_mp == RT_NULL)
     {
         LOG_E("no memory for tb22 at resp memory pool create.");
@@ -1121,7 +1121,7 @@ at_response_t tb22_alloc_at_resp(struct at_device *device, rt_size_t line_num, r
 	
 	at_response_t resp = (at_response_t)buf;
 	resp->buf = (char *)(buf + sizeof(struct at_response));
-    resp->buf_size = TB22_AT_RESP_SIZE - sizeof(struct at_response);
+    resp->buf_size = TB22_AT_RESP_BLOCK_SIZE - sizeof(struct at_response);
     resp->line_num = line_num;
     resp->line_counts = 0;
     resp->timeout = timeout;

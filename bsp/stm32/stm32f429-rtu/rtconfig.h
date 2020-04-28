@@ -143,7 +143,7 @@
 #define ULOG_OUTPUT_LVL 7
 #define ULOG_USING_ISR_LOG
 #define ULOG_ASSERT_ENABLE
-#define ULOG_LINE_BUF_SIZE 1024
+#define ULOG_LINE_BUF_SIZE 2048
 
 /* log format */
 
