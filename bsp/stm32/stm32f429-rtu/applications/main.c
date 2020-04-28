@@ -165,7 +165,7 @@ char topic_upgrade_update[MQTT_TOPIC_BUF_LEN] = "";
 extern int http_ota_fw_download(const char* uri, int size, unsigned char* orign_md5);
 
 /* 重启系统进行升级 */
-extern void http_ota_reboot();
+extern void http_ota_reboot(void);
 
 /* 发送消息到主消息循环 */
 static rt_err_t app_send_msg(app_msg_type msg, void* msg_data)
@@ -1767,7 +1767,7 @@ static const char* get_upgrade_progress_desc(int step)
         case 200:
             return "upgrade success";
         default:
-            return "";
+            break;
     }
     return "";
 }
