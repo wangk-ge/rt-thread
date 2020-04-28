@@ -118,6 +118,16 @@ static void cfg_info_clear(void)
         }
     }
     
+    if (cfg_info.a_ip != NULL)
+    {
+        rt_free(cfg_info.a_ip);
+    }
+    
+    if (cfg_info.b_ip != NULL)
+    {
+        rt_free(cfg_info.b_ip);
+    }
+    
     if (cfg_info.productkey != NULL)
     {
         rt_free(cfg_info.productkey);
@@ -382,6 +392,56 @@ bool cfg_load(void)
 
 #undef LOAD_CONFIG_ITEM
     
+    /* 加载a_ip */
+    {
+        size_t a_ip_len = 0;
+        ef_get_env_blob("a_ip", RT_NULL, 0, &a_ip_len);
+        if (a_ip_len > 0)
+        {
+            cfg_info.a_ip = rt_malloc(a_ip_len + 1);
+            if (cfg_info.a_ip == RT_NULL)
+            {
+                LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, a_ip_len + 1);
+                ret = false;
+                goto __exit;
+            }
+            
+            size_t len = ef_get_env_blob("a_ip", cfg_info.a_ip, a_ip_len, RT_NULL);
+            if (len != a_ip_len)
+            {
+                LOG_E("%s ef_get_env_blob(a_ip) error!", __FUNCTION__);
+                ret = false;
+                goto __exit;
+            }
+            cfg_info.a_ip[a_ip_len] = '\0';
+        }
+    }
+    
+    /* 加载b_ip */
+    {
+        size_t b_ip_len = 0;
+        ef_get_env_blob("b_ip", RT_NULL, 0, &b_ip_len);
+        if (b_ip_len > 0)
+        {
+            cfg_info.b_ip = rt_malloc(b_ip_len + 1);
+            if (cfg_info.b_ip == RT_NULL)
+            {
+                LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, b_ip_len + 1);
+                ret = false;
+                goto __exit;
+            }
+            
+            size_t len = ef_get_env_blob("b_ip", cfg_info.b_ip, b_ip_len, RT_NULL);
+            if (len != b_ip_len)
+            {
+                LOG_E("%s ef_get_env_blob(b_ip) error!", __FUNCTION__);
+                ret = false;
+                goto __exit;
+            }
+            cfg_info.b_ip[b_ip_len] = '\0';
+        }
+    }
+    
     /* 加载productKey */
     {
         size_t productkey_len = 0;
@@ -505,13 +565,11 @@ config_info* cfg_get(void)
 *************************************************/
 void cfg_print(void)
 {
-    char ch_buf[32] = "";
-
     //LOG_I("all config info");
     LOG_I("client_id: %010d", cfg_info.client_id);
-    LOG_I("a_ip: %s", inet_ntoa_r(cfg_info.a_ip, ch_buf, sizeof(ch_buf)));
+    LOG_I("a_ip: %s", cfg_info.a_ip);
     LOG_I("a_port: %u", cfg_info.a_port);
-    LOG_I("b_ip: %s", inet_ntoa_r(cfg_info.b_ip, ch_buf, sizeof(ch_buf)));
+    LOG_I("b_ip: %s", cfg_info.b_ip);
     LOG_I("b_port: %u", cfg_info.b_port);
     LOG_I("ulog_glb_lvl: %u", cfg_info.ulog_glb_lvl);
     LOG_I("acquisition: %u", cfg_info.acquisition);

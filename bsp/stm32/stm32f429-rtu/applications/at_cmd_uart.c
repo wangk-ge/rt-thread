@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include "common.h"
 #include "strref.h"
+#include "app.h"
 
 #define LOG_TAG              "main.at_cmd_uart"
 #define LOG_LVL              LOG_LVL_DBG
@@ -58,36 +59,26 @@ static at_result_t at_uartxvariable_println(char uart_x)
     char cfg_key[32] = "uartXvariable";
     cfg_key[STR_LEN("uart")] = uart_x;
     
-    /* 取得配置数据长度 */
-    size_t data_len = 0;
-    ef_get_env_blob(cfg_key, RT_NULL, 0, &data_len);
-    if (data_len > 0)
+    /* 分配内存 */
+    char *var_list = (char*)app_mp_alloc();
+    RT_ASSERT(var_list != RT_NULL)
+    
+    /* 读取配置 */
+    size_t data_len = ef_get_env_blob(cfg_key, var_list, APP_MP_BLOCK_SIZE, RT_NULL);
+    if (data_len <= 0)
     {
-        /* 分配内存 */
-        char *var_list = (char*)rt_malloc(data_len + 1);
-        if (var_list == RT_NULL)
-        {
-            LOG_E("%s rt_malloc(%u) failed!", __FUNCTION__, data_len);
-            return AT_RESULT_FAILE;
-        }
-        
-        /* 读取配置 */
-        size_t read_len = ef_get_env_blob(cfg_key, var_list, data_len, RT_NULL);
-        if (read_len != data_len)
-        {
-            /* 释放内存 */
-            rt_free(var_list);
-            
-            LOG_E("%s ef_get_env_blob(%s) error(data_len=%u,read_len=%u)!", __FUNCTION__, cfg_key, data_len, read_len);
-            return AT_RESULT_FAILE;
-        }
-        var_list[data_len] = '\0';
-        
-        at_server_printfln("+UART%cVARIABLE: %s", uart_x, var_list);
-        
         /* 释放内存 */
-        rt_free(var_list);
+        app_mp_free(var_list);
+        
+        LOG_E("%s ef_get_env_blob(%s) error(data_len=%u)!", __FUNCTION__, cfg_key, data_len);
+        return AT_RESULT_FAILE;
     }
+    var_list[data_len] = '\0';
+    
+    at_server_printfln("+UART%cVARIABLE: %s", uart_x, var_list);
+    
+    /* 释放内存 */
+    app_mp_free(var_list);
 
     return AT_RESULT_OK;
 }
@@ -944,7 +935,7 @@ static at_result_t at_uartxtype_println(char uart_x)
             at_server_printf("0x%02x,", type_list[i]);
         }
         
-        at_server_printfln("0x%02x", type_list[i]);
+        at_server_printfln("0x%02x", type_list[i]); // 最后一个没有逗号
     }
     
     return AT_RESULT_OK;
@@ -998,24 +989,34 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
             LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
-        int32_t num = 0;
+        int32_t type = 0;
         /* 
             %i:整数，如果字符串以0x或者0X开头，则按16进制进行转换，
             如果以0开头，则按8进制进行转换，否则按10进制转换，
             需要一个类型为int*的的参数存放转换结果
         */
-        rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &num);
+        rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &type);
         if (ret != 1)
         {
             LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
-        if ((num < 0x00) || (num > 0x04))
+        /* uartXtype
+         *  0x00=有符号16位int
+         *  0x01=无符号16位int
+         *  0x02=有符号32位int(ABCD)
+         *  0x03=有符号32位int(CDAB)
+         *  0x04=无符号32位int(ABCD)
+         *  0x05=无符号32位int(CDAB)
+         *  0x06=IEEE754浮点数(ABCD)
+         *  0x07=IEEE754浮点数(CDAB)
+         */
+        if ((type < 0x00) || (type > 0x07))
         {
-            LOG_E("%s param[%d] not in range[0x00,0x04]!", __FUNCTION__, i);
+            LOG_E("%s param[%d] not in range[0x00,0x07]!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
-        type_list[i] = (uint8_t)((uint32_t)num);
+        type_list[i] = (uint8_t)((uint32_t)type);
     }
     
     /* 生成配置KEY值 */

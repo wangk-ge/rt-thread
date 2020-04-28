@@ -18,21 +18,14 @@
 #include <at_device.h>
 #include "common.h"
 #include "config.h"
+#include "app.h"
+#include "util.h"
 
 #define LOG_TAG              "main.at_cmd_rtu"
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-#define JSON_DATA_BUF_LEN (1024)
-
-/* 清空历史数据 */
-extern rt_err_t clear_history_data(void);
-
-/* 读取前n个时刻的一条历史数据(JSON格式) */
-extern uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len, bool need_timestamp);
-
-/* 取得模组信号强度指示 */
-extern int get_modem_rssi(int *rssi);
+#define JSON_DATA_BUF_LEN (APP_MP_BLOCK_SIZE)
 
 /* RTU相关AT指令 */
 
@@ -88,57 +81,49 @@ AT_CMD_EXPORT("AT+CLIENTID", "=<client_id>", RT_NULL, at_clientid_query, at_clie
 
 static at_result_t at_aip_query(const struct at_cmd *cmd)
 {
-    in_addr_t ip_addr = IPADDR_NONE;
-    size_t len = ef_get_env_blob("a_ip", &ip_addr, sizeof(ip_addr), RT_NULL);
-    if (len != sizeof(ip_addr))
-    {
-        LOG_E("%s ef_get_env_blob(a_ip) error!", __FUNCTION__);
-        return AT_RESULT_FAILE;
-    }
+    char a_ip[64] = "";
+    size_t len = ef_get_env_blob("a_ip", a_ip, sizeof(a_ip) - 1, RT_NULL);
+    a_ip[len] = '\0';
+    at_server_printfln("+AIP: %s", a_ip);
     
-    char ip[32] = "";
-    char *ip_ret = inet_ntoa_r(ip_addr, ip, sizeof(ip));
-    if (ip_ret == RT_NULL)
-    {
-        LOG_E("%s inet_ntoa_r(0x%x) error!", __FUNCTION__, ip_addr);
-        return AT_RESULT_FAILE;
-    }
-    
-    at_server_printfln("+AIP: %s", ip);
-
     return AT_RESULT_OK;
 }
 
 static at_result_t at_aip_setup(const struct at_cmd *cmd, const char *args)
 {
-    char ip[32] = "";
-    char req_expr[16] = "";
-    rt_sprintf(req_expr, "=%%%ds", sizeof(ip) - 1);
+    char a_ip[64] = "";
+    char *req_expr = "=%s";
 
-    if (rt_strlen(args) > sizeof(ip))
+    if (rt_strlen(args) > sizeof(a_ip))
     {
-        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(ip));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(a_ip));
         return AT_RESULT_CHECK_FAILE;
     }
-
-    int argc = at_req_parse_args(args, req_expr, ip);
+    
+    int argc = at_req_parse_args(args, req_expr, a_ip);
     if (argc != 1)
     {
         LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
-    in_addr_t ip_addr = inet_addr(ip);
-    if (ip_addr == IPADDR_NONE)
+    /* 检查地址有效性 */
+    bool addr_valid = util_is_ip_valid(a_ip);
+    if (!addr_valid)
     {
-        LOG_E("%s inet_addr(%s) error!", __FUNCTION__, ip);
-        return AT_RESULT_CHECK_FAILE;
+        addr_valid = util_is_domainname_valid(a_ip);
     }
     
-    EfErrCode ef_ret = ef_set_env_blob("a_ip", &ip_addr, sizeof(in_addr_t));
+    if (!addr_valid)
+    { // 地址无效
+        LOG_E("%s invalid ip/domainname(%s)!", __FUNCTION__, a_ip);
+        return AT_RESULT_PARSE_FAILE;
+    }
+
+    EfErrCode ef_ret = ef_set_env_blob("a_ip", a_ip, rt_strlen(a_ip));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("%s ef_set_env_blob(a_ip,0x%x) error(%d)!", __FUNCTION__, ip_addr, ef_ret);
+        LOG_E("%s ef_set_env_blob(a_ip,%s) error(%d)!", __FUNCTION__, a_ip, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -199,57 +184,49 @@ AT_CMD_EXPORT("AT+APORT", "=<port>", RT_NULL, at_aport_query, at_aport_setup, RT
 
 static at_result_t at_bip_query(const struct at_cmd *cmd)
 {
-    in_addr_t ip_addr = IPADDR_NONE;
-    size_t len = ef_get_env_blob("b_ip", &ip_addr, sizeof(ip_addr), RT_NULL);
-    if (len != sizeof(ip_addr))
-    {
-        LOG_E("%s ef_get_env_blob(b_ip) error!", __FUNCTION__);
-        return AT_RESULT_FAILE;
-    }
-    
-    char ip[32] = "";
-    char *ip_ret = inet_ntoa_r(ip_addr, ip, sizeof(ip));
-    if (ip_ret == RT_NULL)
-    {
-        LOG_E("%s inet_ntoa_r(0x%x) error!", __FUNCTION__, ip_addr);
-        return AT_RESULT_FAILE;
-    }
-    
-    at_server_printfln("+BIP: %s", ip);
+    char b_ip[64] = "";
+    size_t len = ef_get_env_blob("b_ip", b_ip, sizeof(b_ip) - 1, RT_NULL);
+    b_ip[len] = '\0';
+    at_server_printfln("+BIP: %s", b_ip);
 
     return AT_RESULT_OK;
 }
 
 static at_result_t at_bip_setup(const struct at_cmd *cmd, const char *args)
 {
-    char ip[32] = "";
-    char req_expr[16] = "";
-    rt_sprintf(req_expr, "=%%%ds", sizeof(ip) - 1);
+    char b_ip[64] = "";
+    char *req_expr = "=%s";
 
-    if (rt_strlen(args) > sizeof(ip))
+    if (rt_strlen(args) > sizeof(b_ip))
     {
-        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(ip));
+        LOG_E("%s rt_strlen(args)>%d!", __FUNCTION__, sizeof(b_ip));
         return AT_RESULT_CHECK_FAILE;
     }
-
-    int argc = at_req_parse_args(args, req_expr, ip);
+    
+    int argc = at_req_parse_args(args, req_expr, b_ip);
     if (argc != 1)
     {
         LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
         return AT_RESULT_PARSE_FAILE;
     }
     
-    in_addr_t ip_addr = inet_addr(ip);
-    if (ip_addr == IPADDR_NONE)
+    /* 检查地址有效性 */
+    bool addr_valid = util_is_ip_valid(b_ip);
+    if (!addr_valid)
     {
-        LOG_E("%s inet_addr(%s) error!", __FUNCTION__, ip);
-        return AT_RESULT_CHECK_FAILE;
+        addr_valid = util_is_domainname_valid(b_ip);
     }
     
-    EfErrCode ef_ret = ef_set_env_blob("b_ip", &ip_addr, sizeof(in_addr_t));
+    if (!addr_valid)
+    { // 地址无效
+        LOG_E("%s invalid ip/domainname(%s)!", __FUNCTION__, b_ip);
+        return AT_RESULT_PARSE_FAILE;
+    }
+
+    EfErrCode ef_ret = ef_set_env_blob("b_ip", b_ip, rt_strlen(b_ip));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("%s ef_set_env_blob(b_ip,0x%x) error(%d)!", __FUNCTION__, ip_addr, ef_ret);
+        LOG_E("%s ef_set_env_blob(b_ip,%s) error(%d)!", __FUNCTION__, b_ip, ef_ret);
         return AT_RESULT_FAILE;
     }
 
@@ -476,12 +453,8 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
         return AT_RESULT_PARSE_FAILE;
     }
     
-    char* json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        return AT_RESULT_PARSE_FAILE;
-    }
+    char* json_data_buf = (char*)app_mp_alloc();
+    RT_ASSERT(json_data_buf != NULL)
     
     /* 读取前n个时刻的一条历史数据(JSON格式)  */
     uint32_t read_len = read_history_data_json(n, json_data_buf, JSON_DATA_BUF_LEN, true);
@@ -496,7 +469,7 @@ static at_result_t at_datard_setup(const struct at_cmd *cmd, const char *args)
         at_server_printfln("+DATARD: ");
     }
     
-    rt_free(json_data_buf);
+    app_mp_free(json_data_buf);
     json_data_buf = NULL;
     
     return AT_RESULT_OK;

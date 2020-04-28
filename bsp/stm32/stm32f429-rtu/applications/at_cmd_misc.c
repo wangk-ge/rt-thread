@@ -17,19 +17,11 @@
 #include <at.h>
 #include <at_device.h>
 #include "common.h"
+#include "app.h"
 
 #define LOG_TAG              "main.at_cmd_misc"
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
-
-/* 取得历史数据条目数 */
-extern uint32_t get_history_data_num(void);
-
-/* 请求采集数据 */
-extern rt_err_t req_data_acquisition(void);
-
-/* 请求上报数据 */
-extern rt_err_t req_data_report(void);
 
 /* 执行TB22模组AT指令 */
 static rt_err_t exec_tb22at(const char *at_str, size_t str_len)

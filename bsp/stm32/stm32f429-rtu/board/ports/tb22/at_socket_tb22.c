@@ -35,9 +35,10 @@
 
 #if defined(AT_DEVICE_USING_TB22) && defined(AT_USING_SOCKET)
 
-#define TB22_MODULE_SEND_MAX_SIZE           1358 // AT+NSOSD最大传输1358字节
+#define TB22_MODULE_SEND_MAX_SIZE           1460 // AT+NSOSD最大传输1358字节
+#define TB22_MODULE_RECV_MAX_SIZE           1460 // AT+NSORF最大传输1358字节
 
-#define TB22_SOCK_RECV_PACKET_NUM           24 // Socket接收包个数(用于内存池分配)
+#define TB22_SOCK_RECV_PACKET_NUM           32 // Socket接收包个数(用于内存池分配)
 #define TB22_SOCK_RECV_PACKET_SIZE          64 // Socket接收包大小(用于内存池分配)
 #define TB22_SOCK_RECV_THREAD_STACK_SIZE    4096
 #define TB22_SOCK_RECV_THREAD_PRIORITY      (RT_THREAD_PRIORITY_MAX / 3 - 2) // 优先级应该高于at_client线程
@@ -53,27 +54,23 @@
 #define TO_HEX_CHAR(b) (((b) <= 0x09) ? ((b) + (uint8_t)'0') : (((b) - 0x0A) + (uint8_t)'A'))
 
 /* AT socket event type */
-#define TB22_EVENT_REQ_RECV_THREAD_QUIT ((uint32_t)0x00000001) // 请求Socket接收线程退出
-#define TB22_EVENT_RECV_THREAD_QUIT     ((uint32_t)0x00000002) // Socket接收线程已退出
-#define TB22_EVENT_REQ_RECV_DATA        ((uint32_t)0x00000004) // 请求Socket接收线程接收数据
-#define TB22_EVENT_SEND_OK              ((uint32_t)0x00000008) // 发送成功
-#define TB22_EVENT_SEND_FAIL            ((uint32_t)0x00000010) // 发送失败
+#define TB22_EVENT_REQ_RECV_DATA        ((uint32_t)0x00000001) // 请求Socket接收线程接收数据
+#define TB22_EVENT_SEND_OK              ((uint32_t)0x00000002) // 发送成功
+#define TB22_EVENT_SEND_FAIL            ((uint32_t)0x00000004) // 发送失败
 
-#define TB22_EVENT_DOMAIN_OK            ((uint32_t)0x00100000) // DNS解析成功
+#define TB22_EVENT_DOMAIN_OK            ((uint32_t)0x01000000) // DNS解析成功
 
 
 /* 发送数据缓冲区大小(字节数) */
 #define TB22_SEND_BUF_SIZE             (TB22_MODULE_SEND_MAX_SIZE * 2)
+/* 接收数据缓冲区大小(字节数) */
+#define TB22_RECV_BUF_SIZE             (TB22_MODULE_RECV_MAX_SIZE * 2)
 
 /* TB22设备Socket信息 */
 struct tb22_sock_t {
     int index;
     int device_socket;
-    struct at_device *device;
-    struct at_socket *socket;
     uint8_t sequence;
-    rt_mp_t recv_buf_mp; // 接收数据内存池
-    rt_thread_t recv_thread; // 接收线程
 };
 
 /* Socket接收信息 */
@@ -88,8 +85,14 @@ static at_evt_cb_t at_evt_cb_set[] = {
     [AT_SOCKET_EVT_CLOSED] = NULL,
 };
 
-/* 发送数据缓冲区 */
-static char at_send_buf[TB22_SEND_BUF_SIZE] = "";
+/* 发送缓冲区 */
+static char at_send_buf[TB22_SEND_BUF_SIZE + 1] = "";
+
+/* 接收缓冲区 */
+static char at_recv_buf[TB22_RECV_BUF_SIZE + 1] = "";
+
+/* TB22设备Socket列表 */
+static struct tb22_sock_t tb22_sock_list[AT_DEVICE_TB22_SOCKETS_NUM];
 
 /**
  * update the sequence value for AT+NSOSD
@@ -169,191 +172,158 @@ static struct at_socket *at_get_socket_by_device_socket(struct at_device *device
 }
 
 /**
+ * do sock recv work(run in socket recv thread)
+ *
+ */
+static void tb22_do_sock_recv_work(struct at_device *device, int socket_index)
+{
+    RT_ASSERT(socket_index < ARRAY_SIZE(device->sockets));
+    
+    struct at_device_tb22 *tb22 = (struct at_device_tb22*)(device->user_data);
+    struct at_socket *socket = &(device->sockets[socket_index]);
+    struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
+    RT_ASSERT(tb22_sock != RT_NULL);
+    int device_socket = tb22_sock->device_socket;
+    
+    LOG_D("%s socket_index(%d) device_socket(%d)", __FUNCTION__, socket_index, device_socket);
+    
+    /* 分配AT Response对象 */
+    at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
+    RT_ASSERT(resp);
+
+    /* 收取Socket数据 */
+    while (1)
+    { // 收取所有数据
+        int rem_len = 0; // 剩余数据长度
+        int sock = 0, port = 0, bytes_len = 0;
+        char ip[32] = "";
+        
+        if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, TB22_MODULE_RECV_MAX_SIZE) != RT_EOK)
+        {
+            LOG_E("at_obj_exec_cmd failed!");
+            break;
+        }
+        
+        // 每个HEX占两个字节再加上字符串结尾'\0'
+        if (at_resp_parse_line_args(resp, 2, "%d,%[^,],%d,%d,%[^,],%d", &sock, ip, &port, &bytes_len, at_recv_buf, &rem_len) <= 0)
+        {
+            LOG_E("at_resp_parse_line_args failed!");
+            break;
+        }
+        RT_ASSERT(device_socket == sock);
+        
+        if (bytes_len <= 0)
+        {
+            LOG_E("bytes_len(%d) is invalid!", bytes_len);
+            break;
+        }
+        
+        /* 对于接收缓冲区中的所有数据,转换格式并推送到上层 */
+        int push_len = 0; // 已推送数据长度
+        while (push_len < bytes_len)
+        {
+            /* 待推送的HEX格式字符串数据 */
+            const char* hex_str = at_recv_buf + push_len;
+            /* HEX格式字符串数据长度(每个HEX占两个字节) */
+            uint32_t hex_str_len = (uint32_t)((bytes_len - push_len) * 2);
+            
+            /* 在内存池分配一块接收缓冲区(固定大小TB22_SOCK_RECV_PACKET_SIZE) */
+            uint32_t recv_buf_len = TB22_SOCK_RECV_PACKET_SIZE;
+            char* recv_buf = (char*)rt_mp_alloc(tb22->sock_recv_mp, RT_WAITING_FOREVER); // 如果暂时没有足够的内存将会阻塞等待
+            RT_ASSERT(recv_buf != RT_NULL);
+            
+            /* HEX格式字符串转换二进制数据 */
+            uint32_t data_len = util_from_hex_str(hex_str, hex_str_len, 
+                (uint8_t*)recv_buf, (uint32_t)recv_buf_len);
+            
+            /* 推送到上层(notice the receive buffer and buffer size) */
+            if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
+            {
+                at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)recv_buf, data_len);
+            }
+            
+            /* 统计已推送数据长度 */
+            push_len += (int)data_len;
+        }
+        
+        if (rem_len <= 0)
+        { // 数据已全部收取
+            break;
+        }
+    }
+    
+    /* 释放AT Response对象 */
+    tb22_free_at_resp(resp);
+}
+
+/**
  * socket recv thread entry
  *
  */
 static void tb22_sock_recv_thread_entry(void *parameter)
 {
-    struct tb22_sock_t* tb22_sock = (struct tb22_sock_t*)parameter;
-    int device_socket = tb22_sock->device_socket;
-    int socket_index = tb22_sock->index;
-    struct at_device *device = tb22_sock->device;
+    int socket_index = 0;
+    struct at_device *device = (struct at_device*)parameter;
     rt_event_t socket_event = device->socket_event;
-    struct at_socket *socket = tb22_sock->socket;
     
+    /* 监听所有Socket的数据接收请求 */
+    uint32_t req_recv_event_set = 0;
+    for (socket_index = 0; socket_index < device->class->socket_num; ++socket_index)
+    {
+        req_recv_event_set |= SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_DATA);
+    }
+    
+    /* 事件处理循环 */
     while (1)
     {
         rt_uint32_t recved_event = 0;
-        uint32_t event_set = SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_THREAD_QUIT | TB22_EVENT_REQ_RECV_DATA);
-        rt_err_t ret = rt_event_recv(socket_event, event_set, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &recved_event);
+        rt_err_t ret = rt_event_recv(socket_event, req_recv_event_set, 
+            RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &recved_event);
         if (ret != RT_EOK)
         {
-            LOG_E("%s socket_index(%d) device_socket(%d) rt_event_recv failed(%d), quit!", __FUNCTION__, socket_index, device_socket, ret);
+            LOG_E("%s rt_event_recv failed(%d), quit!", __FUNCTION__, ret);
             break;
         }
         
-        event_set = SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_THREAD_QUIT);
-        if ((recved_event & event_set) == event_set)
+        /* 处理Socket数据接收请求 */
+        for (socket_index = 0; socket_index < device->class->socket_num; ++socket_index)
         {
-            LOG_D("%s socket_index(%d) device_socket(%d) rt_event_recv(TB22_EVNET_REQ_RECV_THREAD_QUIT) quit.", __FUNCTION__, socket_index, device_socket);
-            break;
-        }
-        
-        event_set = SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_DATA);
-        if ((recved_event & event_set) == event_set)
-        {
-            LOG_D("%s socket_index(%d) device_socket(%d) rt_event_recv(TB22_EVNET_REQ_RECV_DATA)", __FUNCTION__, socket_index, device_socket);
-            
-            at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
-            RT_ASSERT(resp);
-
-            /* 收取Socket数据 */
-            while (1)
-            { // 收取所有数据
-                // 每个HEX占两个字节再加上字符串结尾'\0'
-                char hex_str[TB22_SOCK_RECV_PACKET_SIZE * 2 + 1] = ""; // 注意TB22_SOCK_RECV_PACKET_SIZE太大将导致栈溢出
-                int rem_len = 0; // 剩余数据长度
-                int sock = 0, port = 0, bytes_len = 0;
-                char ip[32] = "";
+            uint32_t event_set = SET_EVENT(socket_index, TB22_EVENT_REQ_RECV_DATA);
+            if ((recved_event & event_set) == event_set)
+            {
+                LOG_D("%s socket_index(%d) rt_event_recv(TB22_EVNET_REQ_RECV_DATA)", __FUNCTION__, socket_index);
                 
-                if (at_obj_exec_cmd(device->client, resp, "AT+NSORF=%d,%d", device_socket, TB22_SOCK_RECV_PACKET_SIZE) != RT_EOK)
-                {
-                    LOG_E("at_obj_exec_cmd failed!");
-                    break;
-                }
-                
-                if (at_resp_parse_line_args(resp, 2, "%d,%[^,],%d,%d,%[^,],%d", &sock, ip, &port, &bytes_len, hex_str, &rem_len) <= 0)
-                {
-                    LOG_E("at_resp_parse_line_args failed!");
-                    break;
-                }
-                RT_ASSERT(device_socket == sock);
-                
-                if (bytes_len <= 0)
-                {
-                    LOG_E("bytes_len(%d) is invalid!", bytes_len);
-                    break;
-                }
-                
-                /* 转换数据格式并发送数据到上层 */
-                {
-                    /* 在内存池分配一块接收缓冲区(固定大小TB22_SOCK_RECV_PACKET_SIZE) */
-                    uint32_t recv_buf_len = TB22_SOCK_RECV_PACKET_SIZE;
-                    char* recv_buf = (char*)rt_mp_alloc(tb22_sock->recv_buf_mp, RT_WAITING_FOREVER); // 如果暂时没有足够的内存将会阻塞等待
-                    RT_ASSERT(recv_buf != RT_NULL);
-                    
-                    /* HEX格式字符串数据长度(每个HEX占两个字节) */
-                    uint32_t hex_str_len = (uint32_t)bytes_len * 2;
-                    
-                    /* HEX格式字符串转换二进制数据(就地转换) */
-                    uint32_t data_len = util_from_hex_str(hex_str, hex_str_len, 
-                        (uint8_t*)recv_buf, (uint32_t)recv_buf_len);
-                    
-                    /* notice the receive buffer and buffer size */
-                    if (at_evt_cb_set[AT_SOCKET_EVT_RECV])
-                    {
-                        at_evt_cb_set[AT_SOCKET_EVT_RECV](socket, AT_SOCKET_EVT_RECV, (const char*)recv_buf, data_len);
-                    }
-                }
-                
-                if (rem_len <= 0)
-                { // 数据已全部收取
-                    break;
-                }
+                /* do sock recv work */
+                tb22_do_sock_recv_work(device, socket_index);
             }
-            
-            tb22_free_at_resp(resp);
         }
     }
-    
-    /* 发送线程已退出通知 */
-    tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_RECV_THREAD_QUIT));
 }
 
 /* 分配TB22 Socket */
-static struct tb22_sock_t* tb22_alloc_socket(struct at_device *device, struct at_socket *socket, int device_socket, int socket_index)
+static struct tb22_sock_t* tb22_alloc_socket(int device_socket, int socket_index)
 {
-    char name[RT_NAME_MAX] = "";
-    struct tb22_sock_t* tb22_sock = 
-        (struct tb22_sock_t*)rt_malloc(sizeof(struct tb22_sock_t));
-    if (tb22_sock == RT_NULL)
-    {
-        LOG_E("no memory for tb22_sock create.");
-        goto __err;
-    }
+    LOG_D("%s tb22_alloc_socket(device_socket=%d, socket_index=%d)", __FUNCTION__, device_socket, socket_index);
+    
+    RT_ASSERT(socket_index < ARRAY_SIZE(tb22_sock_list));
+    
+    struct tb22_sock_t *tb22_sock = &(tb22_sock_list[socket_index]);
     
     tb22_sock->index = socket_index;
     tb22_sock->device_socket = device_socket;
     tb22_sock->sequence = 1;
-    tb22_sock->device = device;
-    tb22_sock->socket = socket;
-    rt_snprintf(name, RT_NAME_MAX, "tb22_skt%d", socket_index);
-    tb22_sock->recv_buf_mp = rt_mp_create(name, TB22_SOCK_RECV_PACKET_NUM, TB22_SOCK_RECV_PACKET_SIZE);
-    if (tb22_sock->recv_buf_mp == RT_NULL)
-    {
-        LOG_E("no memory for tb22 recv memory pool create.");
-        goto __err;
-    }
-    rt_snprintf(name, RT_NAME_MAX, "tb22_skt%d", socket_index);
-    tb22_sock->recv_thread = rt_thread_create(name, tb22_sock_recv_thread_entry, (void*)tb22_sock,
-                         TB22_SOCK_RECV_THREAD_STACK_SIZE, TB22_SOCK_RECV_THREAD_PRIORITY, 10);
-    if (tb22_sock->recv_thread == RT_NULL)
-    {
-        LOG_E("no memory for tb22 recv thread create.");
-        goto __err;
-    }
     
     return tb22_sock;
-
-__err:
-    if (tb22_sock)
-    {
-        if (tb22_sock->recv_buf_mp)
-        {
-            rt_mp_delete(tb22_sock->recv_buf_mp);
-        }
-        if (tb22_sock->recv_thread)
-        {
-            rt_thread_delete(tb22_sock->recv_thread);
-        }
-        rt_free(tb22_sock);
-    }
-    return RT_NULL;
 }
 
 /* 释放TB22 Socket */
 static void tb22_free_socket(struct tb22_sock_t* tb22_sock)
 {
-    if (tb22_sock->recv_buf_mp)
-    {
-        rt_mp_delete(tb22_sock->recv_buf_mp);
-    }
+    LOG_D("%s tb22_free_socket(device_socket=%d, socket_index=%d)", __FUNCTION__, tb22_sock->device_socket, tb22_sock->index);
     
-    if (tb22_sock->recv_thread)
-    {
-        rt_thread_delete(tb22_sock->recv_thread);
-    }
-    
-    rt_free(tb22_sock);
-}
-
-/* 启动TB22 Socket接收线程 */
-static rt_err_t tb22_start_socket_recv(struct tb22_sock_t* tb22_sock)
-{
-    return rt_thread_startup(tb22_sock->recv_thread);
-}
-
-/* 停止TB22 Socket接收线程 */
-static void tb22_stop_socket_recv(struct tb22_sock_t* tb22_sock)
-{
-    uint32_t event = 0;
-    
-    /* 请求Socket接收线程退出 */
-    tb22_socket_event_send(tb22_sock->device, SET_EVENT(tb22_sock->index, TB22_EVENT_REQ_RECV_THREAD_QUIT));
-    
-    /* 等待线程退出 */
-    event = SET_EVENT(tb22_sock->index, TB22_EVENT_RECV_THREAD_QUIT);
-    tb22_socket_event_recv(tb22_sock->device, event, rt_tick_from_millisecond(5 * 1000), RT_EVENT_FLAG_OR);
+    tb22_sock->index = 0;
+    tb22_sock->device_socket = 0;
+    tb22_sock->sequence = 0;
 }
 
 /**
@@ -382,9 +352,6 @@ static int tb22_socket_close(struct at_socket *socket)
 
     at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
     RT_ASSERT(resp);
-    
-    /* 停止接收线程 */
-    tb22_stop_socket_recv(tb22_sock);
     
     result = at_obj_exec_cmd(device->client, resp, "AT+NSOCL=%d", device_socket);
 
@@ -454,12 +421,9 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
         goto __exit;
     }
     
-    tb22_sock = tb22_alloc_socket(device, socket, device_socket, socket_index);
-    if (tb22_sock == RT_NULL)
-    {
-        result = -RT_ENOMEM;
-        goto __exit;
-    }
+    /* 分配TB22设备Socket */
+    tb22_sock = tb22_alloc_socket(device_socket, socket_index);
+    RT_ASSERT(tb22_sock != RT_NULL)
     socket->user_data = (void*)tb22_sock;
     
     /* 设置连接超时时间(60s) */
@@ -482,11 +446,8 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     if (result != RT_EOK)
     {
         LOG_E("%s device socket(%d) connect failed.", device->name, device_socket);
-        goto __exit;
+        //goto __exit;
     }
-    
-    /* 启动Socket接收线程 */
-    result = tb22_start_socket_recv(tb22_sock);
     
 __exit:
     if (resp)
@@ -905,12 +866,63 @@ static const struct at_socket_ops tb22_socket_ops =
 
 int tb22_socket_init(struct at_device *device)
 {
+    int ret = RT_EOK;
+    
     RT_ASSERT(device);
+    
+    struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
+    
+    /* 创建socket接收缓存内存池 */
+    tb22->sock_recv_mp = rt_mp_create("tb22_sock_recv", TB22_SOCK_RECV_PACKET_NUM, TB22_SOCK_RECV_PACKET_SIZE);
+    if (tb22->sock_recv_mp == RT_NULL)
+    {
+        LOG_E("no memory for tb22 socket recv memory pool create.");
+        ret = RT_ENOMEM;
+        goto __err;
+    }
+    
+    /* 创建socket接收线程 */
+    tb22->sock_recv_thread = rt_thread_create("tb22_sock_recv", tb22_sock_recv_thread_entry, (void*)device,
+                         TB22_SOCK_RECV_THREAD_STACK_SIZE, TB22_SOCK_RECV_THREAD_PRIORITY, 10);
+    if (tb22->sock_recv_thread == RT_NULL)
+    {
+        LOG_E("no memory for tb22 socket recv thread create.");
+        ret = RT_ENOMEM;
+        goto __err;
+    }
 
     /* register URC data execution function  */
-    at_obj_set_urc_table(device->client, urc_table, sizeof(urc_table) / sizeof(urc_table[0]));
+    ret = at_obj_set_urc_table(device->client, urc_table, sizeof(urc_table) / sizeof(urc_table[0]));
+    if (ret != RT_EOK)
+    {
+        LOG_E("at_obj_set_urc_table failed(%d)!", ret);
+        goto __err;
+    }
+    
+    /* 启动socket接收线程 */
+    ret = rt_thread_startup(tb22->sock_recv_thread);
+    if (ret != RT_EOK)
+    {
+        LOG_E("rt_thread_startup(sock_recv_thread) failed(%d)!", ret);
+        //goto __err;
+    }
 
-    return RT_EOK;
+__err:
+    if (ret != RT_EOK)
+    {
+        if (tb22->sock_recv_mp)
+        {
+            rt_mp_delete(tb22->sock_recv_mp);
+            tb22->sock_recv_mp = RT_NULL;
+        }
+        if (tb22->sock_recv_thread)
+        {
+            rt_thread_delete(tb22->sock_recv_thread);
+            tb22->sock_recv_thread = RT_NULL;
+        }
+    }
+    
+    return ret;
 }
 
 int tb22_socket_class_register(struct at_device_class *class)

@@ -37,6 +37,26 @@ extern   "C"
 **                             Function Define                                *
 **----------------------------------------------------------------------------*/
 /*************************************************
+* Function: util_is_ip_valid
+* Description: 判断字符串是否为有效的IP地址
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+bool util_is_ip_valid(const char* ip);
+
+/*************************************************
+* Function: util_is_domainname_valid
+* Description: 判断字符串是否为有效的域名
+* Author:
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+bool util_is_domainname_valid(const char* domainname);
+
+/*************************************************
 * Function: util_str_to_u32
 * Description: 字符串转32位无符号整数
 * Author: 

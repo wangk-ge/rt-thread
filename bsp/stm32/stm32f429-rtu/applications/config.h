@@ -55,8 +55,8 @@ typedef struct
 {
     uart_x_config_info uart_x_cfg[CFG_UART_X_NUM]; /* UARTX配置信息 */
     uint32_t client_id; // 客户端编号
-    uint32_t a_ip; // 通道A IP
-    uint32_t b_ip; // 通道B IP
+    char* a_ip; // 通道A IP
+    char* b_ip; // 通道B IP
     uint16_t a_port; // 通道A 端口
     uint16_t b_port; // 通道B 端口
     uint8_t ulog_glb_lvl; // LOG输出等级

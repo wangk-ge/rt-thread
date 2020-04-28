@@ -26,6 +26,7 @@
 #include "common.h"
 #include "util.h"
 #include "strref.h"
+#include "app.h"
 
 #define LOG_TAG              "main"
 #define LOG_LVL              LOG_LVL_DBG
@@ -61,11 +62,20 @@ typedef enum
 /* 历史数据保存的最大条数 */
 #define HISTORY_DATA_MAX_NUM (4096)
 
-/* 上报数据用的JSON数据缓冲区 */
-#define JSON_DATA_BUF_LEN (1024)
-
 /* MQTT订阅主题名缓冲区长度 */
 #define MQTT_TOPIC_BUF_LEN (128)
+
+/* 上报数据用的JSON数据缓冲区 */
+#define JSON_DATA_BUF_LEN (APP_MP_BLOCK_SIZE - MQTT_TOPIC_BUF_LEN - sizeof(mqtt_publish_data_info))
+
+/* HTTP OTA URL缓冲区长度 */
+#define HTTP_OTA_URL_BUF_LEN (512)
+
+/* HTTP OTA Request ID缓冲区长度 */
+#define HTTP_OTA_REQ_ID_BUF_LEN (64)
+
+/* HTTP OTA Version缓冲区长度 */
+#define HTTP_OTA_VERSION_BUF_LEN (64)
 
 /* 主循环消息队列最大长度 */
 #define APP_MSG_QUEUE_LEN (8)
@@ -109,10 +119,10 @@ typedef struct
 /* http OTA升级请求信息 */
 typedef struct
 {
-    char url[256];
+    char url[HTTP_OTA_URL_BUF_LEN];
     uint8_t md5[16];
-    char req_id[32];
-    char version[16];
+    char req_id[HTTP_OTA_REQ_ID_BUF_LEN];
+    char version[HTTP_OTA_VERSION_BUF_LEN];
     int firmware_size;
 } http_ota_info;
 
@@ -122,15 +132,16 @@ typedef struct
     const char *dev_name; // 设备名
 	rt_base_t rts_pin; //RTS引脚
 	int serial_mode;
+    modbus_t *mb_ctx;
 } rs485_device_info;
 
 static rs485_device_info rs485_dev_infos[CFG_UART_X_NUM] = 
 {
-	{RS485_1_DEVICE_NAME, RS485_1_REN_PIN, MODBUS_RTU_RS485},
-	{RS485_2_DEVICE_NAME, RS485_2_REN_PIN, MODBUS_RTU_RS485},
-	{RS485_3_DEVICE_NAME, RS485_3_REN_PIN, MODBUS_RTU_RS485},
-	//{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS485},
-	{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS232},
+	{RS485_1_DEVICE_NAME, RS485_1_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
+	{RS485_2_DEVICE_NAME, RS485_2_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
+	{RS485_3_DEVICE_NAME, RS485_3_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
+	//{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
+	{RS485_4_DEVICE_NAME, 0xFFFFFFFF, MODBUS_RTU_RS232, RT_NULL},
 };
 
 /* 用于保护历史数据FIFO队列信息的并发访问 */
@@ -138,6 +149,9 @@ static rt_mutex_t history_fifo_mutex = RT_NULL;
 
 /* 主消息循环队列 */
 static rt_mq_t app_msg_queue = RT_NULL;
+
+/* APP内存池 */
+static rt_mp_t app_mp = RT_NULL;
 
 /* 定时上报定时器 */
 static rt_timer_t report_timer = RT_NULL;
@@ -165,7 +179,67 @@ char topic_upgrade_update[MQTT_TOPIC_BUF_LEN] = "";
 extern int http_ota_fw_download(const char* uri, int size, unsigned char* orign_md5);
 
 /* 重启系统进行升级 */
-extern void http_ota_reboot();
+extern void http_ota_reboot(void);
+
+/* 从APP内存池分配一块内存 */
+void *app_mp_alloc(void)
+{
+    void *buf = rt_mp_alloc(app_mp, RT_WAITING_FOREVER); // 如果暂时没有足够的内存将会阻塞等待
+    RT_ASSERT(buf != RT_NULL);
+    
+    return buf;
+}
+
+/* 释放APP内存池分配的内存块 */
+void app_mp_free(void *buf)
+{
+    if (buf != RT_NULL);
+    {
+        rt_mp_free(buf);
+    }
+}
+
+/* 分配mqtt_publish_data_info对象 */
+static mqtt_publish_data_info *mqtt_alloc_publish_data_info(void)
+{
+    mqtt_publish_data_info *pub_info = 
+        (mqtt_publish_data_info*)rt_mp_alloc(app_mp, RT_WAITING_FOREVER); // 如果暂时没有足够的内存将会阻塞等待
+    RT_ASSERT(pub_info != RT_NULL);
+    pub_info->qos = QOS0;
+    pub_info->length = 0;
+    pub_info->topic = (char*)pub_info + sizeof(mqtt_publish_data_info);
+    pub_info->payload = pub_info->topic + MQTT_TOPIC_BUF_LEN;
+    
+    return pub_info;
+}
+
+/* 释放mqtt_publish_data_info对象 */
+static void mqtt_free_publish_data_info(mqtt_publish_data_info *pub_info)
+{
+    if (pub_info != RT_NULL);
+    {
+        rt_mp_free(pub_info);
+    }
+}
+
+/* 分配http_ota_info对象 */
+static http_ota_info *http_alloc_ota_info(void)
+{
+    http_ota_info *ota_info = 
+        (http_ota_info*)rt_mp_alloc(app_mp, RT_WAITING_FOREVER); // 如果暂时没有足够的内存将会阻塞等待
+    RT_ASSERT(ota_info != RT_NULL);
+    
+    return ota_info;
+}
+
+/* 释放http_ota_info对象 */
+static void http_free_ota_info(http_ota_info *ota_info)
+{
+    if (ota_info != RT_NULL);
+    {
+        rt_mp_free(ota_info);
+    }
+}
 
 /* 发送消息到主消息循环 */
 static rt_err_t app_send_msg(app_msg_type msg, void* msg_data)
@@ -180,25 +254,11 @@ static rt_err_t app_send_msg(app_msg_type msg, void* msg_data)
 }
 
 /* 请求(主线程)执行MQTT数据发布 */
-static rt_err_t send_mqtt_publish_req(enum QoS qos, char *topic, char *payload, size_t length)
+static rt_err_t send_mqtt_publish_req(mqtt_publish_data_info *pub_info)
 {
-    mqtt_publish_data_info *app_msg_data = 
-        (mqtt_publish_data_info*)rt_malloc(sizeof(mqtt_publish_data_info));
-    if (app_msg_data == RT_NULL)
-    {
-        LOG_E("%s(%u) failed!", __FUNCTION__, sizeof(mqtt_publish_data_info));
-        return -RT_ENOMEM;
-    }
-    
-    app_msg_data->qos = qos;
-    app_msg_data->topic = topic;
-    app_msg_data->payload = payload;
-    app_msg_data->length = length;
-    rt_err_t ret = app_send_msg(APP_MSG_MQTT_PUBLISH_REQ, app_msg_data);
+    rt_err_t ret = app_send_msg(APP_MSG_MQTT_PUBLISH_REQ, pub_info);
     if (ret != RT_EOK)
     {
-        rt_free(app_msg_data);
-        
         LOG_E("%s(APP_MSG_MQTT_PUBLISH_REQ) error(%d)!", __FUNCTION__, ret);
     }
     
@@ -252,90 +312,39 @@ static const char* get_itemid(void)
     return cfg->itemid;
 }
 
-/* 采集UARTX数据 */
-static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_len)
+/* 采集UARTX数据(返回读取的寄存器个数) */
+static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_len)
 {
     LOG_D("%s(UART%d)", __FUNCTION__, x);
     
     /* 内部函数不做参数检查,由调用者保证参数有效性 */
     int index = x - 1;
     
-    uint32_t data_len = 0; // 采集的数据长度(字节数)
+    uint32_t data_len = 0; // 采集的数据长度(寄存器个数)
     
-    /* 校验位转换表(0=无'NONE',1=奇'EVEN',2=偶'ODD') */
-    const char parity_name[] = {'N', 'E', 'O'};
-    
-    modbus_t *mb_ctx = NULL;
+    RT_ASSERT(index < ARRAY_SIZE(rs485_dev_infos));
+    modbus_t *mb_ctx = rs485_dev_infos[index].mb_ctx;
 
     /* 配置信息 */
     config_info *cfg = cfg_get();
     
     /* 采集数据 */
+    memset(data_buf, 0, buf_len * sizeof(data_buf[0])); // 先清零
+    int i = 0;
+    uint8_t variablecnt = cfg->uart_x_cfg[index].variablecnt; // 变量个数
+    for (i = 0; i < variablecnt; ++i)
     {
-        /* 创建MODBUS RTU对象实例 */
-        mb_ctx = modbus_new_rtu(rs485_dev_infos[index].dev_name, 
-            cfg->uart_x_cfg[index].baudrate, 
-            parity_name[cfg->uart_x_cfg[index].parity], 
-            cfg->uart_x_cfg[index].wordlength, 
-            cfg->uart_x_cfg[index].stopbits);
-        if (mb_ctx == NULL)
+        uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
+        uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
+        /* Reads the holding registers of remote device and put the data into an array */
+        int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
+        if (read_bytes != length)
         {
-            LOG_E("%s call modbus_new_rtu error!", __FUNCTION__);
-            goto __exit;
+            LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u)!", __FUNCTION__, startaddr, length, read_bytes);
         }
         
-        /* 配置MODBUS RTU属性 */
-        modbus_rtu_set_serial_mode(mb_ctx, rs485_dev_infos[index].serial_mode);
-		if (rs485_dev_infos[index].serial_mode == MODBUS_RTU_RS485)
-		{
-			/* function shall set the Request To Send mode to communicate on a RS485 serial bus. */
-			modbus_rtu_set_rts(mb_ctx, rs485_dev_infos[index].rts_pin, MODBUS_RTU_RTS_UP);
-		}
-        modbus_set_slave(mb_ctx, cfg->uart_x_cfg[index].slaveraddr); // 从机地址
-        modbus_set_response_timeout(mb_ctx, 1, 0); // 超时时间:1S
-        
-        /* 连接MODBUS端口 */
-        int iret = modbus_connect(mb_ctx);
-        if (iret != 0)
-        {
-            LOG_E("%s modbus_connect error(%d)!", __FUNCTION__, errno);
-            goto __exit;
-        }
-        
-        int i = 0;
-        uint8_t variablecnt = cfg->uart_x_cfg[index].variablecnt; // 变量个数
-        for (i = 0; i < variablecnt; ++i)
-        {
-            uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
-            uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
-            /* Reads the holding registers of remote device and put the data into an array */
-            uint16_t read_buf[MODBUS_MAX_READ_REGISTERS] = {0}; // 读取数据缓冲区
-            memset(read_buf, 0, sizeof(read_buf)); // 先清零
-            int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, read_buf); // 读取寄存器数据
-            if (read_bytes != length)
-			{
-				LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u)!", __FUNCTION__, startaddr, length, read_bytes);
-			}
-			
-            /* 保存到采集数据缓存 */
-            int j = 0;
-            for (j = 0; j < length; ++j)
-            {
-                uint16_t data = read_buf[j];
-                RT_ASSERT(data_len < buf_len);
-                data_buf[data_len++] = (uint8_t)(data >> 8); // 高字节
-                RT_ASSERT(data_len < buf_len);
-                data_buf[data_len++] = (uint8_t)(data & 0x00FF); // 低字节
-            }
-        }
+        data_len += (uint32_t)length;
     }
-    
-__exit:
-    /* 关闭MODBUS端口 */
-    modbus_close(mb_ctx);
-    
-    /* 释放MODBUS对象实例 */
-    modbus_free(mb_ctx);
     
     return data_len;
 }
@@ -346,8 +355,8 @@ static rt_err_t data_acquisition_and_save(void)
     LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
-    uint8_t data_buf[256] = {0};
-    uint32_t data_len = 0;
+    uint16_t data_buf[MODBUS_RTU_MAX_ADU_LENGTH / 2] = {0};
+    uint32_t data_len = 0; // 读取的寄存器个数
     char data_key[16] = "";
     
     /* 确保互斥修改FIFO队列 */
@@ -375,11 +384,11 @@ static rt_err_t data_acquisition_and_save(void)
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
-        /* 采集UARTX数据 */
-        data_len = uart_x_data_acquisition(x, data_buf, sizeof(data_buf));
+        /* 采集UARTX数据(返回读取的寄存器个数) */
+        data_len = uart_x_data_acquisition(x, data_buf, ARRAY_SIZE(data_buf));
         /* 保存UARTX数据 */
         snprintf(data_key, sizeof(data_key), "u%dd%u", x, pos); // Key="uXdN"
-        EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, data_len);
+        EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, (data_len * sizeof(data_buf[0])));
         if (ret != EF_NO_ERR)
         { // 保存失败
             /* 输出警告 */
@@ -476,7 +485,7 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
         /* 读取保存的历史数据 */
-        uint8_t data_buf[128] = {0};
+        uint16_t data_buf[MODBUS_RTU_MAX_ADU_LENGTH / 2] = {0};
         snprintf(data_key, sizeof(data_key), "u%dd%u", x, read_pos); // Key="uXdN"
         int len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
         if (len <= 0)
@@ -497,12 +506,12 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
             /* 每个寄存器16bit */
             uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 变量寄存器个数
             uint8_t data_type = cfg->uart_x_cfg[x - 1].type[i]; // 变量类型
-            uint8_t* var_data = (data_buf + data_read_pos); // 变量数据地址
-            uint16_t data_bytes = reg_num * sizeof(uint16_t); // 变量数据字节数
-            data_read_pos += data_bytes; // 指向下一个变量起始
+            uint16_t *var_data = (data_buf + data_read_pos); // 变量数据地址
+            data_read_pos += reg_num; // 指向下一个变量起始
 #ifndef TEST_NEW_FETURE
-            char hex_str_buf[128] = "";
-            util_to_hex_str(var_data, data_bytes, hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
+            char hex_str_buf[MODBUS_RTU_MAX_ADU_LENGTH * 2 + 1] = "";
+            util_to_hex_str((const uint8_t*)var_data, reg_num * sizeof(var_data[0]), 
+                hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
             json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
                 "\"%s\":\"%s\",", cfg->uart_x_cfg[x - 1].variable[i], hex_str_buf);
 #else
@@ -510,42 +519,58 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
             {
                 case 0x00: // 有符号16位int
                 {
-                    RT_ASSERT(data_bytes >= sizeof(int16_t));
-                    int16_t* int16_data= (int16_t*)var_data; // TODO字节序?
+                    int16_t int16_data= (int16_t)var_data[0];
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(*int16_data));
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(int16_data));
                     break;
                 }
                 case 0x01: // 无符号16位int
                 {
-                    RT_ASSERT(data_bytes >= sizeof(uint16_t));
-                    uint16_t* uint16_data= (uint16_t*)var_data; // TODO字节序?
+                    uint16_t uint16_data= (uint16_t)var_data[0];
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(*uint16_data));
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)(uint16_data));
                     break;
                 }
-                case 0x02: // 有符号32位int
+                case 0x02: // 有符号32位int(ABCD)
                 {
-                    RT_ASSERT(data_bytes >= sizeof(int32_t));
-                    int32_t* int32_data= (int32_t*)var_data; // TODO字节序?
+                    int32_t int32_data = modbus_get_long_abcd(var_data);
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], *int32_data);
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
                     break;
                 }
-                case 0x03: // 无符号32位int
+                case 0x03: // 有符号32位int(CDAB)
                 {
-                    RT_ASSERT(data_bytes >= sizeof(uint32_t));
-                    uint32_t* uint32_data= (uint32_t*)var_data; // TODO字节序?
+                    int32_t int32_data = modbus_get_long_cdab(var_data);
                     json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], *uint32_data);
+                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
                     break;
                 }
-                case 0x04: // IEEE754浮点数
+                case 0x04: // 无符号32位int(ABCD)
                 {
-                    RT_ASSERT(data_bytes >= sizeof(float));
-                    float* float_data = (float*)var_data; // TODO字节序?
+                    uint32_t uint32_data = (uint32_t)modbus_get_long_abcd(var_data);
                     json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], *float_data);
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                    break;
+                }
+                case 0x05: // 无符号32位int(CDAB)
+                {
+                    uint32_t uint32_data = (uint32_t)modbus_get_long_cdab(var_data);
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                    break;
+                }
+                case 0x06: // IEEE754浮点数(ABCD)
+                {
+                    float float_data = modbus_get_float_abcd(var_data);
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    break;
+                }
+                case 0x07: // IEEE754浮点数(CDAB)
+                {
+                    float float_data = modbus_get_float_cdab(var_data);
+                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
                     break;
                 }
                 default:
@@ -704,21 +729,18 @@ static uint32_t read_config_info_json(char* json_data_buf, uint32_t json_buf_len
     LOG_D("%s()", __FUNCTION__);
     
     config_info *cfg = cfg_get();
-    char a_ip[32] = "";
-    
-    inet_ntoa_r(cfg->a_ip, a_ip, sizeof(a_ip));
-    char b_ip[32] = "";
-    
-    inet_ntoa_r(cfg->b_ip, b_ip, sizeof(b_ip));
     int rssi = 0;
-    
-    get_modem_rssi(&rssi);
+    int ret = get_modem_rssi(&rssi);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s get_modem_rssi failed(%d)!", __FUNCTION__, ret);
+    }
     
     rt_int32_t json_data_len = rt_snprintf(json_data_buf, json_buf_len, 
         "{\"cycleSet\":\"%u\",\"acquisitionSet\":\"%u\",\"autoControlSet\":\"0\","
         "\"aIPSet\":\"%s\",\"aPortSet\":\"%u\",\"bIPSet\":\"%s\",\"bPortSet\":\"%u\","
         "\"rssi\":\"%d\",\"version\":\"%s\"}", cfg->cycle, cfg->acquisition, 
-        a_ip, cfg->a_port, b_ip, cfg->b_port, rssi, SW_VERSION);
+        cfg->a_ip, cfg->a_port, cfg->b_ip, cfg->b_port, rssi, SW_VERSION);
     
     return (uint32_t)json_data_len;
 }
@@ -792,15 +814,28 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     }
     
     /* a_ip[可缺省] */
-    in_addr_t a_ip_addr = 0;
     if (!strref_is_empty(a_ip))
     {
-        char a_ip_str[32] = "";
-        strref_str_cpy(a_ip_str, sizeof(a_ip_str), a_ip);
-        a_ip_addr = inet_addr(a_ip_str);
-        if (a_ip_addr == IPADDR_NONE)
+        char a_ip_str[64] = "";
+        if (a_ip->len > (sizeof(a_ip_str) - 1))
         {
-            LOG_E("%s inet_addr(%s) error!", __FUNCTION__, a_ip_str);
+            LOG_E("%s length of addr(%.*s)>%d!", __FUNCTION__, a_ip->len, a_ip->c_str, (sizeof(a_ip_str) - 1));
+            /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
+            return 420;
+        }
+        
+        strref_str_cpy(a_ip_str, sizeof(a_ip_str), a_ip);
+        
+        /* 检查地址有效性 */
+        bool addr_valid = util_is_ip_valid(a_ip_str);
+        if (!addr_valid)
+        {
+            addr_valid = util_is_domainname_valid(a_ip_str);
+        }
+        
+        if (!addr_valid)
+        {
+            LOG_E("%s addr(%s) is invalid!", __FUNCTION__, a_ip_str);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -826,15 +861,28 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     }
     
     /* b_ip[可缺省] */
-    in_addr_t b_ip_addr = 0;
     if (!strref_is_empty(b_ip))
     {
-        char b_ip_str[32] = "";
-        strref_str_cpy(b_ip_str, sizeof(b_ip_str), b_ip);
-        b_ip_addr = inet_addr(b_ip_str);
-        if (b_ip_addr == IPADDR_NONE)
+        char b_ip_str[64] = "";
+        if (b_ip->len > (sizeof(b_ip_str) - 1))
         {
-            LOG_E("%s inet_addr(%s) error!", __FUNCTION__, b_ip_str);
+            LOG_E("%s length of addr(%.*s)>%d!", __FUNCTION__, b_ip->len, b_ip->c_str, (sizeof(b_ip_str) - 1));
+            /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
+            return 420;
+        }
+        
+        strref_str_cpy(b_ip_str, sizeof(b_ip_str), b_ip);
+        
+        /* 检查地址有效性 */
+        bool addr_valid = util_is_ip_valid(b_ip_str);
+        if (!addr_valid)
+        {
+            addr_valid = util_is_domainname_valid(b_ip_str);
+        }
+        
+        if (!addr_valid)
+        {
+            LOG_E("%s addr(%s) is invalid!", __FUNCTION__, b_ip_str);
             /* 420 request parameter error 请求参数错误， 设备入参校验失败 */
             return 420;
         }
@@ -907,10 +955,10 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     /* a_ip */
     if (!strref_is_empty(a_ip))
     {
-        EfErrCode ef_ret = ef_set_env_blob("a_ip", &a_ip_addr, sizeof(a_ip_addr));
+        EfErrCode ef_ret = ef_set_env_blob("a_ip", a_ip->c_str, a_ip->len);
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("%s ef_set_env_blob(a_ip,0x%x) error(%d)!", __FUNCTION__, a_ip_addr, ef_ret);
+            LOG_E("%s ef_set_env_blob(a_ip,%.*s) error(%d)!", __FUNCTION__, a_ip->len, a_ip->c_str, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -931,10 +979,10 @@ static int set_config_info(c_str_ref *cycle, c_str_ref *acquisition, c_str_ref *
     /* b_ip */
     if (!strref_is_empty(b_ip))
     {
-        EfErrCode ef_ret = ef_set_env_blob("b_ip", &b_ip_addr, sizeof(b_ip_addr));
+        EfErrCode ef_ret = ef_set_env_blob("b_ip", b_ip->c_str, b_ip->len);
         if (ef_ret != EF_NO_ERR)
         {
-            LOG_E("%s ef_set_env_blob(b_ip,0x%x) error(%d)!", __FUNCTION__, b_ip_addr, ef_ret);
+            LOG_E("%s ef_set_env_blob(b_ip,%.*s) error(%d)!", __FUNCTION__, b_ip->len, b_ip->c_str, ef_ret);
             /* 500 error 系统内部异常 */
             return 500; // TODO恢复已成功的部分设置
         }
@@ -1046,6 +1094,62 @@ static void mqtt_offline_callback(mqtt_client *client)
     app_send_msg(APP_MSG_MQTT_CLIENT_OFFLINE, RT_NULL); // MQTT客户端已下线
 }
 
+/* 上报数据 */
+static rt_err_t app_data_report(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    mqtt_publish_data_info *pub_info = mqtt_alloc_publish_data_info();
+    RT_ASSERT(pub_info != RT_NULL);
+    char* topic_buf = pub_info->topic;
+    char* json_data_buf = pub_info->payload;
+    
+    /* 编码JSON采集数据并发送 */
+    {
+		time_t time_stamp = time(RT_NULL); // 上报时间戳
+        rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
+            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
+			"\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
+			get_clientid(), time_stamp, get_itemid());
+        
+        /* 读取最新采集的数据(JSON格式)  */
+        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
+        if (read_len <= 0)
+        {
+            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+        json_data_len += read_len;
+        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
+        json_data_buf[json_data_len++] = '}';
+        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
+        json_data_buf[json_data_len] = '\0';
+        
+        /* 发布/sys/${productKey}/${deviceCode}/telemetry/real_time_data */
+        {
+            rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_devicecode());
+            LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
+            int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, topic_buf, json_data_buf, json_data_len);
+            if (mqtt_ret != PAHO_SUCCESS)
+            {
+                LOG_E("%s mqtt publish(%s) error(%d)", __FUNCTION__, topic_buf, mqtt_ret);
+                ret = -RT_ERROR;
+                goto __exit;
+            }
+        }
+    }
+    
+__exit:
+    if (pub_info != NULL)
+    {
+        mqtt_free_publish_data_info(pub_info);
+    }
+    
+    return ret;
+}
+
 static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
 {
     (void) client;
@@ -1055,6 +1159,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     c_str_ref devicecode = {0, NULL}; // deviceCode
     c_str_ref operationdate = {0, NULL}; // operationDate
     c_str_ref id = {0, NULL}; // id
+    mqtt_publish_data_info *pub_info = RT_NULL;
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
     rt_err_t ret = RT_EOK;
@@ -1136,21 +1241,10 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     }
     
     /* 分配响应消息用的内存 */
-    topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
-    if (topic_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
-    
-    json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
+    pub_info = mqtt_alloc_publish_data_info();
+    RT_ASSERT(pub_info != RT_NULL);
+    topic_buf = pub_info->topic;
+    json_data_buf = pub_info->payload;
 	
     /* 编码JSON采集数据并发送 */
     {
@@ -1179,7 +1273,9 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
         LOG_D("publish(%s) %s", topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        pub_info->qos = QOS1;
+        pub_info->length = json_data_len;
+        ret = send_mqtt_publish_req(pub_info);
         if (ret != RT_EOK)
         {
             LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
@@ -1191,16 +1287,9 @@ __exit:
     
     if (ret != RT_EOK)
     {
-        if (topic_buf != NULL)
+        if (pub_info != NULL)
         {
-            rt_free(topic_buf);
-            topic_buf = NULL;
-        }
-        
-        if (json_data_buf != NULL)
-        {
-            rt_free(json_data_buf);
-            json_data_buf = NULL;
+            mqtt_free_publish_data_info(pub_info);
         }
     }
 }
@@ -1214,6 +1303,7 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     c_str_ref devicecode = {0, NULL}; // deviceCode
     c_str_ref operationdate = {0, NULL}; // operationDate
     c_str_ref id = {0, NULL}; // id
+    mqtt_publish_data_info *pub_info = RT_NULL;
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
     rt_err_t ret = RT_EOK;
@@ -1295,21 +1385,10 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     }
     
     /* 分配响应消息用的内存 */
-    topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
-    if (topic_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
-    
-    json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
+    pub_info = mqtt_alloc_publish_data_info();
+    RT_ASSERT(pub_info != RT_NULL);
+    topic_buf = pub_info->topic;
+    json_data_buf = pub_info->payload;
     
     /* 编码JSON配置信息并发送 */
     {
@@ -1343,7 +1422,9 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
         LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        pub_info->qos = QOS1;
+        pub_info->length = json_data_len;
+        ret = send_mqtt_publish_req(pub_info);
         if (ret != RT_EOK)
         {
             LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
@@ -1355,16 +1436,9 @@ __exit:
     
     if (ret != RT_EOK)
     {
-        if (topic_buf != NULL)
+        if (pub_info != NULL)
         {
-            rt_free(topic_buf);
-            topic_buf = NULL;
-        }
-        
-        if (json_data_buf != NULL)
-        {
-            rt_free(json_data_buf);
-            json_data_buf = NULL;
+            mqtt_free_publish_data_info(pub_info);
         }
     }
 }
@@ -1405,6 +1479,7 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     c_str_ref b_ip = {0, NULL}; // bIPSet
     c_str_ref b_port = {0, NULL}; // bPortSet
     c_str_ref restart = {0, NULL}; // restart
+    mqtt_publish_data_info *pub_info = RT_NULL;
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
     rt_err_t ret = RT_EOK;
@@ -1561,21 +1636,10 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
         &a_ip, &a_port, &b_ip, &b_port, &restart);
     
     /* 分配响应消息用的内存 */
-    topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
-    if (topic_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
-    
-    json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
+    pub_info = mqtt_alloc_publish_data_info();
+    RT_ASSERT(pub_info != RT_NULL);
+    topic_buf = pub_info->topic;
+    json_data_buf = pub_info->payload;
     
     /* 编码响应信息并发送 */
     {
@@ -1594,7 +1658,9 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
         LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        pub_info->qos = QOS1;
+        pub_info->length = json_data_len;
+        ret = send_mqtt_publish_req(pub_info);
         if (ret != RT_EOK)
         {
             LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
@@ -1605,22 +1671,20 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
 __exit:
     if (ret != RT_EOK)
     {
-        if (topic_buf != NULL)
+        if (pub_info != NULL)
         {
-            rt_free(topic_buf);
-            topic_buf = NULL;
-        }
-        
-        if (json_data_buf != NULL)
-        {
-            rt_free(json_data_buf);
-            json_data_buf = NULL;
+            mqtt_free_publish_data_info(pub_info);
         }
     }
     else
     {
         if (strref_str_cmp("1", &restart) == 0)
         {
+            if (pub_info != NULL)
+            {
+                mqtt_free_publish_data_info(pub_info);
+            }
+            
             /* 等待响应发送完毕 */
             rt_thread_mdelay(10 * 1000);
             /* 重启 */
@@ -1767,7 +1831,7 @@ static const char* get_upgrade_progress_desc(int step)
         case 200:
             return "upgrade success";
         default:
-            return "";
+            break;
     }
     return "";
 }
@@ -1775,26 +1839,16 @@ static const char* get_upgrade_progress_desc(int step)
 /* 发送升级进度回复消息 */
 static rt_err_t send_upgrade_progress(c_str_ref* req_id, int step)
 {
+    mqtt_publish_data_info *pub_info = RT_NULL;
     char *topic_buf = NULL;
     char *json_data_buf = NULL;
     rt_err_t ret = RT_EOK;
     
     /* 分配响应消息用的内存 */
-    topic_buf = (char*)rt_malloc(MQTT_TOPIC_BUF_LEN);
-    if (topic_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, MQTT_TOPIC_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
-    
-    json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
+    pub_info = mqtt_alloc_publish_data_info();
+    RT_ASSERT(pub_info != RT_NULL);
+    topic_buf = pub_info->topic;
+    json_data_buf = pub_info->payload;
     
     /* 编码响应信息并发送 */
     {
@@ -1812,7 +1866,9 @@ static rt_err_t send_upgrade_progress(c_str_ref* req_id, int step)
         LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
         
         /* 请求主线程来发布MQTT数据(回调函数不能阻塞) */
-        ret = send_mqtt_publish_req(QOS1, topic_buf, json_data_buf, json_data_len);
+        pub_info->qos = QOS1;
+        pub_info->length = json_data_len;
+        ret = send_mqtt_publish_req(pub_info);
         if (ret != RT_EOK)
         {
             LOG_E("%s send_mqtt_publish_req() error(%d)!", __FUNCTION__, ret);
@@ -1823,16 +1879,9 @@ static rt_err_t send_upgrade_progress(c_str_ref* req_id, int step)
 __exit:
     if (ret != RT_EOK)
     {
-        if (topic_buf != NULL)
+        if (pub_info != NULL)
         {
-            rt_free(topic_buf);
-            topic_buf = NULL;
-        }
-        
-        if (json_data_buf != NULL)
-        {
-            rt_free(json_data_buf);
-            json_data_buf = NULL;
+            mqtt_free_publish_data_info(pub_info);
         }
     }
     
@@ -1931,7 +1980,7 @@ static void check_and_report_ota_process(void)
 }
 
 /* HTTP OTA固件下载和升级线程 */
-static void http_ota_thread_proc(void *param)
+static void http_ota_thread_entry(void *param)
 {
     LOG_D("%s()", __FUNCTION__);
     
@@ -1984,7 +2033,7 @@ static void http_ota_thread_proc(void *param)
         }
     }
     
-    rt_free(ota_info);
+    http_free_ota_info(ota_info);
     
     app_send_msg(APP_MSG_MQTT_CLIENT_ONLINE, RT_NULL); // HTTP OTA线程已退出
 }
@@ -1995,7 +2044,8 @@ static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req
     LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
-    http_ota_info *ota_info = RT_NULL;
+    http_ota_info *ota_info = http_alloc_ota_info();
+    RT_ASSERT(ota_info != RT_NULL);
     
     rt_mutex_take(http_ota_mutex, RT_WAITING_FOREVER);
     
@@ -2006,14 +2056,6 @@ static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req
         goto __exit;
     }
     
-    ota_info = (http_ota_info*)rt_malloc(sizeof(http_ota_info));
-    if (ota_info == RT_NULL)
-    {
-        LOG_E("%s rt_malloc(%u) failed!", __FUNCTION__, sizeof(http_ota_info));
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
-    
     strref_str_cpy(ota_info->url, sizeof(ota_info->url), url);
     memcpy(ota_info->md5, md5, sizeof(ota_info->md5));
     strref_str_cpy(ota_info->req_id, sizeof(ota_info->req_id), req_id);
@@ -2021,7 +2063,7 @@ static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req
     ota_info->firmware_size = firmware_size;
     
     /* 创建HTTP OTA线程 */
-    http_ota_thread = rt_thread_create("http_ota", http_ota_thread_proc, 
+    http_ota_thread = rt_thread_create("http_ota", http_ota_thread_entry, 
         (void*)ota_info, HTTP_OTA_THREAD_STACK_SIZE, HTTP_OTA_THREAD_PRIORITY, 10);
     if (http_ota_thread == RT_NULL)
     {
@@ -2040,10 +2082,6 @@ static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req
 __exit:
     if (ret != RT_EOK)
     {
-        if (ota_info != RT_NULL)
-        {
-            rt_free(ota_info);
-        }
         if (http_ota_thread != RT_NULL)
         {
             rt_thread_delete(http_ota_thread);
@@ -2052,6 +2090,14 @@ __exit:
     }
     
     rt_mutex_release(http_ota_mutex);
+    
+    if (ret != RT_EOK)
+    {
+        if (ota_info != RT_NULL)
+        {
+            http_free_ota_info(ota_info);
+        }
+    }
     
     return ret;
 }
@@ -2329,6 +2375,11 @@ static void app_deinit()
         rt_mutex_delete(history_fifo_mutex);
         history_fifo_mutex = RT_NULL;
     }
+    if (RT_NULL != app_mp)
+    {
+        rt_mp_delete(app_mp);
+        app_mp = RT_NULL;
+    }
     if (RT_NULL != app_msg_queue)
     {
         rt_mq_delete(app_msg_queue);
@@ -2351,7 +2402,76 @@ static void app_deinit()
     }
 }
 
-static rt_err_t app_init()
+/* 初始化MODBUS */
+static rt_err_t app_modbus_init(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    config_info *cfg = cfg_get();
+    /* 校验位转换表(0=无'NONE',1=奇'EVEN',2=偶'ODD') */
+    const char parity_name[] = {'N', 'E', 'O'};
+    
+    int i = 0;
+    for (i = 0; i < ARRAY_SIZE(rs485_dev_infos); ++i)
+    {
+        rs485_device_info *device_info = &(rs485_dev_infos[i]);
+        
+        modbus_t *mb_ctx = modbus_new_rtu(device_info->dev_name, 
+            cfg->uart_x_cfg[i].baudrate, 
+            parity_name[cfg->uart_x_cfg[i].parity], 
+            cfg->uart_x_cfg[i].wordlength, 
+            cfg->uart_x_cfg[i].stopbits);
+        if (mb_ctx == NULL)
+        {
+            LOG_E("%s call modbus_new_rtu error!", __FUNCTION__);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+        device_info->mb_ctx = mb_ctx;
+        
+        /* 配置MODBUS RTU属性 */
+        modbus_rtu_set_serial_mode(mb_ctx, device_info->serial_mode);
+        if (device_info->serial_mode == MODBUS_RTU_RS485)
+        {
+            rt_pin_mode(device_info->rts_pin, PIN_MODE_OUTPUT);
+            /* function shall set the Request To Send mode to communicate on a RS485 serial bus. */
+            modbus_rtu_set_rts(mb_ctx, device_info->rts_pin, MODBUS_RTU_RTS_UP);
+        }
+        modbus_set_slave(mb_ctx, cfg->uart_x_cfg[i].slaveraddr); // 从机地址
+        modbus_set_response_timeout(mb_ctx, 1, 0); // 超时时间:1S
+        
+        /* 连接MODBUS端口 */
+        int iret = modbus_connect(mb_ctx);
+        if (iret != 0)
+        {
+            LOG_E("%s modbus_connect error(%d)!", __FUNCTION__, errno);
+            ret = -RT_ERROR;
+            goto __exit;
+        }
+    }
+    
+    ret = RT_EOK;
+    
+__exit:
+    if (ret != RT_EOK)
+    {
+        for (i = 0; i < ARRAY_SIZE(rs485_dev_infos); ++i)
+        {
+            rs485_device_info *device_info = &(rs485_dev_infos[i]);
+            if (device_info->mb_ctx != RT_NULL)
+            {
+                modbus_close(device_info->mb_ctx);
+                modbus_free(device_info->mb_ctx);
+                device_info->mb_ctx = RT_NULL;
+            }
+        }
+    }
+    
+    return ret;
+}
+
+static rt_err_t app_init(void)
 {
     LOG_D("%s()", __FUNCTION__);
     config_info *cfg = NULL;
@@ -2422,6 +2542,15 @@ static rt_err_t app_init()
         goto __exit;
     }
     
+    /* 创建APP内存池 */
+    app_mp = rt_mp_create("app_mp", APP_MP_BLOCK_NUM, APP_MP_BLOCK_SIZE);
+    if (RT_NULL == app_mp)
+    {
+        LOG_E("%s create app memory pool failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* create report timer */
     report_timer = rt_timer_create("report_timer", report_timer_timeout, 
                             RT_NULL, rt_tick_from_millisecond(cfg->cycle * 60 * 1000), 
@@ -2453,6 +2582,15 @@ static rt_err_t app_init()
         goto __exit;
     }
     
+    /* 初始化MODBUS */
+    ret = app_modbus_init();
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s app_modbus_init failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* 初始化MQTT连接参数 */
     {
         MQTTPacket_connectData condata = MQTTPacket_connectData_initializer;
@@ -2479,14 +2617,8 @@ static rt_err_t app_init()
         
         /* 设置服务器地址和端口 */
         {
-#ifndef TEST_NEW_FETURE
-            char addr[32] = "";
-            inet_ntoa_r(cfg->a_ip, addr, sizeof(addr));
-            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", addr, cfg->a_port);
-#else
-            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
-			//rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://47.103.22.229:1883");
-#endif
+            rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://%s:%u", cfg->a_ip, cfg->a_port);
+            //rt_snprintf(mqtt_server_url, sizeof(mqtt_server_url), "tcp://mq.tongxinmao.com:18830");
             mq_client.uri = mqtt_server_url;
             LOG_D("%s mqtt_server_url %s", __FUNCTION__, mqtt_server_url);
         }
@@ -2574,12 +2706,6 @@ static rt_err_t app_init()
         }
         netdev_set_status_callback(net_dev, tbss_netdev_status_callback);
     }
-	
-	/* 初始化RS485 RTS GPIO */
-	rt_pin_mode(RS485_1_REN_PIN, PIN_MODE_OUTPUT);
-	rt_pin_mode(RS485_2_REN_PIN, PIN_MODE_OUTPUT);
-	rt_pin_mode(RS485_3_REN_PIN, PIN_MODE_OUTPUT);
-	rt_pin_mode(RS485_4_REN_PIN, PIN_MODE_OUTPUT);
     
     /* 成功完成初始化 */
     ret = RT_EOK;
@@ -2600,10 +2726,17 @@ __exit:
         }
         memset(&mq_client, 0, sizeof(mq_client));
         
+        
+        
         if (RT_NULL != history_fifo_mutex)
         {
             rt_mutex_delete(history_fifo_mutex);
             history_fifo_mutex = RT_NULL;
+        }
+        if (RT_NULL != app_mp)
+        {
+            rt_mp_delete(app_mp);
+            app_mp = RT_NULL;
         }
         if (RT_NULL != app_msg_queue)
         {
@@ -2660,68 +2793,6 @@ static rt_err_t mqtt_client_stop(rt_int32_t timeout)
     return RT_EOK;
 }
 
-/* 上报数据 */
-static rt_err_t app_data_report(void)
-{
-    LOG_D("%s()", __FUNCTION__);
-    
-    rt_err_t ret = RT_EOK;
-
-    char* json_data_buf = (char*)rt_malloc(JSON_DATA_BUF_LEN);
-    if (json_data_buf == NULL)
-    {
-        LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, JSON_DATA_BUF_LEN);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
-    
-    /* 编码JSON采集数据并发送 */
-    {
-		time_t time_stamp = time(RT_NULL); // 上报时间戳
-        rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
-            "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
-			"\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
-			get_clientid(), time_stamp, get_itemid());
-        
-        /* 读取最新采集的数据(JSON格式)  */
-        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
-        if (read_len <= 0)
-        {
-            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
-            ret = -RT_ERROR;
-            goto __exit;
-        }
-        json_data_len += read_len;
-        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
-        json_data_buf[json_data_len++] = '}';
-        RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
-        json_data_buf[json_data_len] = '\0';
-        
-        /* 发布/sys/${productKey}/${deviceCode}/telemetry/real_time_data */
-        {
-            char topic_buf[MQTT_TOPIC_BUF_LEN] = "";
-            rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/telemetry/real_time_data", get_productkey(), get_devicecode());
-            LOG_D("%s publish(%s) %s", __FUNCTION__, topic_buf, json_data_buf);
-            int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, topic_buf, json_data_buf, json_data_len);
-            if (mqtt_ret != PAHO_SUCCESS)
-            {
-                LOG_E("%s mqtt publish(%s) error(%d)", __FUNCTION__, topic_buf, mqtt_ret);
-                ret = -RT_ERROR;
-                goto __exit;
-            }
-        }
-    }
-    
-__exit:
-    if (json_data_buf != NULL)
-    {
-        rt_free(json_data_buf);
-        json_data_buf = NULL;
-    }
-    
-    return ret;
-}
-
 /* 请求采集数据 */
 
 rt_err_t req_data_acquisition(void)
@@ -2754,6 +2825,14 @@ int main(void)
     if (ret != RT_EOK)
     {
         LOG_E("%s app_init error(%d)!", __FUNCTION__, ret);
+        goto __exit;
+    }
+    
+    /* 启动定时采集 */
+    ret = rt_timer_start(acquisition_timer);
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s start acquisition timer failed(%d)!", __FUNCTION__, ret);
         goto __exit;
     }
     
@@ -2805,24 +2884,24 @@ int main(void)
             }
             case APP_MSG_MQTT_PUBLISH_REQ: // MQTT发布数据请求
             {
-                mqtt_publish_data_info *pub_data_info  = 
+                mqtt_publish_data_info *pub_info  = 
                     (mqtt_publish_data_info*)app_msg.msg_data;
-                if (pub_data_info == RT_NULL)
+                if (pub_info == RT_NULL)
                 {
                     LOG_E("%s recv mqtt_publish_data_info is empty!", __FUNCTION__);
                     break;
                 }
                 
-                if ((pub_data_info->topic != RT_NULL) 
-                    && (pub_data_info->payload != RT_NULL)
-                    && (pub_data_info->length > 0))
+                if ((pub_info->topic != RT_NULL) 
+                    && (pub_info->payload != RT_NULL)
+                    && (pub_info->length > 0))
                 {
                     /* 发布MQTT数据 */
-                    int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, pub_data_info->topic, 
-                        pub_data_info->payload, pub_data_info->length);
+                    int mqtt_ret = paho_mqtt_publish(&mq_client, QOS1, pub_info->topic, 
+                        pub_info->payload, pub_info->length);
                     if (mqtt_ret != PAHO_SUCCESS)
                     {
-                        LOG_E("%s mqtt publish(%s) error(%d)!", __FUNCTION__, pub_data_info->topic, ret);
+                        LOG_E("%s mqtt publish(%s) error(%d)!", __FUNCTION__, pub_info->topic, ret);
                     }
                 }
                 else
@@ -2831,15 +2910,7 @@ int main(void)
                 }
                 
                 /* 释放内存 */
-                if (pub_data_info->topic != RT_NULL)
-                {
-                    rt_free(pub_data_info->topic);
-                }
-                if (pub_data_info->payload != RT_NULL)
-                {
-                    rt_free(pub_data_info->payload);
-                }
-                rt_free(app_msg.msg_data);
+                mqtt_free_publish_data_info(pub_info);
                 break;
             }
             case APP_MSG_MQTT_CLIENT_ONLINE: // MQTT客户端已上线
@@ -2885,6 +2956,13 @@ int main(void)
     }
     
 __exit:
+    
+    /* 停止定时采集 */
+    ret = rt_timer_stop(acquisition_timer);
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s stop acquisition timer failed(%d)!", __FUNCTION__, ret);
+    }
     
     LOG_D("main exit");
     
