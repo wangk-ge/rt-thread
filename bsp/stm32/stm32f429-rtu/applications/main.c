@@ -1931,7 +1931,7 @@ static void check_and_report_ota_process(void)
 }
 
 /* HTTP OTA固件下载和升级线程 */
-static void http_ota_thread_proc(void *param)
+static void http_ota_thread_entry(void *param)
 {
     LOG_D("%s()", __FUNCTION__);
     
@@ -2021,7 +2021,7 @@ static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req
     ota_info->firmware_size = firmware_size;
     
     /* 创建HTTP OTA线程 */
-    http_ota_thread = rt_thread_create("http_ota", http_ota_thread_proc, 
+    http_ota_thread = rt_thread_create("http_ota", http_ota_thread_entry, 
         (void*)ota_info, HTTP_OTA_THREAD_STACK_SIZE, HTTP_OTA_THREAD_PRIORITY, 10);
     if (http_ota_thread == RT_NULL)
     {

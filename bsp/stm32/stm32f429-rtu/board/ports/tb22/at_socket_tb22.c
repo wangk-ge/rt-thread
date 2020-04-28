@@ -38,7 +38,7 @@
 #define TB22_MODULE_SEND_MAX_SIZE           1460 // AT+NSOSD最大传输1358字节
 #define TB22_MODULE_RECV_MAX_SIZE           1460 // AT+NSORF最大传输1358字节
 
-#define TB22_SOCK_RECV_PACKET_NUM           24 // Socket接收包个数(用于内存池分配)
+#define TB22_SOCK_RECV_PACKET_NUM           32 // Socket接收包个数(用于内存池分配)
 #define TB22_SOCK_RECV_PACKET_SIZE          64 // Socket接收包大小(用于内存池分配)
 #define TB22_SOCK_RECV_THREAD_STACK_SIZE    4096
 #define TB22_SOCK_RECV_THREAD_PRIORITY      (RT_THREAD_PRIORITY_MAX / 3 - 2) // 优先级应该高于at_client线程
