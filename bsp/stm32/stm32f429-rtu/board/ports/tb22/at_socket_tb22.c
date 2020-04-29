@@ -128,8 +128,11 @@ static int tb22_socket_event_recv(struct at_device *device, uint32_t event, uint
     result = rt_event_recv(device->socket_event, event, option | RT_EVENT_FLAG_CLEAR, timeout, &recved);
     if (result != RT_EOK)
     {
-        LOG_E("%s rt_event_recv failed(%d)!", __FUNCTION__, result);
-        return -RT_ETIMEOUT;
+        if (result != -RT_ETIMEOUT)
+        {
+            LOG_E("%s rt_event_recv failed(%d)!", __FUNCTION__, result);
+        }
+        return result;
     }
 
     return recved;
