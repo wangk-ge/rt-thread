@@ -130,7 +130,7 @@
 #define AT_CLIENT_NUM_MAX 1
 #define AT_USING_SOCKET
 #define AT_PRINT_RAW_CMD
-#define AT_CMD_MAX_LEN 2048
+#define AT_CMD_MAX_LEN 3072
 #define AT_SW_VERSION_NUM 0x10300
 
 /* VBUS(Virtual Software BUS) */
@@ -143,7 +143,7 @@
 #define ULOG_OUTPUT_LVL 7
 #define ULOG_USING_ISR_LOG
 #define ULOG_ASSERT_ENABLE
-#define ULOG_LINE_BUF_SIZE 2048
+#define ULOG_LINE_BUF_SIZE 3072
 
 /* log format */
 
@@ -163,7 +163,6 @@
 #define MQTT_DEBUG
 #define PKG_USING_WEBCLIENT
 #define WEBCLIENT_DEBUG
-#define WEBCLIENT_USING_FILE_DOWMLOAD
 #define WEBCLIENT_NOT_USE_TLS
 #define PKG_USING_WEBCLIENT_LATEST_VERSION
 #define PKG_WEBCLIENT_VER_NUM 0x99999
@@ -263,7 +262,7 @@
 #define TB22_STATUS_PIN -1
 #define TB22_DEVICE_NAME "tb22"
 #define TB22_CLIENT_NAME "uart3"
-#define TB22_RECV_BUFF_LEN 2048
+#define TB22_RECV_BUFF_LEN 3072
 #define KAWAII_MQTT_USE_SAL
 
 /* On-chip Peripheral Drivers */

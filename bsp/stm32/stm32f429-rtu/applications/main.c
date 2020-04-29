@@ -2958,10 +2958,13 @@ int main(void)
 __exit:
     
     /* 停止定时采集 */
-    ret = rt_timer_stop(acquisition_timer);
-    if (RT_EOK != ret)
+    if (acquisition_timer)
     {
-        LOG_E("%s stop acquisition timer failed(%d)!", __FUNCTION__, ret);
+        ret = rt_timer_stop(acquisition_timer);
+        if (RT_EOK != ret)
+        {
+            LOG_E("%s stop acquisition timer failed(%d)!", __FUNCTION__, ret);
+        }
     }
     
     LOG_D("main exit");

@@ -36,8 +36,8 @@
 
 #if defined(AT_DEVICE_USING_TB22) && defined(AT_USING_SOCKET)
 
-#define TB22_MODULE_SEND_MAX_SIZE           512 // AT+NSOSD最大传输1358字节
-#define TB22_MODULE_RECV_MAX_SIZE           512 // AT+NSORF最大读取1358字节
+#define TB22_MODULE_SEND_MAX_SIZE           1358 // AT+NSOSD最大传输1358字节
+#define TB22_MODULE_RECV_MAX_SIZE           1358 // AT+NSORF最大读取1358字节
 
 #define TB22_SOCK_RECV_PACKET_NUM           32 // Socket接收包个数(用于内存池分配)
 #define TB22_SOCK_RECV_PACKET_SIZE          64 // Socket接收包大小(用于内存池分配)

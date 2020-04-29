@@ -537,6 +537,7 @@ __exit:
         /* 清除缓存的配置数据,释放内存 */
         cfg_info_clear();
         //cfg_set_default();
+        //ef_env_set_default();
     }
     
     return ret;

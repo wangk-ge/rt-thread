@@ -13,7 +13,11 @@ at_cmd_misc.c
 util.c
 strref.c
 config.c
+http_ota.c
+http-parser/http_parser.c
 """)
+
+path += [cwd + '/http-parser']
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)
 
