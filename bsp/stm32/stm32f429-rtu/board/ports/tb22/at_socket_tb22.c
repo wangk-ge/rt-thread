@@ -395,6 +395,8 @@ static int tb22_socket_close(struct at_socket *socket)
     int result = RT_EOK;
     struct at_device *device = (struct at_device *) socket->device;
     
+    LOG_D("%s()", __FUNCTION__);
+    
     if (socket->type != AT_SOCKET_TCP)
     {
         LOG_E("%s socket->type(%d) not support!", __FUNCTION__, socket->type);
@@ -404,6 +406,8 @@ static int tb22_socket_close(struct at_socket *socket)
     struct tb22_sock_t *tb22_sock = (struct tb22_sock_t*)(socket->user_data);
     int socket_index = tb22_sock->index;
     int device_socket = tb22_sock->device_socket;
+    
+    LOG_D("%s() socket_index(%d) device_socket(%d)", __FUNCTION__, socket_index, device_socket);
 
     at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
     RT_ASSERT(resp != RT_NULL);
@@ -449,6 +453,8 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     RT_ASSERT(ip != RT_NULL);
     RT_ASSERT(port >= 0);
 
+    LOG_D("%s sddr(%s:%d)", __FUNCTION__, ip, port);
+    
     if (!is_client)
     {
         LOG_E("%s is_client(%d) not support!", __FUNCTION__, is_client);
