@@ -599,7 +599,7 @@ static at_result_t at_uartxfunction_println(char uart_x)
         return AT_RESULT_FAILE;
     }
     
-    at_server_printfln("+UART%cSLAVERADDR: 0x%02x", uart_x, code);
+    at_server_printfln("+UART%cFUNCTION: 0x%02x", uart_x, code);
 
     return AT_RESULT_OK;
 }
