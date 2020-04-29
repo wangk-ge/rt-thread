@@ -251,7 +251,7 @@ static void tb22_do_sock_recv_work(struct at_device *device, int socket_index)
             }
         }
         
-        /* 是否找到有效的相应 */
+        /* 是否找到有效的响应 */
         if ((param_count != 6) || (sock != device_socket))
         {
             LOG_E("%s response is invalid!", __FUNCTION__);
@@ -436,7 +436,7 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
     int i = 0;
     at_response_t resp = RT_NULL;
     int result = RT_EOK;
-    int device_socket = 0;
+    int device_socket = -1;
     int socket_index = (int) socket->user_data;
     struct at_device *device = (struct at_device *) socket->device;
     struct tb22_sock_t *tb22_sock = RT_NULL;
@@ -465,8 +465,22 @@ static int tb22_socket_connect(struct at_socket *socket, char *ip, int32_t port,
         goto __exit;
     }
     
-    if (at_resp_parse_line_args(resp, 2, "%d", &device_socket) <= 0)
+    /* 找到<socket>这行响应 */
+    for (i = 1; i <= resp->line_counts; ++i)
+    { // 为了处理相应中间夹杂着主动上报干扰的情况
+        int sock = 0;
+        if (at_resp_parse_line_args(resp, i, "%d", &sock) == 1)
+        {
+            /* 得到设备创建的Socket */
+            device_socket = sock;
+            break;
+        }
+    }
+    
+    /* 是否找到有效的响应 */
+    if (device_socket != -1)
     {
+        LOG_E("%s at response invalid!", __FUNCTION__);
         result = -RT_ERROR;
         goto __exit;
     }
@@ -571,21 +585,41 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         /* send the "AT+NSOSD" commands to AT server. */
         if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_sock_send_buf, tb22_sock->sequence) < 0)
         {
+            LOG_E("%s at_obj_exec_cmd failed!", __FUNCTION__);
             result = -RT_ERROR;
             goto __exit;
         }
         
+        /* 找到<socket>,<length>这行响应 */
         int sock = 0, len = 0;
-        if (at_resp_parse_line_args(resp, 2, "%d,%d,%d", &sock, &len) <= 0)
-        {
-            result = -RT_ERROR;
-            goto __exit;
+        int i = 0;
+        for (i = 1; i <= resp->line_counts; ++i)
+        { // 为了处理相应中间夹杂着主动上报干扰的情况
+            if (at_resp_parse_line_args(resp, i, "%d,%d", &sock, &len) <= 0)
+            {
+                continue;
+            }
+            
+            if (sock == device_socket)
+            {
+                break;
+            }
         }
-        RT_ASSERT(device_socket == sock);
-        cur_pkt_size = len;
         
+        /* 释放AT Response */
         tb22_free_at_resp(resp);
         resp = RT_NULL;
+        
+        /* 是否找到有效的响应 */
+        if (sock != device_socket)
+        {
+            LOG_E("%s at response invalid!", __FUNCTION__);
+            result = -RT_ERROR;
+            goto __exit;
+        }
+        
+        /* 实际发送数据长度(bytes) */
+        cur_pkt_size = len;
         
         /* 
          * 进行正常数据传输业务时，在业务数据交互过程中，若60s后未收到下行数据，
@@ -613,6 +647,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         /* update sequence */
         tb22_update_sequence(socket);
 
+        /* 统计已成功发送的数据长度(bytes) */
         sent_size += cur_pkt_size;
     }
 
