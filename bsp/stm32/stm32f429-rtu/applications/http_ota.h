@@ -32,7 +32,7 @@ extern   "C"
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
 **----------------------------------------------------------------------------*/
-enum
+typedef enum
 {
 	HTTP_OTA_DOWNLOAD_AND_VERIFY_SUCCESS = 0, // 下载并校验成功
 	HTTP_OTA_DOWNLOAD_FAIL, // 下载失败
@@ -42,8 +42,12 @@ enum
 /*----------------------------------------------------------------------------*
 **                             Function Define                                *
 **----------------------------------------------------------------------------*/
-/* 下载固件并执行MD5校验,返回值: 0=下载并校验成功, -1=下载失败, -2=校验失败 */
-http_ota_result http_ota_fw_download(const char *uri, int firmware_size, uint8_t *orign_md5);
+/* 下载固件并执行MD5校验 */
+http_ota_result http_ota_fw_download(const char *url, size_t firmware_size, 
+	uint8_t *orign_md5, uint32_t retry_count);
+
+/* 重启系统进行升级 */
+void http_ota_reboot(void);
 
 /**--------------------------------------------------------------------------*
 **                         Compiler Flag                                     *

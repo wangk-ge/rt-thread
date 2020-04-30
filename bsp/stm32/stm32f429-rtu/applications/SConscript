@@ -17,7 +17,7 @@ http_ota.c
 http-parser/http_parser.c
 """)
 
-path += [cwd + '/http-parser']
+CPPPATH += [cwd + '/http-parser']
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)
 

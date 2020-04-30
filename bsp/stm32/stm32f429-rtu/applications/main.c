@@ -27,6 +27,7 @@
 #include "util.h"
 #include "strref.h"
 #include "app.h"
+#include "http_ota.h"
 
 #define LOG_TAG              "main"
 #define LOG_LVL              LOG_LVL_DBG
@@ -43,7 +44,6 @@ typedef enum
     APP_MSG_MQTT_PUBLISH_REQ, // MQTT发布数据请求
     APP_MSG_MQTT_CLIENT_ONLINE, // MQTT客户端器上线
     APP_MSG_MQTT_CLIENT_OFFLINE, // MQTT客户端器下线
-    APP_MSG_HTTP_OTA_THREAD_QUIT, // HTTP OTA线程已退出
 } app_msg_type;
 
 /* RS485设备名 */
@@ -175,12 +175,6 @@ char topic_config_set[MQTT_TOPIC_BUF_LEN] = "";
 char topic_telemetry_result[MQTT_TOPIC_BUF_LEN] = "";
 char topic_upgrade_update[MQTT_TOPIC_BUF_LEN] = "";
 
-/* 下载固件并执行MD5校验,返回值: 0=下载并校验成功, -1=下载失败, -2=校验失败 */
-extern int http_ota_fw_download(const char* uri, int size, unsigned char* orign_md5);
-
-/* 重启系统进行升级 */
-extern void http_ota_reboot(void);
-
 /* 从APP内存池分配一块内存 */
 void *app_mp_alloc(void)
 {
@@ -193,7 +187,7 @@ void *app_mp_alloc(void)
 /* 释放APP内存池分配的内存块 */
 void app_mp_free(void *buf)
 {
-    if (buf != RT_NULL);
+    if (buf != RT_NULL)
     {
         rt_mp_free(buf);
     }
@@ -216,7 +210,7 @@ static mqtt_publish_data_info *mqtt_alloc_publish_data_info(void)
 /* 释放mqtt_publish_data_info对象 */
 static void mqtt_free_publish_data_info(mqtt_publish_data_info *pub_info)
 {
-    if (pub_info != RT_NULL);
+    if (pub_info != RT_NULL)
     {
         rt_mp_free(pub_info);
     }
@@ -235,7 +229,7 @@ static http_ota_info *http_alloc_ota_info(void)
 /* 释放http_ota_info对象 */
 static void http_free_ota_info(http_ota_info *ota_info)
 {
-    if (ota_info != RT_NULL);
+    if (ota_info != RT_NULL)
     {
         rt_mp_free(ota_info);
     }
@@ -1991,10 +1985,10 @@ static void http_ota_thread_entry(void *param)
     c_str_ref version = {strlen(ota_info->version), ota_info->version};
     
     /* 下载并校验OTA固件(耗时操作) */
-    int ret = http_ota_fw_download(ota_info->url, ota_info->firmware_size, ota_info->md5);
+    http_ota_result ret = http_ota_fw_download(ota_info->url, ota_info->firmware_size, ota_info->md5, 100);
     switch (ret)
     {
-        case 0: // 下载并校验成功
+        case HTTP_OTA_DOWNLOAD_AND_VERIFY_SUCCESS: // 下载并校验成功
         {
             /* 上报下载成功 */
             send_upgrade_progress(&id, 1);
@@ -2009,18 +2003,21 @@ static void http_ota_thread_entry(void *param)
                 send_upgrade_progress(&id, -3); // 直接上报升级失败
                 break;
             }
+            
+            /* 等待上报完毕 */
+            rt_thread_delay(rt_tick_from_millisecond(10 * 1000));
 
             /* 重启系统进行升级 */
             http_ota_reboot();
             break;
         }
-        case -1: // 下载失败
+        case HTTP_OTA_DOWNLOAD_FAIL: // 下载失败
         {
             /* 上报下载失败 */
             send_upgrade_progress(&id, -1);
             break;
         }
-        case -2: // 校验失败
+        case HTTP_OTA_VERIFY_FAIL: // 校验失败
         {
             /* 上报校验失败 */
             send_upgrade_progress(&id, -2);
@@ -2034,8 +2031,10 @@ static void http_ota_thread_entry(void *param)
     }
     
     http_free_ota_info(ota_info);
-    
-    app_send_msg(APP_MSG_MQTT_CLIENT_ONLINE, RT_NULL); // HTTP OTA线程已退出
+
+    rt_mutex_take(http_ota_mutex, RT_WAITING_FOREVER);
+    http_ota_thread = RT_NULL;
+    rt_mutex_release(http_ota_mutex);
 }
 
 /* 执行HTTP OTA请求 */
@@ -2077,18 +2076,10 @@ static rt_err_t do_http_ota_request(c_str_ref *url, uint8_t *md5, c_str_ref *req
     if (ret != RT_EOK)
     {
         LOG_E("%s rt_thread_startup() failed(%d)!", __FUNCTION__, ret);
+        http_ota_thread = RT_NULL;
     }
     
 __exit:
-    if (ret != RT_EOK)
-    {
-        if (http_ota_thread != RT_NULL)
-        {
-            rt_thread_delete(http_ota_thread);
-            http_ota_thread = RT_NULL;
-        }
-    }
-    
     rt_mutex_release(http_ota_mutex);
     
     if (ret != RT_EOK)
@@ -2934,17 +2925,6 @@ int main(void)
                 {
                     LOG_E("%s stop report timer failed(%d)!", __FUNCTION__, ret);
                 }
-                break;
-            }
-            case APP_MSG_HTTP_OTA_THREAD_QUIT: // HTTP OTA线程已退出
-            {
-                rt_mutex_take(http_ota_mutex, RT_WAITING_FOREVER);
-                
-                /* 释放资源 */
-                rt_thread_delete(http_ota_thread);
-                http_ota_thread = RT_NULL;
-                
-                rt_mutex_release(http_ota_mutex);
                 break;
             }
             default:

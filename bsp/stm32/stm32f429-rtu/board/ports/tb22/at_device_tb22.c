@@ -523,6 +523,95 @@ static struct netdev *tb22_netdev_add(const char *netdev_name)
 }
 
 /* =============================  tb22 device operations ============================= */
+/* 切换波特率 */
+static rt_err_t tb22_change_baudrate(struct at_device *device, at_response_t resp, int to_baudrate)
+{
+    LOG_D("%s() to_baudrate=%d", __FUNCTION__, to_baudrate);
+    
+    rt_err_t result = RT_EOK;
+    int baudrate = 0;
+    
+    /* Get the baudrate */
+    if (at_obj_exec_cmd(device->client, resp, "AT+NATSPEED?") != RT_EOK)
+    {
+        result = -RT_ERROR;
+        LOG_E(">> AT+NATSPEED?");
+        goto __exit;
+    }
+    if (at_resp_parse_line_args_by_kw(resp, "+NATSPEED:", "+NATSPEED:%d", &baudrate) < 0)
+    {
+        result = -RT_ERROR;
+        LOG_E("at_resp_parse_line_args_by_kw failed!");
+        goto __exit;
+    }
+    
+    LOG_D("baudrate before change(%d)", baudrate);
+    
+    if (baudrate != to_baudrate)
+    {
+        /* Set the baudrate */
+        if (at_obj_exec_cmd(device->client, resp, "AT+NATSPEED=%d,0,0", to_baudrate) != RT_EOK)
+        {
+            result = -RT_ERROR;
+            LOG_E(">> AT+NATSPEED=%d,0,0", to_baudrate);
+            goto __exit;
+        }
+        
+        /* 切换串口波特率 */
+        struct serial_configure uart_cfg = {
+            to_baudrate,        /* baudrate */
+            DATA_BITS_8,        /* 8 databits */
+            STOP_BITS_1,        /* 1 stopbit */
+            PARITY_NONE,        /* No parity  */
+            BIT_ORDER_LSB,      /* LSB first sent */
+            NRZ_NORMAL,         /* Normal mode */
+            RT_SERIAL_RB_BUFSZ, /* Buffer size */
+            0
+        };
+        rt_device_t at_client_dev = rt_device_find(TB22_CLIENT_NAME);
+        if (at_client_dev == RT_NULL)
+        {
+            result = -RT_ERROR;
+            LOG_E("rt_device_find(%s) failed!", TB22_CLIENT_NAME);
+            goto __exit;
+        }
+        
+        rt_err_t ret = rt_device_control(at_client_dev, RT_DEVICE_CTRL_CONFIG, &uart_cfg);
+        if (ret != RT_EOK)
+        {
+            result = ret;
+            LOG_E("rt_device_control(%s) error(%d)!", TB22_CLIENT_NAME, ret);
+            goto __exit;
+        }
+        
+        /* 立即使用新波特率与模组通信 */
+        //if (at_obj_exec_cmd(device->client, resp, "AT") != RT_EOK)
+        //{
+        //    result = -RT_ERROR;
+        //    LOG_E(">> AT");
+        //    goto __exit;
+        //}
+    }
+    
+    /* Get the baudrate */
+    if (at_obj_exec_cmd(device->client, resp, "AT+NATSPEED?") != RT_EOK)
+    {
+        result = -RT_ERROR;
+        LOG_E(">> AT+NATSPEED?");
+        goto __exit;
+    }
+    if (at_resp_parse_line_args_by_kw(resp, "+NATSPEED:", "+NATSPEED:%d", &baudrate) < 0)
+    {
+        result = -RT_ERROR;
+        LOG_E("at_resp_parse_line_args_by_kw failed!");
+        goto __exit;
+    }
+    
+    LOG_D("baudrate after change(%d)", baudrate);
+    
+__exit:
+    return result;
+}
 
 /* initialize for tb22 */
 static void tb22_init_thread_entry(void *parameter)
@@ -539,7 +628,7 @@ static void tb22_init_thread_entry(void *parameter)
     rt_err_t result = RT_EOK;
     at_response_t resp = RT_NULL;
     struct at_device *device = (struct at_device *) parameter;
-    struct at_client *client = device->client;
+    //struct at_client *client = device->client;
 
     LOG_D("start init %s device.", device->name);
 	
@@ -552,15 +641,41 @@ static void tb22_init_thread_entry(void *parameter)
         tb22_reset(device);
         rt_thread_mdelay(1000);
 
+#if 0
         /* wait tb22 startup finish, send AT every 500ms, if receive OK, SYNC success*/
-        if (at_client_obj_wait_connect(client, TB22_WAIT_CONNECT_TIME))
+        if (at_client_obj_wait_connect(device->client, TB22_WAIT_CONNECT_TIME))
         {
             result = -RT_ETIMEOUT;
+            LOG_E("at_client_obj_wait_connect() failed!");
             goto __exit;
         }
+#else
+        {
+            int try_cnt = 5;
+            while (at_obj_exec_cmd(device->client, resp, "AT") != RT_EOK)
+            {
+                rt_thread_mdelay(1000);
+                try_cnt--;
+                if (try_cnt <= 0)
+                {
+                    result = -RT_ETIMEOUT;
+                    LOG_E("at_obj_exec_cmd(AT) failed!");
+                    goto __exit;
+                }
+            }
+        }
+#endif    
         
-		
-		
+#if 0
+		/* 切换到波特率921600 */
+        result = tb22_change_baudrate(device, resp, 921600);
+        if (result != RT_EOK)
+        {
+            LOG_E("tb22_change_baudrate(921600) failed!");
+            goto __exit;
+        }
+#endif	
+        
         /* disable echo */
         if (at_obj_exec_cmd(device->client, resp, "ATE0") != RT_EOK)
         {

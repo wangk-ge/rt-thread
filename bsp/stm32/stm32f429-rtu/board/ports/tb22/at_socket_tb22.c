@@ -1004,6 +1004,7 @@ int tb22_socket_init(struct at_device *device)
     if (ret != RT_EOK)
     {
         LOG_E("%s rt_thread_startup(sock_recv_thread) failed(%d)!", __FUNCTION__, ret);
+        tb22->sock_recv_thread = RT_NULL;
         //goto __err;
     }
 
@@ -1014,11 +1015,6 @@ __err:
         {
             rt_mp_delete(tb22->sock_recv_mp);
             tb22->sock_recv_mp = RT_NULL;
-        }
-        if (tb22->sock_recv_thread)
-        {
-            rt_thread_delete(tb22->sock_recv_thread);
-            tb22->sock_recv_thread = RT_NULL;
         }
     }
     
