@@ -598,11 +598,11 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         /* 数据转换成hex字符串 */
         cur_pkt_size = util_to_hex_str((const uint8_t*)buff + sent_size, cur_pkt_size, 
             at_sock_send_buf, sizeof(at_sock_send_buf));
-        
+    
+__retry:        
         resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
         RT_ASSERT(resp != RT_NULL);
     
-__retry:
         /* send the "AT+NSOSD" commands to AT server. */
         if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_sock_send_buf, tb22_sock->sequence) < 0)
         {
