@@ -35,16 +35,20 @@
 
 #define TEST_NEW_FETURE // 测试新特性
 
+/* APP主循环消息 */
 typedef enum
 {
     APP_MSG_NONE = 0,
     APP_MSG_MQTT_CLIENT_START_REQ, // MQTT客户端启动请求
-    APP_MSG_DATA_REPORT_REQ, // 数据主动上报请求
     APP_MSG_DATA_ACQUISITION_REQ, // 数据采集请求
     APP_MSG_MQTT_PUBLISH_REQ, // MQTT发布数据请求
     APP_MSG_MQTT_CLIENT_ONLINE, // MQTT客户端器上线
     APP_MSG_MQTT_CLIENT_OFFLINE, // MQTT客户端器下线
 } app_msg_type;
+
+/* 数据上报事件 */
+#define DATA_REPORT_EVENT_REQ 0x00000001 // 数据上报请求(请求上报线程上报数据)
+#define DATA_REPORT_EVENT_ACK 0x00000002 // 数据上报应答(收到服务器应答)
 
 /* RS485设备名 */
 #define RS485_1_DEVICE_NAME "/dev/uart2"
@@ -59,8 +63,8 @@ typedef enum
 #define RS485_3_REN_PIN GET_PIN(E, 12) // PE12(高电平发送,低电平接收)
 #define RS485_4_REN_PIN GET_PIN(E, 13) // PE13(高电平发送,低电平接收)
 
-/* 历史数据保存的最大条数 */
-#define HISTORY_DATA_MAX_NUM (4096)
+/* 历史数据保存的最大条数(需保证5分钟采集间隔条件下存储3个月的数据) */
+#define HISTORY_DATA_MAX_NUM (25920)
 
 /* MQTT订阅主题名缓冲区长度 */
 #define MQTT_TOPIC_BUF_LEN (128)
@@ -87,10 +91,25 @@ typedef enum
 #define MQTT_CLIENT_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY - 1)
 
 /* HTTP OTA线程优先级(优先级低于主线程) */
-#define HTTP_OTA_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY + 1)
+#define HTTP_OTA_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY + 2)
 
 /* HTTP OTA线程栈大小 */
 #define HTTP_OTA_THREAD_STACK_SIZE (4096)
+
+/* 数据上报线程优先级(优先级低于主线程) */
+#define DATA_REPORT_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY + 1)
+
+/* 数据上报线程栈大小 */
+#define DATA_REPORT_THREAD_STACK_SIZE (4096)
+
+/* 数据上报ACK超时时间(ms) */
+#define DATA_REPORT_ACK_TIMEOUT (60 * 1000)
+
+/* 上报没收到ACK最大重试次数 */
+#define DATA_REPORT_MAX_RERTY_CNT (3)
+
+/* 上报时等待MQTT连接的时间(s) */
+#define DATA_REPORT_WAIT_CONNECT_TIME (60)
 
 /* 历史数据FIFO队列信息(头部插入、尾部删除) */
 typedef struct
@@ -162,6 +181,11 @@ static rt_timer_t acquisition_timer = RT_NULL;
 static rt_thread_t http_ota_thread = RT_NULL;
 /* HTTP OTA互斥锁(用于保护http_ota_thread变量) */
 static rt_mutex_t http_ota_mutex = RT_NULL;
+
+/* 数据上报线程 */
+static rt_thread_t data_report_thread = RT_NULL;
+/* 数据上报Event对象 */
+static rt_event_t data_report_event = RT_NULL;
 
 /* mqtt client */
 static mqtt_client mq_client;
@@ -1048,7 +1072,12 @@ static void report_timer_timeout(void *parameter)
 {
     LOG_D("%s()", __FUNCTION__);
     
-    app_send_msg(APP_MSG_DATA_REPORT_REQ, RT_NULL); // 发送数据主动上报请求
+    /* 请求数据上报 */
+    rt_err_t ret = req_data_report();
+    if (ret != RT_EOK)
+    {
+        LOG_D("%s() req_data_report failed(%d)!", __FUNCTION__, ret);
+    }
 }
 
 static void acquisition_timer_timeout(void *parameter)
@@ -1088,30 +1117,192 @@ static void mqtt_offline_callback(mqtt_client *client)
     app_send_msg(APP_MSG_MQTT_CLIENT_OFFLINE, RT_NULL); // MQTT客户端已下线
 }
 
-/* 上报数据 */
+/* 读取历史数据FIFO队列信息 */
+static rt_err_t get_history_fifo_info(history_fifo_info *fifo_info)
+{
+    /* 加载FIFO队列信息 */
+    size_t len = ef_get_env_blob("history_fifo_info", fifo_info, sizeof(history_fifo_info), NULL);
+    if (len != sizeof(history_fifo_info))
+    {
+        /* 加载FIFO队列失败(第一次运行?) */
+        LOG_E("%s ef_get_env_blob(history_fifo_info) failed!", __FUNCTION__);
+        return -RT_ERROR;
+    }
+    
+    return RT_EOK;
+}
+
+/* 读取待上报数据位置 */
+static rt_err_t get_report_pos(uint32_t *pos)
+{
+    /* 加载待上报数据位置信息 */
+    size_t len = ef_get_env_blob("report_pos", pos, sizeof(uint32_t), NULL);
+    if (len != sizeof(uint32_t))
+    {
+        /* 加载待上报数据位置信息失败(第一次上报?) */
+        LOG_E("%s ef_get_env_blob(report_pos) failed!", __FUNCTION__);
+        return -RT_ERROR;
+    }
+    
+    return RT_EOK;
+}
+
+/* 设置待上报数据位置 */
+static rt_err_t set_report_pos(uint32_t pos)
+{
+    LOG_D("%s() pos=%u", __FUNCTION__, pos);
+    
+    /* 保存待上报数据位置信息 */
+    EfErrCode result = ef_set_env_blob("report_pos", &pos, sizeof(uint32_t));
+    if (result != EF_NO_ERR)
+    {
+        /* 保存待上报数据位置信息失败 */
+        LOG_E("%s ef_set_env_blob(report_pos) failed(%d)!", __FUNCTION__, result);
+        return -RT_ERROR;
+    }
+    
+    return RT_EOK;
+}
+
+/* 移动待上报数据位置到下一个位置 */
+static rt_err_t move_report_pos_to_next(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    /* 待上报历史数据位置 */
+    uint32_t report_pos = 0;
+    /* 历史数据队列信息 */
+    history_fifo_info fifo_info = {
+        .length = 0, // 队列长度
+        .head_pos = 0, // 头部位置
+        .tail_pos = 0 // 尾部位置
+    };
+    
+    /* 读取历史数据队列信息 */
+    ret = get_history_fifo_info(&fifo_info);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s get_history_fifo_info failed!", __FUNCTION__);
+        goto __exit;
+    }
+    
+    /* 状态检查 */
+    if (fifo_info.length <= 0)
+    { // 队列为空
+        LOG_E("%s history data is empty!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 读取待上报数据位置 */
+    ret = get_report_pos(&report_pos);
+    if (ret != RT_EOK)
+    {
+        LOG_D("%s get_report_pos not fount.", __FUNCTION__);
+        /* 从队尾开始上报 */
+        report_pos = fifo_info.tail_pos;
+    }
+    
+    /* 移动到下一个位置 */
+    report_pos++;
+    if (report_pos > HISTORY_DATA_MAX_NUM)
+    {
+        report_pos = 0;
+    }
+    
+    if (report_pos == fifo_info.head_pos)
+    { // 已到达队列头部(队列上报已全部完成)
+        LOG_E("%s report pos reach the fifo head!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    /* 保存新的待上报位置 */
+    ret = set_report_pos(report_pos);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s set_report_pos(%u) failed!", __FUNCTION__, report_pos);
+        goto __exit;
+    }
+    
+    LOG_D("%s set_report_pos(%d) success.", __FUNCTION__, report_pos);
+        
+    ret = RT_EOK;
+    
+__exit:
+    return ret;
+}
+
+/* 上报待上报历史数据位置的数据 */
 static rt_err_t app_data_report(void)
 {
     LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
-    mqtt_publish_data_info *pub_info = mqtt_alloc_publish_data_info();
-    RT_ASSERT(pub_info != RT_NULL);
-    char* topic_buf = pub_info->topic;
-    char* json_data_buf = pub_info->payload;
+    mqtt_publish_data_info *pub_info = RT_NULL;
+    /* 待上报历史数据位置 */
+    uint32_t report_pos = 0;
+    /* 历史数据队列信息 */
+    history_fifo_info fifo_info = {
+        .length = 0, // 队列长度
+        .head_pos = 0, // 头部位置
+        .tail_pos = 0 // 尾部位置
+    };
     
-    /* 编码JSON采集数据并发送 */
+    /* 读取历史数据队列信息 */
+    ret = get_history_fifo_info(&fifo_info);
+    if (ret != RT_EOK)
     {
-		time_t time_stamp = time(RT_NULL); // 上报时间戳
+        LOG_E("%s get_history_fifo_info failed!", __FUNCTION__);
+        goto __exit;
+    }
+    
+    /* 状态检查 */
+    if (fifo_info.length <= 0)
+    { // 队列为空
+        LOG_E("%s history data is empty!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 读取待上报数据位置 */
+    ret = get_report_pos(&report_pos);
+    if (ret != RT_EOK)
+    {
+        LOG_D("%s get_report_pos not fount.", __FUNCTION__);
+        /* 从队尾开始上报 */
+        report_pos = fifo_info.tail_pos;
+    }
+    
+    
+    if (report_pos == fifo_info.head_pos)
+    { // 已到达队列头部(队列上报已全部完成)
+        LOG_E("%s report pos reach the fifo head!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 上报未上报的数据 */
+    {
+        pub_info = mqtt_alloc_publish_data_info();
+        RT_ASSERT(pub_info != RT_NULL);
+        char* topic_buf = pub_info->topic;
+        char* json_data_buf = pub_info->payload;
+        uint32_t read_len = 0;
+            
+        /* 编码JSON采集数据并发送 */
+        time_t time_stamp = time(RT_NULL); // 上报时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
 			"\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
 			get_clientid(), time_stamp, get_itemid());
         
-        /* 读取最新采集的数据(JSON格式)  */
-        uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
+        /* 读取report_pos处的一条待上报历史数据(JSON格式) */
+        read_len = read_history_pos_data_json(report_pos, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
         if (read_len <= 0)
         {
-            LOG_E("%s read_history_data_json(read_len=%d) failed!", __FUNCTION__, read_len);
+            LOG_E("%s read_history_pos_data_json(%d) read_len(%d) failed!", __FUNCTION__, report_pos, read_len);
             ret = -RT_ERROR;
             goto __exit;
         }
@@ -1134,6 +1325,9 @@ static rt_err_t app_data_report(void)
             }
         }
     }
+    // else // 已到达队列头部(队列上报已全部完成)
+    
+    ret = RT_EOK;
     
 __exit:
     if (pub_info != NULL)
@@ -1801,7 +1995,14 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
         goto __exit;
     }
     
-    // TODO
+    /* 发送收到服务器ACK事件 */
+    {
+        rt_err_t ret = rt_event_send(data_report_event, DATA_REPORT_EVENT_ACK);
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s rt_event_send(DATA_REPORT_EVENT_ACK) failed(%d)!", __FUNCTION__, ret);
+        }
+    }
     
 __exit:
     return;
@@ -2462,6 +2663,174 @@ __exit:
     return ret;
 }
 
+/* 数据上报处理线程 */
+static void data_report_thread_entry(void *param)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_int32_t ack_time_out = rt_tick_from_millisecond(DATA_REPORT_ACK_TIMEOUT);
+    int retry_count = 0;
+    
+    while (1)
+    {
+        rt_uint32_t recved_event = 0;
+        /* 等待数据上报请求 */
+        rt_err_t ret =  rt_event_recv(data_report_event, DATA_REPORT_EVENT_REQ, 
+            RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &recved_event);
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s rt_event_recv failed(%d), quit!", __FUNCTION__, ret);
+            break;
+        }
+        
+        if ((recved_event & DATA_REPORT_EVENT_REQ) != DATA_REPORT_EVENT_REQ)
+        { // 收到其他事件,不做处理
+            LOG_W("%s rt_event_recv() 0x%08x is not DATA_REPORT_EVENT_REQ!", __FUNCTION__, recved_event);
+            continue;
+        }
+        
+        /* 清除可能存在的ACK事件 */
+        rt_event_recv(data_report_event, DATA_REPORT_EVENT_ACK, 
+            RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, 0, &recved_event);
+        recved_event = 0;
+        
+        /* 初始化重试次数 */
+        retry_count = DATA_REPORT_MAX_RERTY_CNT;
+        
+        /* 尝试上报数据 */
+__retry:
+        /* 检查是否已连接到MQTT服务器 */
+        if (!paho_mqtt_is_connected(&mq_client))
+        {
+            LOG_W("%s mqtt is not connect!", __FUNCTION__);
+            
+            /* 等待一段时间后重试 */
+            goto __wait_and_retry;
+        }
+        
+        /* 上报数据 */
+        ret = app_data_report();
+        if (ret != RT_EOK)
+        { // 上报失败
+            LOG_E("%s app_data_report failed(%d)!", __FUNCTION__, ret);
+            
+            /* 等待一段时间后重试 */
+            goto __wait_and_retry;
+        }
+        
+        LOG_I("%s send data success, wait the server ACK...", __FUNCTION__);
+        
+        /* 发送成功,等待服务器ACK */
+        ret =  rt_event_recv(data_report_event, DATA_REPORT_EVENT_ACK, 
+            RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, ack_time_out, &recved_event);
+        if (ret == -RT_ETIMEOUT)
+        { // 超时
+            LOG_W("%s rt_event_recv(DATA_REPORT_EVENT_ACK) timeout!", __FUNCTION__);
+            
+            /* 等待一段时间后重试 */
+            goto __wait_and_retry;
+        }
+        else if (ret != RT_EOK)
+        {
+            LOG_E("%s rt_event_recv failed(%d), quit!", __FUNCTION__, ret);
+            break;
+        }
+        else // if (ret == RT_EOK)
+        {
+            /* 上报成功 */
+            LOG_I("%s recv the server ACK success.", __FUNCTION__);
+        
+            /* 移动待上报数据位置到下一个位置 */
+            ret = move_report_pos_to_next();
+            if (ret != RT_EOK)
+            {
+                LOG_W("%s move_report_pos_to_next failed!", __FUNCTION__);
+                /* 移动位置失败,后续将继续上报本条数据! */
+            }
+            
+            /* 继续请求上报数据 */
+            ret = req_data_report();
+            if (ret != RT_EOK)
+            {
+                LOG_W("%s req_data_report failed!", __FUNCTION__);
+                /* 继续请求上报数据失败,将在下次上报定时器到期时启动上报! */
+            }
+            continue;
+        }
+        
+__wait_and_retry:
+        /* 递减重试次数 */
+        --retry_count;
+        
+        if (retry_count >= 0)
+        {
+            LOG_W("%s wait(%ds) and retry(%d)!", __FUNCTION__, 
+                DATA_REPORT_WAIT_CONNECT_TIME, DATA_REPORT_MAX_RERTY_CNT - retry_count);
+            
+            /* 等待一段时间后重试 */
+            rt_thread_delay(rt_tick_from_millisecond(DATA_REPORT_WAIT_CONNECT_TIME * 1000));
+            goto __retry;
+        }
+        else    
+        { // 已达到最大重试次数
+            LOG_W("%s retch max retry count(%d), give up!", __FUNCTION__, DATA_REPORT_MAX_RERTY_CNT);
+            
+            /* 放弃 */
+        }
+    }
+    
+    data_report_thread = RT_NULL;
+}
+
+/* 初始化并启动数据上报线程 */
+static rt_err_t data_report_thread_init(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    
+    /* 数据上报Event对象 */
+    data_report_event = rt_event_create("data_report", RT_IPC_FLAG_FIFO);
+    if (data_report_event == RT_NULL)
+    {
+        LOG_E("%s rt_event_create(data_report) failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 创建数据上报线程 */
+    data_report_thread = rt_thread_create("data_report", data_report_thread_entry, 
+        (void*)RT_NULL, DATA_REPORT_THREAD_STACK_SIZE, DATA_REPORT_THREAD_PRIORITY, 10);
+    if (data_report_thread == RT_NULL)
+    {
+        LOG_E("%s rt_thread_create(data_report) failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    ret = rt_thread_startup(data_report_thread);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s rt_thread_startup(data_report) failed!", __FUNCTION__);
+        data_report_thread = RT_NULL;
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    ret = RT_EOK;
+    
+__exit:
+    if (ret != RT_EOK)
+    {
+        if (data_report_event)
+        {
+            rt_event_delete(data_report_event);
+            data_report_event = RT_NULL;
+        }
+    }
+    return ret;
+}
+
 static rt_err_t app_init(void)
 {
     LOG_D("%s()", __FUNCTION__);
@@ -2582,6 +2951,15 @@ static rt_err_t app_init(void)
         goto __exit;
     }
     
+    /* 初始化并启动数据上报线程 */
+    ret = data_report_thread_init();
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s data_report_thread_init failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* 初始化MQTT连接参数 */
     {
         MQTTPacket_connectData condata = MQTTPacket_connectData_initializer;
@@ -2681,9 +3059,9 @@ static rt_err_t app_init(void)
         /* 设置其他MQTT参数初值 */
         mq_client.keepalive_interval = 120; // keepalive间隔，以秒为单位
         mq_client.keepalive_count = 3; // keepalive次数，超过该次数无应答，则关闭连接
-        mq_client.connect_timeout = 60; // 连接超时，以秒为单位
+        mq_client.connect_timeout = 90; // 连接超时，以秒为单位
         mq_client.reconnect_interval = 5; // 重新连接间隔，以秒为单位
-        mq_client.msg_timeout = 60; // 消息通信超时，以秒为单位，根据网络情况，不能为0
+        mq_client.msg_timeout = 90; // 消息通信超时，以秒为单位，根据网络情况，不能为0
     }
     
     /* 监听网络就绪事件 */
@@ -2794,19 +3172,27 @@ rt_err_t req_data_acquisition(void)
 }
 
 /* 请求上报数据 */
-
 rt_err_t req_data_report(void)
 {
 	LOG_D("%s()", __FUNCTION__);
     
+#if 0 /* 即使暂时没有连接到MQTT服务器,也要发送请求,由数据上报线程决定如何处理 */
     /* 检查是否已连接到MQTT服务器 */
     if (!paho_mqtt_is_connected(&mq_client))
     {
         LOG_E("%s mqtt is not connect!", __FUNCTION__);
         return -RT_ERROR;
     }
+#endif
 	
-	return app_send_msg(APP_MSG_DATA_REPORT_REQ, RT_NULL); // 发送数据上报请求
+    /* 发送数据上报请求 */
+    rt_err_t ret = rt_event_send(data_report_event, DATA_REPORT_EVENT_REQ);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s rt_event_send(DATA_REPORT_EVENT_REQ) failed(%d)!", __FUNCTION__, ret);
+    }
+    
+    return ret;
 }
 
 int main(void)
@@ -2825,6 +3211,13 @@ int main(void)
     {
         LOG_E("%s start acquisition timer failed(%d)!", __FUNCTION__, ret);
         goto __exit;
+    }
+    
+    /* 启动定时上报 */
+    ret = rt_timer_start(report_timer);
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s start report timer failed(%d)!", __FUNCTION__, ret);
     }
     
     /* 主消息循环 */
@@ -2852,19 +3245,6 @@ int main(void)
                     LOG_E("%s mqtt_client_start failed(%d)!", __FUNCTION__, ret);
                     goto __exit;
                 }
-                break;
-            }
-            case APP_MSG_DATA_REPORT_REQ: // 数据主动上报请求
-            {
-                /* 检查是否已连接到MQTT服务器 */
-                if (!paho_mqtt_is_connected(&mq_client))
-                {
-                    LOG_W("%s mqtt is not connect!", __FUNCTION__);
-                    break;
-                }
-                
-                /* 主动上报数据 */
-                app_data_report();
                 break;
             }
             case APP_MSG_DATA_ACQUISITION_REQ: // 数据采集请求
@@ -2908,23 +3288,11 @@ int main(void)
             {
                 /* 检查是否成功进行了OTA,并上报进度信息 */
                 check_and_report_ota_process();
-                
-                /* 启动定时上报 */
-                rt_err_t ret = rt_timer_start(report_timer);
-                if (RT_EOK != ret)
-                {
-                    LOG_E("%s start report timer failed(%d)!", __FUNCTION__, ret);
-                }
                 break;
             }
             case APP_MSG_MQTT_CLIENT_OFFLINE: // MQTT客户端已下线
             {
-                /* 停止定时上报 */
-                rt_err_t ret = rt_timer_stop(report_timer);
-                if (RT_EOK != ret)
-                {
-                    LOG_E("%s stop report timer failed(%d)!", __FUNCTION__, ret);
-                }
+                // TODO
                 break;
             }
             default:
@@ -2936,7 +3304,16 @@ int main(void)
     }
     
 __exit:
-    
+    /* 停止定时上报 */
+    if (report_timer)
+    {
+        ret = rt_timer_stop(report_timer);
+        if (RT_EOK != ret)
+        {
+            LOG_E("%s stop report timer failed(%d)!", __FUNCTION__, ret);
+        }
+    }
+                
     /* 停止定时采集 */
     if (acquisition_timer)
     {

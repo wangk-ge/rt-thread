@@ -58,8 +58,9 @@
 #define TB22_EVENT_REQ_RECV_DATA        ((uint32_t)0x00000001) // 请求Socket接收线程接收数据
 #define TB22_EVENT_SEND_OK              ((uint32_t)0x00000002) // 发送成功
 #define TB22_EVENT_SEND_FAIL            ((uint32_t)0x00000004) // 发送失败
+#define TB22_EVENT_SOCK_CLOSE           ((uint32_t)0x00000008) // 发送失败
 
-#define TB22_EVENT_DOMAIN_OK            ((uint32_t)0x01000000) // DNS解析成功
+#define TB22_EVENT_DOMAIN_OK            ((uint32_t)0x10000000) // DNS解析成功
 
 
 /* 发送数据缓冲区大小(字节数) */
@@ -408,6 +409,9 @@ static int tb22_socket_close(struct at_socket *socket)
     int device_socket = tb22_sock->device_socket;
     
     LOG_D("%s() socket_index(%d) device_socket(%d)", __FUNCTION__, socket_index, device_socket);
+    
+    /* 通知Socket已关闭 */
+    tb22_socket_event_send(device, SET_EVENT(socket_index, TB22_EVENT_SOCK_CLOSE));
 
     at_response_t resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(1000));
     RT_ASSERT(resp != RT_NULL);
@@ -569,13 +573,15 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     struct at_device *device = (struct at_device *) socket->device;
     //rt_mutex_t lock = device->client->lock;
     at_response_t resp = RT_NULL;
+    #define RETRY_SEND_CNT (3) // 重试发送次数
+    int retry_cnt = RETRY_SEND_CNT;
 
     RT_ASSERT(buff != RT_NULL);
     
     //rt_mutex_take(lock, RT_WAITING_FOREVER);
 
     /* clear socket send event */
-    event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL);
+    event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL | TB22_EVENT_SOCK_CLOSE);
     tb22_socket_event_recv(device, event, 0, RT_EVENT_FLAG_OR);
 
     while (sent_size < bfsz)
@@ -596,6 +602,7 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
         resp = tb22_alloc_at_resp(device, 0, rt_tick_from_millisecond(10 * 1000));
         RT_ASSERT(resp != RT_NULL);
     
+__retry:
         /* send the "AT+NSOSD" commands to AT server. */
         if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_sock_send_buf, tb22_sock->sequence) < 0)
         {
@@ -641,19 +648,41 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
          * 若3次尝试均超时失败，则进入异常处理流程(由应用层选择是否重试发送)
          */
         /* waiting OK or failed result */
-        event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL);
+        event = SET_EVENT(socket_index, TB22_EVENT_SEND_OK | TB22_EVENT_SEND_FAIL | TB22_EVENT_SOCK_CLOSE);
         event_result = tb22_socket_event_recv(device, event, rt_tick_from_millisecond(60 * 1000), RT_EVENT_FLAG_OR);
         if (event_result < 0)
         {
-            LOG_E("%s %s device socket(%d) wait sned OK|FAIL timeout.", __FUNCTION__, device->name, device_socket);
-            result = -RT_ETIMEOUT;
-            goto __exit;
+            LOG_E("%s %s device socket(%d) wait send OK|FAIL timeout.", __FUNCTION__, device->name, device_socket);
+            
+            /* 递减重试次数 */
+            --retry_cnt;
+            
+            if (retry_cnt > 0)
+            {
+                LOG_D("%s retry(%d).", __FUNCTION__, RETRY_SEND_CNT - retry_cnt);
+                /* 重试 */
+                goto __retry;
+            }
+            else
+            {
+                LOG_E("%s retch max retry count(%d), give up!", __FUNCTION__, RETRY_SEND_CNT);
+                result = -RT_ETIMEOUT;
+                /* 放弃 */
+                goto __exit;
+            }
         }
         /* check result */
         event = SET_EVENT(socket_index, TB22_EVENT_SEND_FAIL);
         if ((event_result & event) == event)
         {
             LOG_E("%s %s device socket(%d) send failed.", __FUNCTION__, device->name, device_socket);
+            result = -RT_ERROR;
+            goto __exit;
+        }
+        event = SET_EVENT(socket_index, TB22_EVENT_SOCK_CLOSE);
+        if ((event_result & event) == event)
+        {
+            LOG_E("%s %s device socket(%d) closed.", __FUNCTION__, device->name, device_socket);
             result = -RT_ERROR;
             goto __exit;
         }
