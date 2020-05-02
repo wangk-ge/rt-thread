@@ -48,7 +48,6 @@ extern   "C"
 /*----------------------------------------------------------------------------*
 **                             Mcaro Definitions                              *
 **----------------------------------------------------------------------------*/
-#define AT_ESP32_UART_DEVICE_NAME 	"uart4"
 #define AT_ESP32_CLIENT_BUF_SIZE 	(128)
 #define AT_ESP32_POWER_PIN 			GET_PIN(E, 3) // esp32电源开关控制引脚
 #define AT_ESP32_CONNECT_TIME 		(5000) // 等待连接esp32超时时间(tick)
@@ -98,6 +97,8 @@ static const struct at_urc esp32_at_urc_table[] =
 	{"+BLEDISCONN:", "\r\n", esp32_at_urc_bledisconn_func},
     {"+BLECFGMTU:", "\r\n", esp32_at_urc_blecfgmtu_func},
 };
+
+static char esp32_ble_addr[32] = "";
 
 /*----------------------------------------------------------------------------*
 **                             Local Function                                 *
@@ -227,12 +228,19 @@ static void esp32_at_urc_blecfgmtu_func(struct at_client *client, const char *da
     esp32_mtu = (uint32_t)mtu;
 }
 
-/* CMD响应输出函数 */
-static void cmd_resp(const uint8_t* data, uint32_t data_len)
+/*************************************************
+* Function: esp32_ble_send
+* Description: 通过ESP32 BLE发送数据
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void esp32_ble_send(const uint8_t *data, uint32_t data_len)
 {
-	LOG_D("%s() data=%.*s", __FUNCTION__, data_len, (const char*)data);
-	
-	size_t cur_pkt_size = 0, sent_size = 0;
+    LOG_D("%s() data_len=%d", __FUNCTION__, data_len);
+    
+    size_t cur_pkt_size = 0, sent_size = 0;
 	at_response_t resp = app_alloc_at_resp(1, rt_tick_from_millisecond(5000));
     RT_ASSERT(resp != RT_NULL)
 
@@ -273,6 +281,21 @@ static void cmd_resp(const uint8_t* data, uint32_t data_len)
     }
 	
 	app_free_at_resp(resp);
+}
+
+/*************************************************
+* Function: cmd_resp
+* Description: 发送CMD响应
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void cmd_resp(const uint8_t *data, uint32_t data_len)
+{
+    LOG_D("%s() %.*s", __FUNCTION__, data_len, (const char*)data);
+    
+    esp32_ble_send(data, data_len);
 }
 
 /* 数据处理线程 */
@@ -385,7 +408,7 @@ rt_err_t at_esp32_init(void)
 	/* 初始化CMD模块 */
 	cmd_init(cmd_resp);
 	
-#if 0
+#if 1
 	/* 开启ESP32模块电源重新上电 */
 	rt_pin_write(AT_ESP32_POWER_PIN, PIN_HIGH); // 拉高关闭电源
 	rt_pin_mode(AT_ESP32_POWER_PIN, PIN_MODE_OUTPUT);
@@ -465,7 +488,8 @@ rt_err_t at_esp32_init(void)
 		//ret = -RT_ETIMEOUT;
 		goto __exit;
 	}
-
+    at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
+    
 	/* 创建消息队列 */
     esp32_at_mq = rt_mq_create("at_esp32", sizeof(at_esp32_message), AT_ESP32_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
     if (RT_NULL == esp32_at_mq)
@@ -529,6 +553,41 @@ __exit:
 	}
 	
 	return ret;
+}
+
+/*************************************************
+* Function: at_esp32_ble_send
+* Description: 通过ESP32 BLE发送字符串数据
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+void at_esp32_ble_send(const char *str, int len)
+{
+    uint8_t *data = (uint8_t*)str;
+    uint32_t data_len = (uint32_t)len;
+    if (len < 0)
+    {
+        data_len = strlen(str);
+    }
+    
+    LOG_D("%s() %.*s", __FUNCTION__, data_len, (const char*)data);
+    
+    esp32_ble_send(data, data_len);
+}
+
+/*************************************************
+* Function: get_esp32_ble_addr
+* Description: 取得ESP32模块BLE地址
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+const char* get_esp32_ble_addr(void)
+{
+    return esp32_ble_addr;
 }
 
 /**---------------------------------------------------------------------------*

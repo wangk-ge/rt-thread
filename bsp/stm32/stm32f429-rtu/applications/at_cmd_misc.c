@@ -18,6 +18,7 @@
 #include <at_device.h>
 #include "common.h"
 #include "app.h"
+#include "at_esp32.h"
 
 #define LOG_TAG              "main.at_cmd_misc"
 #define LOG_LVL              LOG_LVL_DBG
@@ -63,6 +64,57 @@ static rt_err_t exec_tb22at(const char *at_str, size_t str_len)
         const char *resp_line_str = at_resp_get_line(resp, i);
         
         at_server_printfln("+TB22AT: %s", resp_line_str);
+    }
+    
+__exit:
+    if (resp)
+    {
+        app_free_at_resp(resp);
+    }
+    
+    return ret;
+}
+
+/* 执行ESP32模组AT指令 */
+static rt_err_t exec_esp32at(const char *at_str, size_t str_len)
+{
+    int i = 0;
+    rt_err_t ret = RT_EOK;
+    at_client_t client = RT_NULL;
+    at_response_t resp = RT_NULL;
+    
+    if (str_len <= 0)
+    {
+        LOG_E("%s str_len=%d!", __FUNCTION__, str_len);
+        ret = -RT_ENOMEM;
+        goto __exit;
+    }
+    
+    client = at_client_get(AT_ESP32_UART_DEVICE_NAME);
+	if (client == RT_NULL)
+    {
+        LOG_E("%s at_client_get(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
+        ret = -RT_ERROR;
+		goto __exit;
+    }
+
+    resp = app_alloc_at_resp(0, rt_tick_from_millisecond(5000));
+    RT_ASSERT(resp != RT_NULL)
+    
+    /* 执行AT命令 */
+    ret = at_obj_exec_cmd(client, resp, "%.*s", str_len, at_str);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(%.*s) error(%d)!", __FUNCTION__, str_len, at_str, ret);
+        goto __exit;
+    }
+    
+    for (i = 1; i <= resp->line_counts; ++i)
+    {
+        /* line number, start from '1' */
+        const char *resp_line_str = at_resp_get_line(resp, i);
+        
+        at_server_printfln("+ESP32AT: %s", resp_line_str);
     }
     
 __exit:
@@ -304,3 +356,47 @@ static at_result_t at_tb22at_setup(const struct at_cmd *cmd, const char *args)
 }
 
 AT_CMD_EXPORT("AT+TB22AT", "=<at>[,<p1>][,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p8>][,<p10>]", RT_NULL, RT_NULL, at_tb22at_setup, RT_NULL, 0);
+
+/* AT+ESP32AT 执行ESP32模组AT指令 */
+
+static at_result_t at_esp32at_setup(const struct at_cmd *cmd, const char *args)
+{
+    const char *at_str = args + 1; // 跳过'='
+    size_t at_str_len = rt_strlen(args) - 1 - STR_LEN(AT_CMD_END_MARK); // 排除结尾符
+    
+    rt_err_t ret = exec_esp32at(at_str, at_str_len);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s exec_esp32at() error(%d)!", __FUNCTION__, ret);
+        return AT_RESULT_FAILE;
+    }
+    
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+ESP32AT", "=<at>[,<p1>][,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p8>][,<p10>]", RT_NULL, RT_NULL, at_esp32at_setup, RT_NULL, 0);
+
+/* AT+ESP32BLEADDR 读取ESP32 BLE地址 */
+
+static at_result_t at_esp32bleaddr_exec(const struct at_cmd *cmd)
+{
+	at_server_printfln("+ESP32BLEADDR: %s", get_esp32_ble_addr());
+    
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+ESP32BLEADDR", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_esp32bleaddr_exec, 0);
+
+/* AT+ESP32BLESEND 通过ESP32 BLE发送数据 */
+
+static at_result_t at_esp32blesend_setup(const struct at_cmd *cmd, const char *args)
+{
+    const char *str_data = args + 1; // 跳过'='
+    size_t str_data_len = rt_strlen(args) - 1 - STR_LEN(AT_CMD_END_MARK); // 排除结尾符
+    
+    at_esp32_ble_send(str_data, (int)str_data_len);
+    
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+ESP32BLESEND", "=<data>", RT_NULL, RT_NULL, at_esp32blesend_setup, RT_NULL, 0);
