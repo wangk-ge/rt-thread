@@ -1,23 +1,20 @@
 /****************************************************************************
  *
  * File Name
- *  app.h
+ *  cmd.h
  * Author
  *  
  * Date
- *  2020/04/28
+ *  2020/05/01
  * Descriptions:
- * APP相关接口定义
+ * 命令解析模块接口定义
  *
  ****************************************************************************/
 
-#ifndef __APP_H__
-#define __APP_H__
-
 #include <stdint.h>
-#include <stdbool.h>
-#include <rtthread.h>
-#include <at.h>
+
+#ifndef __CMD_H__
+#define __CMD_H__
 
 /**---------------------------------------------------------------------------*
 **                             Compiler Flag                                  *
@@ -30,47 +27,45 @@ extern   "C"
 /*----------------------------------------------------------------------------*
 **                             Mcaro Definitions                              *
 **----------------------------------------------------------------------------*/
-/* APP内存池大小 */
-#define APP_MP_BLOCK_NUM (8) // APP内存池预留块数
-#define APP_MP_BLOCK_SIZE (1024) // APP内存池每块大小(字节)
 
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
 **----------------------------------------------------------------------------*/
-    
+/* 响应输出函数类型定义 */
+typedef void (*cmd_resp_func)(const uint8_t* data, uint32_t data_len);
+
 /*----------------------------------------------------------------------------*
 **                             Function Define                                *
 **----------------------------------------------------------------------------*/
 /*************************************************
-* 从APP内存池分配一块内存 */
-void *app_mp_alloc(void);
+* Function: cmd_init
+* Description: 初始化CMD模块
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+void cmd_init(cmd_resp_func resp_func);
 
-/* 释放APP内存池分配的内存块 */
-void app_mp_free(void *buf);
+/*************************************************
+* Function: cmd_clear_packet_buf
+* Description: 清空Packet Buffer
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+void cmd_clear_packet_buf(void);
 
-/* 从内存池分配at_response_t对象 */
-at_response_t app_alloc_at_resp(rt_size_t line_num, rt_int32_t timeout);
-
-/* 释放at_response_t对象 */
-void app_free_at_resp(at_response_t resp);
-
-/* 清空历史数据 */
-rt_err_t clear_history_data(void);
-
-/* 读取前n个时刻的一条历史数据(JSON格式) */
-uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_buf_len, bool need_timestamp);
-
-/* 取得模组信号强度指示 */
-int get_modem_rssi(int *rssi);
-
-/* 取得历史数据条目数 */
-uint32_t get_history_data_num(void);
-
-/* 请求采集数据 */
-rt_err_t req_data_acquisition(void);
-
-/* 请求上报数据 */
-rt_err_t req_data_report(void);
+/*************************************************
+* Function: cmd_input
+* Description: 输入字节流
+* Author: 
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+void cmd_input(const uint8_t* data, uint32_t data_len);
 
 /**--------------------------------------------------------------------------*
 **                         Compiler Flag                                     *
@@ -79,4 +74,4 @@ rt_err_t req_data_report(void);
 }
 #endif
 
-#endif // __APP_H__
+#endif // __CMD_H__

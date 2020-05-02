@@ -22,12 +22,14 @@
 #include <string.h>
 #include <jsmn.h>
 #include <at_device.h>
+#include <at.h>
 #include "config.h"
 #include "common.h"
 #include "util.h"
 #include "strref.h"
 #include "app.h"
 #include "http_ota.h"
+#include "at_esp32.h"
 
 #define LOG_TAG              "main"
 #define LOG_LVL              LOG_LVL_DBG
@@ -215,6 +217,35 @@ void app_mp_free(void *buf)
     {
         rt_mp_free(buf);
     }
+}
+
+/* 从内存池分配at_response_t对象 */
+at_response_t app_alloc_at_resp(rt_size_t line_num, rt_int32_t timeout)
+{
+	uint8_t *buf = (uint8_t*)rt_mp_alloc(app_mp, RT_WAITING_FOREVER); // 如果暂时没有足够的内存将会阻塞等待
+    RT_ASSERT(buf != RT_NULL);
+	
+	at_response_t resp = (at_response_t)buf;
+	resp->buf = (char*)(buf + sizeof(struct at_response));
+    resp->buf_size = APP_MP_BLOCK_SIZE - sizeof(struct at_response);
+    resp->line_num = line_num;
+    resp->line_counts = 0;
+    resp->timeout = timeout;
+    
+    //LOG_D("%s at_resp_mp=0x%08x, resp=0x%08x", __FUNCTION__, app_mp, resp);
+	
+	return resp;
+}
+
+/* 释放at_response_t对象 */
+void app_free_at_resp(at_response_t resp)
+{
+    //LOG_D("%s resp=0x%08x", __FUNCTION__, resp);
+    
+	if (resp != RT_NULL)
+	{
+		rt_mp_free(resp);
+	}
 }
 
 /* 分配mqtt_publish_data_info对象 */
@@ -2960,6 +2991,15 @@ static rt_err_t app_init(void)
         goto __exit;
     }
     
+    /* ESP32模块初始化 */
+    ret = at_esp32_init();
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_esp32_init failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* 初始化MQTT连接参数 */
     {
         MQTTPacket_connectData condata = MQTTPacket_connectData_initializer;
@@ -3333,7 +3373,7 @@ __exit:
     app_deinit();
     
     /* 重启系统 */
-    rt_hw_cpu_reset();
+    //rt_hw_cpu_reset();
     
     return ret;
 }

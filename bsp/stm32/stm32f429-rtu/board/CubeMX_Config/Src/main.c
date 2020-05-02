@@ -45,6 +45,7 @@ RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi1;
 
+UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart7;
 UART_HandleTypeDef huart8;
@@ -65,6 +66,7 @@ static void MX_UART5_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_UART4_Init(void);
 static void MX_UART7_Init(void);
 static void MX_UART8_Init(void);
 static void MX_USART2_UART_Init(void);
@@ -112,6 +114,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_SPI1_Init();
+  MX_UART4_Init();
   MX_UART7_Init();
   MX_UART8_Init();
   MX_USART2_UART_Init();
@@ -256,6 +259,39 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief UART4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART4_Init(void)
+{
+
+  /* USER CODE BEGIN UART4_Init 0 */
+
+  /* USER CODE END UART4_Init 0 */
+
+  /* USER CODE BEGIN UART4_Init 1 */
+
+  /* USER CODE END UART4_Init 1 */
+  huart4.Instance = UART4;
+  huart4.Init.BaudRate = 115200;
+  huart4.Init.WordLength = UART_WORDLENGTH_8B;
+  huart4.Init.StopBits = UART_STOPBITS_1;
+  huart4.Init.Parity = UART_PARITY_NONE;
+  huart4.Init.Mode = UART_MODE_TX_RX;
+  huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART4_Init 2 */
+
+  /* USER CODE END UART4_Init 2 */
 
 }
 

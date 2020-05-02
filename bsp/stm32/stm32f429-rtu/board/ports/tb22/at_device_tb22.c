@@ -641,7 +641,6 @@ static void tb22_init_thread_entry(void *parameter)
         tb22_reset(device);
         rt_thread_mdelay(1000);
 
-#if 0
         /* wait tb22 startup finish, send AT every 500ms, if receive OK, SYNC success*/
         if (at_client_obj_wait_connect(device->client, TB22_WAIT_CONNECT_TIME))
         {
@@ -649,22 +648,6 @@ static void tb22_init_thread_entry(void *parameter)
             LOG_E("at_client_obj_wait_connect() failed!");
             goto __exit;
         }
-#else
-        {
-            int try_cnt = 5;
-            while (at_obj_exec_cmd(device->client, resp, "AT") != RT_EOK)
-            {
-                rt_thread_mdelay(1000);
-                try_cnt--;
-                if (try_cnt <= 0)
-                {
-                    result = -RT_ETIMEOUT;
-                    LOG_E("at_obj_exec_cmd(AT) failed!");
-                    goto __exit;
-                }
-            }
-        }
-#endif    
         
 #if 0
 		/* 切换到波特率921600 */

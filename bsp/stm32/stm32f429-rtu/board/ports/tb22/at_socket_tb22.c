@@ -979,8 +979,8 @@ static void urc_dnsqip_func(struct at_client *client, const char *data, rt_size_
 static const struct at_urc urc_table[] =
 {
     {"+NSOSTR:",    "\r\n",                 urc_send_func},
-    {"+NSOCLI",     "\r\n",                 urc_close_func},
-    {"+NSONMI",     "\r\n",                 urc_recv_func},
+    {"+NSOCLI:",     "\r\n",                 urc_close_func},
+    {"+NSONMI:",     "\r\n",                 urc_recv_func},
     {"+MDNS:",      "\r\n",                 urc_dnsqip_func},
 };
 

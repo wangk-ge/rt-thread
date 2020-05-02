@@ -46,13 +46,8 @@ static rt_err_t exec_tb22at(const char *at_str, size_t str_len)
         goto __exit;
     }
 
-    resp = at_create_resp(1024, 0, rt_tick_from_millisecond(5000));
-    if (resp == RT_NULL)
-    {
-        LOG_E("%s no memory for resp create.", __FUNCTION__);
-        ret = -RT_ENOMEM;
-        goto __exit;
-    }
+    resp = app_alloc_at_resp(0, rt_tick_from_millisecond(5000));
+    RT_ASSERT(resp != RT_NULL)
     
     /* 执行AT命令 */
     ret = at_obj_exec_cmd(device->client, resp, "%.*s", str_len, at_str);
@@ -73,7 +68,7 @@ static rt_err_t exec_tb22at(const char *at_str, size_t str_len)
 __exit:
     if (resp)
     {
-        at_delete_resp(resp);
+        app_free_at_resp(resp);
     }
     
     return ret;

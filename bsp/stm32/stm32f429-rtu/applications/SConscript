@@ -15,9 +15,12 @@ strref.c
 config.c
 http_ota.c
 http-parser/http_parser.c
+esp32/at_esp32.c
+esp32/cmd.c
 """)
 
 CPPPATH += [cwd + '/http-parser']
+CPPPATH += [cwd + '/esp32']
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)
 
