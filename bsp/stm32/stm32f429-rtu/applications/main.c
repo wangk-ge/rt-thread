@@ -2200,6 +2200,33 @@ static rt_err_t save_ota_version(c_str_ref *ota_version, c_str_ref *ota_req_id)
     return RT_EOK;
 }
 
+/* 清除已下载待升级的OTA固件版本号等信息 */
+static rt_err_t clear_ota_version(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    /* 清除保存的ota_version */
+    EfErrCode ef_ret = ef_del_env("ota_version");
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_W("%s ef_del_env(ota_version) error(%d)!", __FUNCTION__, ef_ret);
+        
+        /* 清除失败,下次重启将再次上报! */
+        return -RT_ERROR;
+    }
+    
+    /* 清除保存的ota_version */
+    ef_ret = ef_del_env("ota_req_id");
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_W("%s ef_del_env(ota_req_id) error(%d)!", __FUNCTION__, ef_ret);
+        
+        /* ota_req_id清除失败不影响 */
+    }
+    
+    return RT_EOK;
+}
+
 /* 用于重启后检查是否成功进行了OTA,并上报进度信息(不可重入,非线程安全) */
 static void check_and_report_ota_process(void)
 {
@@ -2223,8 +2250,10 @@ static void check_and_report_ota_process(void)
     }
     ota_version[ver_len] = '\0';
     
+    LOG_I("%s() ota_version=%s", __FUNCTION__, ota_version);
+    
     /* 读取OTA请求ID */
-    char ota_req_id[32] = "";
+    char ota_req_id[64] = "";
     size_t id_len = ef_get_env_blob("ota_req_id", ota_req_id, sizeof(ota_req_id), RT_NULL);
     if ((id_len <= 0) || (id_len >= sizeof(ota_req_id)))
     { // 没有读取到有效的ota_req_id
@@ -2233,6 +2262,8 @@ static void check_and_report_ota_process(void)
         return;
     }
     ota_req_id[id_len] = '\0';
+    
+    LOG_I("%s() ota_req_id=%s", __FUNCTION__, ota_req_id);
     
     c_str_ref id = {id_len, ota_req_id};
     int step = 0;
@@ -2254,14 +2285,8 @@ static void check_and_report_ota_process(void)
         LOG_W("%s send_upgrade_progress(%s,%d) error(%d)!", __FUNCTION__, ota_req_id, step, ret);
     }
     
-    /* 清除保存的ota_version */
-    EfErrCode ef_ret = ef_del_env("ota_version");
-    if (ef_ret != EF_NO_ERR)
-    {
-        LOG_W("%s ef_del_env(ota_version) error(%d)!", __FUNCTION__, ef_ret);
-        
-        /* 清除失败,下次重启将再次上报! */
-    }
+    /* 清除保存的ota_version等信息 */
+    clear_ota_version();
 }
 
 /* HTTP OTA固件下载和升级线程 */

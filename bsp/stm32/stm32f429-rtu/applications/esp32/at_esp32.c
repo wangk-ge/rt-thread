@@ -459,6 +459,15 @@ rt_err_t at_esp32_init(void)
         goto __exit;
     }
     
+    /* 关闭休眠模式 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+SLEEP=0");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+SLEEP=0) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* 配置ESP32工作于BLE服务器模式 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEINIT=2");
     if (ret != RT_EOK)
