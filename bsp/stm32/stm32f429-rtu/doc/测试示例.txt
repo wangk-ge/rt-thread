@@ -22,6 +22,6 @@
 
 OTA升级示例
 平台发布主题: /sys/productKey1/deviceCode1/upgrade/update
-平台发布数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","code":1000,"data":{"size":161026,"sign":"IRf/FuPH64P++cR1ynpA9tv9qW5xfI3Mc7a1muWCsrlEcIZuZ6VXk8pcOTmV94LOpv/sgfGz9Lyh\n5JSDFA/208jp/jyQD2M6tfGY2dfM+hY/NXOK2K4E2CxGNSudjHxT/JPRB/gyByB58H7VCv3qrX9y\nMvaKV0mLTG33LshBqw0=","version":"V2.0.0","url":"http://47.103.58.226/group1/M00/00/00/rBMkCV6k90mAG2uqAAJ1AgBrKek3_big.0.rbl","signMethod":"md5","md5":"9ff41046b6fc6f49aa5d1fd354e11e4f"},"id":"08ad8b01-8706-4fa3-bba3-575799ec28cc","message":"upgrade"}
+平台发布数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","code":1000,"data":{"size":190882,"sign":"cRnUiam0oQkbGdgUM333koKxUVcXIPh3Dx5YR8PnC76hxgRcfU8+o4CrjgcxF6TeOM8o5+5QuNhv\natIJe3MOnZ4PUZArXp09pSZ89d6RN2cYQFM8KSvU8T8NMd4e+R9y9m5ASctSH7S9G9LNN4NaKKif\nv39ecYho8ubUXUyCwSQ=","version":"V2.0.0","url":"http://47.103.58.226/group1/M00/00/00/rBMkCV6ubt6Aa8j_AALporYD1bc0_big.0.rbl","signMethod":"md5","md5":"7bbcefcb7feba657a7b9b41c3ee41f41"},"id":"202732f5-6ba4-4783-99cb-9aa7a827849e","message":"upgrade"}
 平台订阅主题: /sys/productKey1/deviceCode1/upgrade/progress
 

@@ -468,6 +468,29 @@ rt_err_t at_esp32_init(void)
         goto __exit;
     }
     
+    /* 关闭WIFI */
+    {
+        int cwmode = 0;
+        ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+CWMODE?");
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s at_obj_exec_cmd(AT+CWMODE?) failed(%d)!", __FUNCTION__, ret);
+            //ret = -RT_ERROR;
+            goto __exit;
+        }
+        at_resp_parse_line_args_by_kw(resp, "+CWMODE:", "+CWMODE:%d", &cwmode);
+        if (cwmode != 0)
+        {
+            ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+CWMODE=0");
+            if (ret != RT_EOK)
+            {
+                LOG_E("%s at_obj_exec_cmd(AT+CWMODE=0) failed(%d)!", __FUNCTION__, ret);
+                //ret = -RT_ERROR;
+                goto __exit;
+            }
+        }
+    }
+    
     /* 配置ESP32工作于BLE服务器模式 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEINIT=2");
     if (ret != RT_EOK)
