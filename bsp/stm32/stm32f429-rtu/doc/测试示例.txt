@@ -19,3 +19,9 @@
 平台订阅主题: /sys/productKey1/deviceCode1/telemetry/real_time_data
 平台发布回复主题: /sys/productKey1/deviceCode1/telemetry/result
 平台发布回复数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","id":"W343Wwwe4","code":200,"message":"success","topic":"/sys/productKey1/deviceCode1/telemetry/real_time_data","data":{}}
+
+OTA升级示例
+平台发布主题: /sys/productKey1/deviceCode1/upgrade/update
+平台发布数据: {"productKey":"productKey1","deviceCode":"deviceCode1","OperationDate":"20200423223800","code":1000,"data":{"size":161026,"sign":"IRf/FuPH64P++cR1ynpA9tv9qW5xfI3Mc7a1muWCsrlEcIZuZ6VXk8pcOTmV94LOpv/sgfGz9Lyh\n5JSDFA/208jp/jyQD2M6tfGY2dfM+hY/NXOK2K4E2CxGNSudjHxT/JPRB/gyByB58H7VCv3qrX9y\nMvaKV0mLTG33LshBqw0=","version":"V2.0.0","url":"http://47.103.58.226/group1/M00/00/00/rBMkCV6k90mAG2uqAAJ1AgBrKek3_big.0.rbl","signMethod":"md5","md5":"9ff41046b6fc6f49aa5d1fd354e11e4f"},"id":"08ad8b01-8706-4fa3-bba3-575799ec28cc","message":"upgrade"}
+平台订阅主题: /sys/productKey1/deviceCode1/upgrade/progress
+
