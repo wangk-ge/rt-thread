@@ -91,11 +91,11 @@ static rt_err_t exec_esp32at(const char *at_str, size_t str_len)
     }
     
     client = at_client_get(AT_ESP32_UART_DEVICE_NAME);
-	if (client == RT_NULL)
+    if (client == RT_NULL)
     {
         LOG_E("%s at_client_get(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
         ret = -RT_ERROR;
-		goto __exit;
+        goto __exit;
     }
 
     resp = app_alloc_at_resp(0, rt_tick_from_millisecond(5000));
@@ -316,11 +316,11 @@ AT_CMD_EXPORT("AT+TESTREPORT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_testreport
 static at_result_t at_efsetdefault_exec(const struct at_cmd *cmd)
 {
     EfErrCode ef_ret = ef_env_set_default();
-	if (ef_ret != EF_NO_ERR)
-	{
-		LOG_E("%s ef_env_set_default() error(%d)!", __FUNCTION__, ef_ret);
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("%s ef_env_set_default() error(%d)!", __FUNCTION__, ef_ret);
         return AT_RESULT_FAILE;
-	}
+    }
     
     return AT_RESULT_OK;
 }
@@ -330,8 +330,8 @@ AT_CMD_EXPORT("AT+EFSETDEFAULT", RT_NULL, RT_NULL, RT_NULL, RT_NULL, at_efsetdef
 
 static at_result_t at_efprint_exec(const struct at_cmd *cmd)
 {
-	at_server_printfln("+EFPRINT: ");
-	
+    at_server_printfln("+EFPRINT: ");
+    
     ef_print_env();
     
     return AT_RESULT_OK;
@@ -380,7 +380,7 @@ AT_CMD_EXPORT("AT+ESP32AT", "=<at>[,<p1>][,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p
 
 static at_result_t at_esp32bleaddr_exec(const struct at_cmd *cmd)
 {
-	at_server_printfln("+ESP32BLEADDR: %s", get_esp32_ble_addr());
+    at_server_printfln("+ESP32BLEADDR: %s", get_esp32_ble_addr());
     
     return AT_RESULT_OK;
 }

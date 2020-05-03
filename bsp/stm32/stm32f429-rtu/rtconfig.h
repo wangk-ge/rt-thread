@@ -189,6 +189,8 @@
 
 /* IoT Cloud */
 
+#define PKG_USING_OTA_DOWNLOADER
+#define PKG_USING_OTA_DOWNLOADER_LATEST_VERSION
 
 /* security packages */
 
