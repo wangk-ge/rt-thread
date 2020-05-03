@@ -98,6 +98,9 @@ typedef enum
 /* HTTP OTA线程栈大小 */
 #define HTTP_OTA_THREAD_STACK_SIZE (4096)
 
+/* HTTP OTA下载失败最大重试次数 */
+#define HTTP_OTA_DOWNLOAD_MAX_RETRY_CNT (100)
+
 /* 数据上报线程优先级(优先级低于主线程) */
 #define DATA_REPORT_THREAD_PRIORITY (RT_MAIN_THREAD_PRIORITY + 1)
 
@@ -2273,7 +2276,8 @@ static void http_ota_thread_entry(void *param)
     c_str_ref version = {strlen(ota_info->version), ota_info->version};
     
     /* 下载并校验OTA固件(耗时操作) */
-    http_ota_result ret = http_ota_fw_download(ota_info->url, ota_info->firmware_size, ota_info->md5, 100);
+    http_ota_result ret = http_ota_fw_download(ota_info->url, ota_info->firmware_size, 
+        ota_info->md5, HTTP_OTA_DOWNLOAD_MAX_RETRY_CNT);
     switch (ret)
     {
         case HTTP_OTA_DOWNLOAD_AND_VERIFY_SUCCESS: // 下载并校验成功
@@ -2925,8 +2929,8 @@ static rt_err_t app_init(void)
     rt_err_t ret = RT_EOK;
     
     /* 输出软/硬件版本号 */
-    LOG_D("sw_version: %s", __FUNCTION__, SW_VERSION);
-    LOG_D("hw_version: %s", __FUNCTION__, HW_VERSION);
+    LOG_D("%s sw_version: %s", __FUNCTION__, SW_VERSION);
+    LOG_D("%s hw_version: %s", __FUNCTION__, HW_VERSION);
     
     /* fal init */
     {

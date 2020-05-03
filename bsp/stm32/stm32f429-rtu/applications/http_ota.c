@@ -568,7 +568,7 @@ __close_connect_and_retry:
 	if (retry_count <= 0)
 	{
 		LOG_E("%s retry count reached!", __FUNCTION__);
-		result = HTTP_OTA_VERIFY_FAIL;
+		result = HTTP_OTA_DOWNLOAD_FAIL;
 		goto __exit;
 	}
 	
