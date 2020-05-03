@@ -946,7 +946,7 @@ static at_result_t at_uartxtype_query(const struct at_cmd *cmd)
     /* 串口号UART X的X实际字符 */
     char uart_x = *(cmd->name + STR_LEN("AT+UART"));
     
-    return at_uartxlength_println(uart_x);
+    return at_uartxtype_println(uart_x);
 }
 
 static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args)
@@ -1002,18 +1002,26 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
             return AT_RESULT_PARSE_FAILE;
         }
         /* uartXtype
-         *  0x00=有符号16位int
-         *  0x01=无符号16位int
-         *  0x02=有符号32位int(ABCD)
-         *  0x03=有符号32位int(CDAB)
-         *  0x04=无符号32位int(ABCD)
-         *  0x05=无符号32位int(CDAB)
-         *  0x06=IEEE754浮点数(ABCD)
-         *  0x07=IEEE754浮点数(CDAB)
+         *  0x00=有符号16位int(AB)
+         *  0x01=有符号16位int(BA)
+         *  0x02=无符号16位int(AB)
+         *  0x03=无符号16位int(BA)
+         *  0x04=有符号32位int(ABCD)
+         *  0x05=有符号32位int(DCBA)
+         *  0x06=有符号32位int(BADC)
+         *  0x07=有符号32位int(CDAB)
+         *  0x08=无符号32位int(ABCD)
+         *  0x09=无符号32位int(DCBA)
+         *  0x0A=无符号32位int(BADC)
+         *  0x0B=无符号32位int(CDAB)
+         *  0x0C=IEEE754浮点数(ABCD)
+         *  0x0D=IEEE754浮点数(DCBA)
+         *  0x0E=IEEE754浮点数(BADC)
+         *  0x0F=IEEE754浮点数(CDAB)
          */
-        if ((type < 0x00) || (type > 0x07))
+        if ((type < 0x00) || (type > 0x0F))
         {
-            LOG_E("%s param[%d] not in range[0x00,0x07]!", __FUNCTION__, i);
+            LOG_E("%s param[%d] not in range[0x00,0x0F]!", __FUNCTION__, i);
             return AT_RESULT_PARSE_FAILE;
         }
         type_list[i] = (uint8_t)((uint32_t)type);

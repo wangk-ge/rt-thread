@@ -38,8 +38,8 @@ menu "Onboard Peripheral Drivers"
             int "Power pin"
             default -1
 
-        config TB22_STATUS_PIN
-            int "Power status pin"
+        config TB22_RESET_PIN
+            int "Reset pin"
             default -1
 
         config TB22_DEVICE_NAME

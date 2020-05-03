@@ -30,12 +30,12 @@
 
 static struct at_device_tb22 _dev =
 {
-    TB22_DEVICE_NAME,
-    TB22_CLIENT_NAME,
+    .device_name = TB22_DEVICE_NAME,
+    .client_name = TB22_CLIENT_NAME,
 
-    TB22_POWER_PIN,
-    TB22_STATUS_PIN,
-    TB22_RECV_BUFF_LEN,
+    .power_pin = TB22_POWER_PIN,
+    .reset_pin = TB22_RESET_PIN,
+    .recv_bufsz = TB22_RECV_BUFF_LEN,
 };
 
 static int tb22_device_register(void)

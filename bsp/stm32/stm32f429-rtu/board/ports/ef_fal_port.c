@@ -105,19 +105,27 @@ static const ef_env default_env_set[] = {
         {"uart3length", "\x07\x00", 2}, // 默认值0x0007
         {"uart4length", "\x07\x00", 2}, // 默认值0x0007
         /* uartXtype
-         *  0x00=有符号16位int
-         *  0x01=无符号16位int
-         *  0x02=有符号32位int(ABCD)
-         *  0x03=有符号32位int(CDAB)
-         *  0x04=无符号32位int(ABCD)
-         *  0x05=无符号32位int(CDAB)
-         *  0x06=IEEE754浮点数(ABCD)
-         *  0x07=IEEE754浮点数(CDAB)
+         *  0x00=有符号16位int(AB)
+         *  0x01=有符号16位int(BA)
+         *  0x02=无符号16位int(AB)
+         *  0x03=无符号16位int(BA)
+         *  0x04=有符号32位int(ABCD)
+         *  0x05=有符号32位int(DCBA)
+         *  0x06=有符号32位int(BADC)
+         *  0x07=有符号32位int(CDAB)
+         *  0x08=无符号32位int(ABCD)
+         *  0x09=无符号32位int(DCBA)
+         *  0x0A=无符号32位int(BADC)
+         *  0x0B=无符号32位int(CDAB)
+         *  0x0C=IEEE754浮点数(ABCD)
+         *  0x0D=IEEE754浮点数(DCBA)
+         *  0x0E=IEEE754浮点数(BADC)
+         *  0x0F=IEEE754浮点数(CDAB)
          */
-        {"uart1type", "\x06", 1}, // 默认值0x06
-        {"uart2type", "\x06", 1}, // 默认值0x06
-        {"uart3type", "\x06", 1}, // 默认值0x06
-        {"uart4type", "\x06", 1}, // 默认值0x06
+        {"uart1type", "\x0D", 1}, // 默认值0x0D
+        {"uart2type", "\x0D", 1}, // 默认值0x0D
+        {"uart3type", "\x0D", 1}, // 默认值0x0D
+        {"uart4type", "\x0D", 1}, // 默认值0x0D
 };
 
 static char log_buf[RT_CONSOLEBUF_SIZE];

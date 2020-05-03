@@ -399,4 +399,4 @@ static at_result_t at_esp32blesend_setup(const struct at_cmd *cmd, const char *a
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+ESP32BLESEND", "=<data>", RT_NULL, RT_NULL, at_esp32blesend_setup, RT_NULL, 0);
+AT_CMD_EXPORT("AT+ESP32BLESEND", "=<data>[,<p1>][,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p8>][,<p10>]", RT_NULL, RT_NULL, at_esp32blesend_setup, RT_NULL, 0);

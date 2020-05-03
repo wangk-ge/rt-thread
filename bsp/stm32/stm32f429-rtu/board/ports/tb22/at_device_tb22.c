@@ -45,12 +45,11 @@ static int tb22_reset(struct at_device *device)
 {
     struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
 
-    if (tb22->power_pin != -1)
+    if (tb22->reset_pin != -1)
     {
-        rt_pin_mode(tb22->power_pin, PIN_MODE_OUTPUT);
-        rt_pin_write(tb22->power_pin, PIN_LOW);
+        rt_pin_write(tb22->reset_pin, PIN_LOW);
         rt_thread_mdelay(300);
-        rt_pin_write(tb22->power_pin, PIN_HIGH);
+        rt_pin_write(tb22->reset_pin, PIN_HIGH);
         tb22->power_status = 1;
     }
 
@@ -70,11 +69,11 @@ static int tb22_check_link_status(struct at_device *device)
     }
     if (tb22->sleep_status)    // is sleep status
     {
-        if (tb22->power_pin != -1)
+        if (tb22->reset_pin != -1)
         {
-            rt_pin_write(tb22->power_pin, PIN_LOW);
+            rt_pin_write(tb22->reset_pin, PIN_LOW);
             rt_thread_mdelay(100);
-            rt_pin_write(tb22->power_pin, PIN_HIGH);
+            rt_pin_write(tb22->reset_pin, PIN_HIGH);
             rt_thread_mdelay(200);
         }
     }
@@ -1110,11 +1109,20 @@ static int tb22_init(struct at_device *device)
     /* initialize tb22 pin configuration */
     if (tb22->power_pin != -1)
     {
-        rt_pin_mode(tb22->power_pin, PIN_MODE_OUTPUT);
-        rt_pin_write(tb22->power_pin, PIN_LOW);
+        //rt_pin_write(tb22->power_pin, PIN_HIGH); // 断电
+        //rt_pin_mode(tb22->power_pin, PIN_MODE_OUTPUT_OD);
+        //rt_thread_mdelay(1000);
+        rt_pin_write(tb22->power_pin, PIN_LOW); // 开启供电
+        //rt_thread_mdelay(1000);
     }
-    rt_pin_mode(TB22_NET_LED_PIN, PIN_MODE_OUTPUT);
-    rt_pin_write(TB22_NET_LED_PIN, PIN_HIGH);
+    if (tb22->reset_pin != -1)
+    {
+        rt_pin_write(tb22->reset_pin, PIN_LOW); // 复位引脚拉低
+        rt_pin_mode(tb22->reset_pin, PIN_MODE_OUTPUT_OD);
+        tb22->power_status = 0;
+    }
+    rt_pin_write(TB22_NET_LED_PIN, PIN_HIGH); // 关闭网络LED
+    rt_pin_mode(TB22_NET_LED_PIN, PIN_MODE_OUTPUT_OD);
 
     /* initialize tb22 device network */
     ret = tb22_netdev_set_up(device->netdev);

@@ -410,18 +410,15 @@ rt_err_t at_esp32_init(void)
 	
 #if 1
 	/* 开启ESP32模块电源重新上电 */
-	rt_pin_write(AT_ESP32_POWER_PIN, PIN_HIGH); // 拉高关闭电源
-	rt_pin_mode(AT_ESP32_POWER_PIN, PIN_MODE_OUTPUT);
-    rt_thread_mdelay(1000);
+	//rt_pin_write(AT_ESP32_POWER_PIN, PIN_HIGH); // 拉高关闭电源
+	//rt_pin_mode(AT_ESP32_POWER_PIN, PIN_MODE_OUTPUT_OD);
+    //rt_thread_mdelay(1000);
     rt_pin_write(AT_ESP32_POWER_PIN, PIN_LOW); // 拉低开启电源
 #else
     /* 开启ESP32模块电源(拉低开启) */
 	rt_pin_write(AT_ESP32_POWER_PIN, PIN_LOW);
-	rt_pin_mode(AT_ESP32_POWER_PIN, PIN_MODE_OUTPUT);
+	rt_pin_mode(AT_ESP32_POWER_PIN, PIN_MODE_OUTPUT_OD);
 #endif
-    
-	/* 等待esp32启动完成 */
-	rt_thread_mdelay(1000);
     
 	/* wait esp32 startup finish, send AT every 500ms, if receive OK, SYNC success*/
 	ret = at_client_obj_wait_connect(esp32_at_client, AT_ESP32_CONNECT_TIME);
@@ -435,12 +432,30 @@ rt_err_t at_esp32_init(void)
 	resp = app_alloc_at_resp(0, rt_tick_from_millisecond(1000));
     RT_ASSERT(resp != RT_NULL)
     
+    /* 软复位 */
+	ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+RST");
+	if (ret != RT_EOK)
+	{
+		LOG_E("%s at_obj_exec_cmd(AT+RST) failed(%d)!", __FUNCTION__, ret);
+		//ret = -RT_ERROR;
+		goto __exit;
+	}
+    
+    /* wait esp32 startup finish, send AT every 500ms, if receive OK, SYNC success*/
+	ret = at_client_obj_wait_connect(esp32_at_client, AT_ESP32_CONNECT_TIME);
+	if (ret != RT_EOK)
+	{
+		LOG_E("%s at_client_obj_wait_connect(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
+		//ret = -RT_ETIMEOUT;
+		goto __exit;
+	}
+    
     /* 关闭回显 */
 	ret = at_obj_exec_cmd(esp32_at_client, resp, "ATE0");
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(ATE0) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
 	
@@ -449,7 +464,7 @@ rt_err_t at_esp32_init(void)
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEINIT=2) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
 
@@ -458,7 +473,7 @@ rt_err_t at_esp32_init(void)
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSSRVCRE) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		//goto __exit; // 服务已创建?
 	}
 	
@@ -467,7 +482,7 @@ rt_err_t at_esp32_init(void)
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSSRVSTART) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
 	
@@ -476,7 +491,7 @@ rt_err_t at_esp32_init(void)
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSCHAR?) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
 	
@@ -485,7 +500,7 @@ rt_err_t at_esp32_init(void)
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEADDR?) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
     at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
@@ -504,7 +519,7 @@ rt_err_t at_esp32_init(void)
 	if (ret != RT_EOK)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEADVSTART) failed(%d)!", __FUNCTION__, ret);
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
 	
@@ -524,7 +539,7 @@ rt_err_t at_esp32_init(void)
 	{
 		LOG_E("%s at_obj_exec_cmd(AT+BLEADVSTART) failed(%d)!", __FUNCTION__, ret);
 		esp32_at_thread = RT_NULL;
-		//ret = -RT_ETIMEOUT;
+		//ret = -RT_ERROR;
 		goto __exit;
 	}
     

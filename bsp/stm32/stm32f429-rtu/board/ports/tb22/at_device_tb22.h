@@ -41,8 +41,8 @@ struct at_device_tb22
     char *device_name;
     char *client_name;
 
-    int power_pin;          /* TB22 has not power_en, it should be reset pin */
-    int power_status_pin;   /* ADC */
+    int power_pin; // 电源控制GPIO
+    int reset_pin; // 复位控制GPIO
     size_t recv_bufsz;
     struct at_device device;
 
