@@ -89,6 +89,7 @@ static void esp32_at_urc_write_func(struct at_client *client, const char *data, 
 static void esp32_at_urc_bleconn_func(struct at_client *client, const char *data, rt_size_t size);
 static void esp32_at_urc_bledisconn_func(struct at_client *client, const char *data, rt_size_t size);
 static void esp32_at_urc_blecfgmtu_func(struct at_client *client, const char *data, rt_size_t size);
+static void esp32_at_urc_ready_func(struct at_client *client, const char *data, rt_size_t size);
 
 static const struct at_urc esp32_at_urc_table[] =
 {
@@ -96,6 +97,7 @@ static const struct at_urc esp32_at_urc_table[] =
     {"+BLECONN:", "\r\n", esp32_at_urc_bleconn_func},
     {"+BLEDISCONN:", "\r\n", esp32_at_urc_bledisconn_func},
     {"+BLECFGMTU:", "\r\n", esp32_at_urc_blecfgmtu_func},
+    {"ready", "\r\n", esp32_at_urc_ready_func},
 };
 
 static char esp32_ble_addr[32] = "";
@@ -111,6 +113,123 @@ static rt_err_t at_esp32_send_msg(at_esp32_message *esp32_msg)
     {
         LOG_E("%s call rt_mq_send error(%d)", __FUNCTION__, ret);
     }
+    return ret;
+}
+
+/* 配置并启动BLE Server */
+static rt_err_t at_esp32_ble_init(at_response_t resp)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    rt_err_t ret = RT_EOK;
+    
+    /* 关闭回显 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "ATE0");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(ATE0) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 关闭休眠模式 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+SLEEP=0");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+SLEEP=0) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 关闭WIFI */
+    {
+        int cwmode = 0;
+        ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+CWMODE?");
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s at_obj_exec_cmd(AT+CWMODE?) failed(%d)!", __FUNCTION__, ret);
+            //ret = -RT_ERROR;
+            goto __exit;
+        }
+        at_resp_parse_line_args_by_kw(resp, "+CWMODE:", "+CWMODE:%d", &cwmode);
+        if (cwmode != 0)
+        {
+            ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+CWMODE=0");
+            if (ret != RT_EOK)
+            {
+                LOG_E("%s at_obj_exec_cmd(AT+CWMODE=0) failed(%d)!", __FUNCTION__, ret);
+                //ret = -RT_ERROR;
+                goto __exit;
+            }
+        }
+    }
+    
+    /* 配置ESP32工作于BLE服务器模式 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEINIT=2");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEINIT=2) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+
+    /* 创建BLE服务 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEGATTSSRVCRE");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSSRVCRE) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        //goto __exit; // 服务已创建?
+    }
+    
+    /* 启动BLE服务 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEGATTSSRVSTART");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSSRVSTART) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 查询BLE服务和特性 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEGATTSCHAR?");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSCHAR?) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 查询BLE地址 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADDR?");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEADDR?) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
+    
+    /* 创建消息队列 */
+    esp32_at_mq = rt_mq_create("at_esp32", sizeof(at_esp32_message), AT_ESP32_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
+    if (RT_NULL == esp32_at_mq)
+    {
+        LOG_E("%s rt_mq_create(at_esp32) failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 启动BLE广播 */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVSTART");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEADVSTART) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+__exit:
+    
     return ret;
 }
 
@@ -226,6 +345,25 @@ static void esp32_at_urc_blecfgmtu_func(struct at_client *client, const char *da
     }
     
     esp32_mtu = (uint32_t)mtu;
+}
+
+static void esp32_at_urc_ready_func(struct at_client *client, const char *data, rt_size_t size)
+{
+    LOG_D("%s() data=%.*s", __FUNCTION__, (int)size, data);
+    
+    at_response_t resp = app_alloc_at_resp(0, rt_tick_from_millisecond(1000));
+    RT_ASSERT(resp != RT_NULL)
+    
+    rt_err_t ret = at_esp32_ble_init(resp);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_esp32_ble_init() failed(%d)!", __FUNCTION__, ret);
+    }
+    
+    if (resp)
+    {
+        app_free_at_resp(resp);
+    }
 }
 
 /*************************************************
@@ -450,108 +588,11 @@ rt_err_t at_esp32_init(void)
         goto __exit;
     }
     
-    /* 关闭回显 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "ATE0");
+    ret = at_esp32_ble_init(resp);
     if (ret != RT_EOK)
     {
-        LOG_E("%s at_obj_exec_cmd(ATE0) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
-    }
-    
-    /* 关闭休眠模式 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+SLEEP=0");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+SLEEP=0) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
-    }
-    
-    /* 关闭WIFI */
-    {
-        int cwmode = 0;
-        ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+CWMODE?");
-        if (ret != RT_EOK)
-        {
-            LOG_E("%s at_obj_exec_cmd(AT+CWMODE?) failed(%d)!", __FUNCTION__, ret);
-            //ret = -RT_ERROR;
-            goto __exit;
-        }
-        at_resp_parse_line_args_by_kw(resp, "+CWMODE:", "+CWMODE:%d", &cwmode);
-        if (cwmode != 0)
-        {
-            ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+CWMODE=0");
-            if (ret != RT_EOK)
-            {
-                LOG_E("%s at_obj_exec_cmd(AT+CWMODE=0) failed(%d)!", __FUNCTION__, ret);
-                //ret = -RT_ERROR;
-                goto __exit;
-            }
-        }
-    }
-    
-    /* 配置ESP32工作于BLE服务器模式 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEINIT=2");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEINIT=2) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
-    }
-
-    /* 创建BLE服务 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEGATTSSRVCRE");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSSRVCRE) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        //goto __exit; // 服务已创建?
-    }
-    
-    /* 启动BLE服务 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEGATTSSRVSTART");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSSRVSTART) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
-    }
-    
-    /* 查询BLE服务和特性 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEGATTSCHAR?");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEGATTSCHAR?) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
-    }
-    
-    /* 查询BLE地址 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADDR?");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEADDR?) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
-    }
-    at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
-    
-    /* 创建消息队列 */
-    esp32_at_mq = rt_mq_create("at_esp32", sizeof(at_esp32_message), AT_ESP32_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
-    if (RT_NULL == esp32_at_mq)
-    {
-        LOG_E("%s rt_mq_create(at_esp32) failed!", __FUNCTION__);
-        ret = -RT_ERROR;
-        goto __exit;
-    }
-    
-    /* 启动BLE广播 */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVSTART");
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEADVSTART) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
+        LOG_E("%s at_esp32_ble_init() failed(%d).", __FUNCTION__, ret);
+        //ret = -RT_ETIMEOUT;
         goto __exit;
     }
     

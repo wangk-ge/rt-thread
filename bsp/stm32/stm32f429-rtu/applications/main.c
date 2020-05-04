@@ -1365,11 +1365,10 @@ static rt_err_t app_data_report(void)
         report_pos = fifo_info.tail_pos;
     }
     
-    
     if (report_pos == fifo_info.head_pos)
     { // 已到达队列头部(队列上报已全部完成)
         LOG_E("%s report pos reach the fifo head!", __FUNCTION__);
-        ret = -RT_ERROR;
+        ret = -RT_EEMPTY;
         goto __exit;
     }
     
@@ -2084,6 +2083,11 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
         LOG_E("%s devicecode check failed!", __FUNCTION__);
         goto __exit;
     }
+    if (strref_str_cmp("200", &code) != 0)
+    {
+        LOG_E("%s code(%.*s)!=200 check failed!", __FUNCTION__, code.len, code.c_str);
+        goto __exit;
+    }
     
     /* 发送收到服务器ACK事件 */
     {
@@ -2747,7 +2751,8 @@ static rt_err_t app_modbus_init(void)
             modbus_rtu_set_rts(mb_ctx, device_info->rts_pin, MODBUS_RTU_RTS_UP);
         }
         modbus_set_slave(mb_ctx, cfg->uart_x_cfg[i].slaveraddr); // 从机地址
-        modbus_set_response_timeout(mb_ctx, 1, 0); // 超时时间:1S
+        modbus_set_response_timeout(mb_ctx, 3, 0); // 超时时间:1S
+        //modbus_set_debug(mb_ctx, 1);
         
         /* 连接MODBUS端口 */
         int iret = modbus_connect(mb_ctx);
@@ -2826,7 +2831,12 @@ __retry:
         
         /* 上报数据 */
         ret = app_data_report();
-        if (ret != RT_EOK)
+        if (ret == -RT_EEMPTY)
+        { // 已到达队列头部(队列上报已全部完成)
+            LOG_D("%s report history data completed.", __FUNCTION__);
+            continue;
+        }
+        else if (ret != RT_EOK)
         { // 上报失败
             LOG_E("%s app_data_report failed(%d)!", __FUNCTION__, ret);
             
@@ -2895,6 +2905,7 @@ __wait_and_retry:
         }
     }
     
+
     data_report_thread = RT_NULL;
 }
 
@@ -3220,8 +3231,6 @@ __exit:
         }
         memset(&mq_client, 0, sizeof(mq_client));
         
-        
-        
         if (RT_NULL != history_fifo_mutex)
         {
             rt_mutex_delete(history_fifo_mutex);
@@ -3343,7 +3352,20 @@ int main(void)
     if (RT_EOK != ret)
     {
         LOG_E("%s start report timer failed(%d)!", __FUNCTION__, ret);
+        goto __exit;
     }
+    
+    /* 启动AT Server */
+    LOG_I("%s at_server_init() start", __FUNCTION__);
+    ret = at_server_init();
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s at_server_init failed(%d)!", __FUNCTION__, ret);
+        goto __exit;
+    }
+    LOG_I("%s at_server_init() success", __FUNCTION__);
+    
+    at_server_printfln("ready");
     
     /* 主消息循环 */
     while (1)

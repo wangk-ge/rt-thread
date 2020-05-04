@@ -570,7 +570,7 @@ int at_server_init(void)
         goto __exit;
     }
 
-    at_server_local->echo_mode = 1;
+    at_server_local->echo_mode = 0;
     at_server_local->status = AT_STATUS_UNINITIALIZED;
 
     memset(at_server_local->recv_buffer, 0x00, AT_SERVER_RECV_BUFF_LEN);
@@ -645,7 +645,7 @@ __exit:
 
     return result;
 }
-INIT_COMPONENT_EXPORT(at_server_init);
+//INIT_COMPONENT_EXPORT(at_server_init);
 
 RT_WEAK void at_port_reset(void)
 {
