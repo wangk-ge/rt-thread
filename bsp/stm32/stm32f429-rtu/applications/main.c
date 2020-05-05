@@ -20,6 +20,7 @@
 #include <mqtt_client.h>
 #include <errno.h>
 #include <string.h>
+#include <math.h>
 #include <jsmn.h>
 #include <at_device.h>
 #include <at.h>
@@ -656,29 +657,61 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                 case 0x0C: // IEEE754浮点数(ABCD)
                 {
                     float float_data = modbus_get_float_abcd(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    if (isnan(float_data))
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                    }
+                    else
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    }
                     break;
                 }
                 case 0x0D: // IEEE754浮点数(DCBA)
                 {
                     float float_data = modbus_get_float_dcba(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    if (isnan(float_data))
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                    }
+                    else
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    }
                     break;
                 }
                 case 0x0E: // IEEE754浮点数(BADC)
                 {
                     float float_data = modbus_get_float_badc(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    if (isnan(float_data))
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                    }
+                    else
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    }
                     break;
                 }
                 case 0x0F: // IEEE754浮点数(CDAB)
                 {
                     float float_data = modbus_get_float_cdab(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    if (isnan(float_data))
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                    }
+                    else
+                    {
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                    }
                     break;
                 }
                 default:
@@ -786,11 +819,65 @@ rt_err_t clear_history_data(void)
     /* 确保互斥修改FIFO队列 */
     rt_mutex_take(history_fifo_mutex, RT_WAITING_FOREVER);
     
-    /* 清空历史数据队列信息 */
-    EfErrCode ef_ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
+    /* 加载FIFO队列信息 */
+    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(history_fifo_info), NULL);
+    if (len != sizeof(history_fifo_info))
+    {
+        /* 加载FIFO队列失败 */
+        LOG_W("%s ef_get_env_blob(history_fifo_info) failed!", __FUNCTION__);
+    }
+    else
+    {
+        /* 删除所有的历史数据条目 */
+        uint32_t pos = fifo_info.tail_pos;
+        while (pos != fifo_info.head_pos)
+        {
+            char data_key[16] = "";
+            int x = 1;
+            for (x = 1; x <= CFG_UART_X_NUM; ++x)
+            {
+                snprintf(data_key, sizeof(data_key), "u%dd%u", x, pos); // Key="uXdN"
+                EfErrCode ef_ret = ef_del_env(data_key);
+                if (ret != EF_NO_ERR)
+                { // 删除失败
+                    /* 输出警告 */
+                    LOG_W("%s ef_del_env(%s) error!", __FUNCTION__, data_key);
+                    /* 继续删除其他数据 */
+                }
+            }
+
+            snprintf(data_key, sizeof(data_key), "d%uts", pos); // Key="dNts"
+            EfErrCode ef_ret = ef_del_env(data_key);
+            if (ret != EF_NO_ERR)
+            { // 删除失败
+                /* 输出警告 */
+                LOG_W("%s ef_del_env(%s) error!", __FUNCTION__, data_key);
+                /* 继续删除其他数据 */
+            }
+            
+            /* 下一条 */
+            pos++;
+            if (pos >= HISTORY_DATA_MAX_NUM)
+            {
+                pos = 0;
+            }
+        }
+    }
+    
+    /* 删除历史数据队列信息 */
+    EfErrCode ef_ret = ef_del_env("history_fifo_info");
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("%s ef_set_env_blob(history_fifo_info) error(%d)!", __FUNCTION__, ef_ret);
+        LOG_E("%s ef_del_env(history_fifo_info) error(%d)!", __FUNCTION__, ef_ret);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 清除上报位置 */
+    ef_ret = ef_del_env("report_pos");
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("%s ef_del_env(report_pos) error(%d)!", __FUNCTION__, ef_ret);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1289,7 +1376,7 @@ static rt_err_t move_report_pos_to_next(void)
     ret = get_report_pos(&report_pos);
     if (ret != RT_EOK)
     {
-        LOG_D("%s get_report_pos not fount.", __FUNCTION__);
+        LOG_D("%s get_report_pos not found.", __FUNCTION__);
         /* 从队尾开始上报 */
         report_pos = fifo_info.tail_pos;
     }
@@ -1304,7 +1391,7 @@ static rt_err_t move_report_pos_to_next(void)
     if (report_pos == fifo_info.head_pos)
     { // 已到达队列头部(队列上报已全部完成)
         LOG_E("%s report pos reach the fifo head!", __FUNCTION__);
-        ret = -RT_ERROR;
+        ret = -RT_EEMPTY;
         goto __exit;
     }
 
@@ -1360,7 +1447,7 @@ static rt_err_t app_data_report(void)
     ret = get_report_pos(&report_pos);
     if (ret != RT_EOK)
     {
-        LOG_D("%s get_report_pos not fount.", __FUNCTION__);
+        LOG_D("%s get_report_pos not found.", __FUNCTION__);
         /* 从队尾开始上报 */
         report_pos = fifo_info.tail_pos;
     }
@@ -2868,7 +2955,12 @@ __retry:
         
             /* 移动待上报数据位置到下一个位置 */
             ret = move_report_pos_to_next();
-            if (ret != RT_EOK)
+            if (ret == -RT_EEMPTY)
+            { // 已到达队列头部(队列上报已全部完成)
+                LOG_D("%s report history data completed.", __FUNCTION__);
+                continue;
+            }
+            else if (ret != RT_EOK)
             {
                 LOG_W("%s move_report_pos_to_next failed!", __FUNCTION__);
                 /* 移动位置失败,后续将继续上报本条数据! */
