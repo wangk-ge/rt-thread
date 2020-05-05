@@ -87,6 +87,8 @@ static char* var_str_buf[ARRAY_SIZE(cfg_info.uart_x_cfg)] = {NULL};
 *************************************************/
 static void cfg_info_clear(void)
 {
+    LOG_D("%s()", __FUNCTION__);
+    
     /* 释放动态分配的内存 */
     int i = 0;
     for (i = 0; i < ARRAY_SIZE(cfg_info.uart_x_cfg); ++i)
@@ -147,6 +149,26 @@ static void cfg_info_clear(void)
     memset(&cfg_info, 0, sizeof(cfg_info));
 }
 
+/* 计算每条数据的大小(字节数) */
+static void calc_data_size(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    cfg_info.data_size = sizeof(time_t);
+    
+    int x = 1;
+    for (x = 1; x <= CFG_UART_X_NUM; ++x)
+    {
+        int i = 0;
+        for (i = 0; i < cfg_info.uart_x_cfg[x - 1].variablecnt; ++i)
+        {
+            /* 每个寄存器16bit */
+            uint16_t reg_num = cfg_info.uart_x_cfg[x - 1].length[i]; // 变量寄存器个数
+            cfg_info.data_size += reg_num * sizeof(uint16_t);
+        }
+    }
+}
+
 /*************************************************
 * Function: cfg_load_uart_x
 * Description: 加载UARTX配置
@@ -157,6 +179,8 @@ static void cfg_info_clear(void)
 *************************************************/
 static bool cfg_load_uart_x(int x)
 {
+    LOG_D("%s() x=%d", __FUNCTION__, x);
+    
     /* 内部函数不做参数检查,由调用者保证参数有效性 */
     int index = x - 1; // 索引值
     bool ret = true;
@@ -531,13 +555,24 @@ bool cfg_load(void)
         }
     }
     
+    /* 计算每条数据的大小(字节数) */
+    calc_data_size();
+    
 __exit:
     if (!ret)
     { // 加载失败
         /* 清除缓存的配置数据,释放内存 */
         cfg_info_clear();
-        //cfg_set_default();
-        //ef_env_set_default();
+        
+        LOG_D("%s() ef_env_set_default.", __FUNCTION__);
+        /* 恢复默认配置 */
+        EfErrCode ef_ret = ef_env_set_default();
+        if (ef_ret != EF_NO_ERR)
+        {
+            LOG_E("%s() ef_env_set_default failed(%d)!", __FUNCTION__, ef_ret);
+        }
+        
+        /* 配置加载失败,将会重启系统重新尝试加载配置 */
     }
     
     return ret;
@@ -577,6 +612,7 @@ void cfg_print(void)
     LOG_I("cycle: %u", cfg_info.cycle);
     LOG_I("productkey: %s", cfg_info.productkey ? cfg_info.productkey : "");
     LOG_I("devicecode: %s", cfg_info.devicecode ? cfg_info.devicecode : "");
+    LOG_I("data_size: %u", cfg_info.data_size);
     
     int i = 0;
     for (i = 0; i < ARRAY_SIZE(cfg_info.uart_x_cfg); ++i)

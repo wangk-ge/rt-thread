@@ -490,6 +490,10 @@ static void server_parser(at_server_t server)
         }
 
         server->recv_buffer[server->cur_recv_len++] = ch;
+        if (server->cur_recv_len >= AT_SERVER_RECV_BUFF_LEN)
+        {
+            goto __retry;
+        }
         last_ch = ch;
 
         if(!strstr(server->recv_buffer, server->end_mark))

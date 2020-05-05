@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <easyflash.h>
 
 #include "config.h"
 #include "cmd.h"
@@ -97,10 +98,36 @@ static CmdPacketBuf_T s_tCmdPacketBuf = {CMD_PACKET_EMPTY};
 // 命令执行函数(声明)
 static void _CMD_HandlerDATANUM(const c_str_ref* pctStrRefParam);
 static void _CMD_HandlerDATARD(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerCLIENTID(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerPRODUCTKEY(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerDEVICECODE(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerITEMID(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerSENSORHVER(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerSENSORSVER(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerAIP(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerAPORT(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerBIP(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerBPORT(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerCYCLE(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerACQUISITION(const c_str_ref* pctStrRefParam);
+static void _CMD_HandlerRSSI(const c_str_ref* pctStrRefParam);
 // 命令和执行函数对应表
 const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
     { STR_ITEM("DATANUM"), _CMD_HandlerDATANUM }, /* 读取历史数据条数 */
     { STR_ITEM("DATARD"), _CMD_HandlerDATARD }, /* 读取指定历史数据 */
+    { STR_ITEM("CLIENTID"), _CMD_HandlerCLIENTID }, /* 读取客户端编号 */
+    { STR_ITEM("PRODUCTKEY"), _CMD_HandlerPRODUCTKEY }, /* 读取产品编号 */
+    { STR_ITEM("DEVICECODE"), _CMD_HandlerDEVICECODE }, /* 读取设备编号 */
+    { STR_ITEM("ITEMID"), _CMD_HandlerITEMID }, /* 读取标签编号 */
+    { STR_ITEM("SENSORHVER"), _CMD_HandlerSENSORHVER }, /* 读取硬件版本号 */
+    { STR_ITEM("SENSORSVER"), _CMD_HandlerSENSORSVER }, /* 读取软件版本号 */
+    { STR_ITEM("AIP"), _CMD_HandlerAIP }, /* 读取通道A地址 */
+    { STR_ITEM("APORT"), _CMD_HandlerAPORT }, /* 读取通道A端口 */
+    { STR_ITEM("BIP"), _CMD_HandlerBIP }, /* 读取通道B地址 */
+    { STR_ITEM("BPORT"), _CMD_HandlerBPORT }, /* 读取通道B端口 */
+    { STR_ITEM("CYCLE"), _CMD_HandlerCYCLE }, /* 读取数据发布间隔时间 */
+    { STR_ITEM("ACQUISITION"), _CMD_HandlerACQUISITION }, /* 读取数据采集间隔时间 */
+    { STR_ITEM("RSSI"), _CMD_HandlerRSSI }, /* 读取信号强度 */
 };
 
 /*----------------------------------------------------------------------------*
@@ -176,18 +203,20 @@ static void _CMD_Response(const char* pcszFmt, ...)
         return;
     }
     
-    char szCmdRspBuf[CMD_PACKET_MAX_LEN] = "";
+    char* szCmdRspBuf = (char*)app_mp_alloc();
+    RT_ASSERT(szCmdRspBuf);
     int iCmdRspLen = 0;
     va_list ap;
     va_start(ap, pcszFmt);
-    iCmdRspLen = vsnprintf(szCmdRspBuf, sizeof(szCmdRspBuf), pcszFmt, ap);
+    iCmdRspLen = vsnprintf(szCmdRspBuf, APP_MP_BLOCK_SIZE, pcszFmt, ap);
     va_end(ap);
-    if ((iCmdRspLen > 0) && (iCmdRspLen <= (sizeof(szCmdRspBuf) - 2)))
+    if ((iCmdRspLen > 0) && (iCmdRspLen <= (APP_MP_BLOCK_SIZE - 2)))
     {
         szCmdRspBuf[iCmdRspLen++] = '\r';
         szCmdRspBuf[iCmdRspLen++] = '\n';
         cmd_response_output((const uint8_t*)szCmdRspBuf, (uint32_t)iCmdRspLen);
     }
+    app_mp_free(szCmdRspBuf);
 }
 
 /*************************************************
@@ -340,6 +369,354 @@ static void _CMD_HandlerDATARD(const c_str_ref* pctStrRefParam)
     
         app_mp_free(json_data_buf);
         json_data_buf = NULL;
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerCLIENTID
+* Description: CLIENTID命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerCLIENTID(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        rt_uint32_t client_id = 0;
+        size_t len = ef_get_env_blob("client_id", &client_id, sizeof(client_id), RT_NULL);
+        if (len != sizeof(client_id))
+        {
+            LOG_E("%s ef_get_env_blob(client_id) error!", __FUNCTION__);
+            _CMD_Response("[ERR]");
+        }
+        else
+        {
+            _CMD_Response("[CLIENTID=%010u]", client_id);
+        }
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerPRODUCTKEY
+* Description: PRODUCTKEY命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerPRODUCTKEY(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        char key[64] = "";
+        size_t len = ef_get_env_blob("productkey", key, sizeof(key), RT_NULL);
+        key[len] = '\0';
+        _CMD_Response("[PRODUCTKEY=%s]", key);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerDEVICECODE
+* Description: DEVICECODE命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerDEVICECODE(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        char devicecode[64] = "";
+        size_t len = ef_get_env_blob("devicecode", devicecode, sizeof(devicecode), RT_NULL);
+        devicecode[len] = '\0';
+        _CMD_Response("[DEVICECODE=%s]", devicecode);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerITEMID
+* Description: ITEMID命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerITEMID(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        char itemid[64] = "";
+        size_t len = ef_get_env_blob("itemid", itemid, sizeof(itemid) - 1, RT_NULL);
+        itemid[len] = '\0';
+        _CMD_Response("[ITEMID=%s]", itemid);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerSENSORHVER
+* Description: SENSORHVER命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerSENSORHVER(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        _CMD_Response("[SENSORHVER=%s]", HW_VERSION);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerSENSORSVER
+* Description: SENSORSVER命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerSENSORSVER(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        _CMD_Response("[SENSORSVER=%s]", SW_VERSION);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerAIP
+* Description: AIP命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerAIP(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        char a_ip[64] = "";
+        size_t len = ef_get_env_blob("a_ip", a_ip, sizeof(a_ip) - 1, RT_NULL);
+        a_ip[len] = '\0';
+        _CMD_Response("[AIP=%s]", a_ip);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerAPORT
+* Description: APORT命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerAPORT(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        uint16_t port = 0;
+        size_t len = ef_get_env_blob("a_port", &port, sizeof(port), RT_NULL);
+        if (len != sizeof(port))
+        {
+            LOG_E("%s ef_get_env_blob(a_port) error!", __FUNCTION__);
+            _CMD_Response("[ERR]");
+        }
+        else
+        {
+            _CMD_Response("[APORT=%u]", port);
+        }
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerBIP
+* Description: BIP命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerBIP(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        char b_ip[64] = "";
+        size_t len = ef_get_env_blob("b_ip", b_ip, sizeof(b_ip), RT_NULL);
+        b_ip[len] = '\0';
+        _CMD_Response("[BIP=%s]", b_ip);
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerBPORT
+* Description: BPORT命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerBPORT(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        uint16_t port = 0;
+        size_t len = ef_get_env_blob("b_port", &port, sizeof(port), RT_NULL);
+        if (len != sizeof(port))
+        {
+            LOG_E("%s ef_get_env_blob(b_port) error!", __FUNCTION__);
+            _CMD_Response("[ERR]");
+        }
+        else
+        {
+            _CMD_Response("[BPORT=%u]", port);
+        }
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerCYCLE
+* Description: CYCLE命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerCYCLE(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        uint8_t minutes = 0;
+        size_t len = ef_get_env_blob("cycle", &minutes, sizeof(minutes), RT_NULL);
+        if (len != sizeof(minutes))
+        {
+            LOG_E("%s ef_get_env_blob(cycle) error!", __FUNCTION__);
+            _CMD_Response("[ERR]");
+        }
+        else
+        {
+            _CMD_Response("[CYCLE=%u]", minutes);
+        }
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerACQUISITION
+* Description: ACQUISITION命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerACQUISITION(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        uint8_t minutes = 0;
+        size_t len = ef_get_env_blob("acquisition", &minutes, sizeof(minutes), RT_NULL);
+        if (len != sizeof(minutes))
+        {
+            LOG_E("%s ef_get_env_blob(acquisition) error!", __FUNCTION__);
+            _CMD_Response("[ERR]");
+        }
+        else
+        {
+            _CMD_Response("[ACQUISITION=%u]", minutes);
+        }
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
+    }
+}
+
+/*************************************************
+* Function: _CMD_HandlerRSSI
+* Description: RSSI命令处理函数
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerRSSI(const c_str_ref* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+    { // 读取
+        int rssi = 0;
+        int ret = get_modem_rssi(&rssi);
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s get_modem_rssi error(%d)!", __FUNCTION__, ret);
+            _CMD_Response("[ERR]");
+        }
+        else
+        {
+            _CMD_Response("[RSSI=%d]", rssi);
+        }
+    }
+    else
+    { // 设置
+        // 只读属性,不允许设置
+        _CMD_Response("[ERR]");
     }
 }
 

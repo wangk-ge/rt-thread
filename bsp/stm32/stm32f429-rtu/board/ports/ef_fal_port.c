@@ -80,10 +80,10 @@ static const ef_env default_env_set[] = {
         {"uart3parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
         {"uart4parity", "\x00", 1}, // 默认值0(0:无校验,1:奇校验,2:偶校验)
         /* uartXstopbits */
-        {"uart1stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
-        {"uart2stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
-        {"uart3stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
-        {"uart4stopbits", "\x02", 1}, // 默认值2(高半字节整数部分,低半字节小数部分)
+        {"uart1stopbits", "\x02", 1}, // 默认值2(取值1,2)
+        {"uart2stopbits", "\x02", 1}, // 默认值2(取值1,2)
+        {"uart3stopbits", "\x02", 1}, // 默认值2(取值1,2)
+        {"uart4stopbits", "\x02", 1}, // 默认值2(取值1,2)
         /* uartXslaveraddr */
         {"uart1slaveraddr", "\x01", 1}, // 默认值0x01
         {"uart2slaveraddr", "\x01", 1}, // 默认值0x01
@@ -100,10 +100,10 @@ static const ef_env default_env_set[] = {
         {"uart3startaddr", "\x00\x26", 2}, // 默认值0x2600
         {"uart4startaddr", "\x00\x26", 2}, // 默认值0x2600
         /* uartXlength */
-        {"uart1length", "\x07\x00", 2}, // 默认值0x0007
-        {"uart2length", "\x07\x00", 2}, // 默认值0x0007
-        {"uart3length", "\x07\x00", 2}, // 默认值0x0007
-        {"uart4length", "\x07\x00", 2}, // 默认值0x0007
+        {"uart1length", "\x02\x00", 2}, // 默认值0x0002
+        {"uart2length", "\x02\x00", 2}, // 默认值0x0002
+        {"uart3length", "\x02\x00", 2}, // 默认值0x0002
+        {"uart4length", "\x02\x00", 2}, // 默认值0x0002
         /* uartXtype
          *  0x00=有符号16位int(AB)
          *  0x01=有符号16位int(BA)

@@ -82,7 +82,7 @@ AT_CMD_EXPORT("AT+CLIENTID", "=<client_id>", RT_NULL, at_clientid_query, at_clie
 static at_result_t at_aip_query(const struct at_cmd *cmd)
 {
     char a_ip[64] = "";
-    size_t len = ef_get_env_blob("a_ip", a_ip, sizeof(a_ip) - 1, RT_NULL);
+    size_t len = ef_get_env_blob("a_ip", a_ip, sizeof(a_ip), RT_NULL);
     a_ip[len] = '\0';
     at_server_printfln("+AIP: %s", a_ip);
     
@@ -185,7 +185,7 @@ AT_CMD_EXPORT("AT+APORT", "=<port>", RT_NULL, at_aport_query, at_aport_setup, RT
 static at_result_t at_bip_query(const struct at_cmd *cmd)
 {
     char b_ip[64] = "";
-    size_t len = ef_get_env_blob("b_ip", b_ip, sizeof(b_ip) - 1, RT_NULL);
+    size_t len = ef_get_env_blob("b_ip", b_ip, sizeof(b_ip), RT_NULL);
     b_ip[len] = '\0';
     at_server_printfln("+BIP: %s", b_ip);
 

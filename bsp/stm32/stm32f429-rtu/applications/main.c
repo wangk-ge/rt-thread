@@ -31,6 +31,7 @@
 #include "app.h"
 #include "http_ota.h"
 #include "at_esp32.h"
+#include "history_data.h"
 
 #define LOG_TAG              "main"
 #define LOG_LVL              LOG_LVL_DBG
@@ -66,8 +67,8 @@ typedef enum
 #define RS485_3_REN_PIN GET_PIN(E, 12) // PE12(高电平发送,低电平接收)
 #define RS485_4_REN_PIN GET_PIN(E, 13) // PE13(高电平发送,低电平接收)
 
-/* 历史数据保存的最大条数(需保证5分钟采集间隔条件下存储3个月的数据) */
-#define HISTORY_DATA_MAX_NUM (25920)
+/* 历史数据分区名 */
+#define HISTORY_DATA_PARTITION "data"
 
 /* MQTT订阅主题名缓冲区长度 */
 #define MQTT_TOPIC_BUF_LEN (128)
@@ -117,14 +118,6 @@ typedef enum
 /* 上报时等待MQTT连接的时间(s) */
 #define DATA_REPORT_WAIT_CONNECT_TIME (60)
 
-/* 历史数据FIFO队列信息(头部插入、尾部删除) */
-typedef struct
-{
-    uint32_t length; // 队列长度
-    uint32_t head_pos; // 头部位置
-    uint32_t tail_pos; // 尾部位置
-} history_fifo_info;
-
 /* 主消息循环消息类型定义 */
 typedef struct
 {
@@ -168,9 +161,6 @@ static rs485_device_info rs485_dev_infos[CFG_UART_X_NUM] =
     //{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
     {RS485_4_DEVICE_NAME, 0xFFFFFFFF, MODBUS_RTU_RS232, RT_NULL},
 };
-
-/* 用于保护历史数据FIFO队列信息的并发访问 */
-static rt_mutex_t history_fifo_mutex = RT_NULL;
 
 /* 主消息循环队列 */
 static rt_mq_t app_msg_queue = RT_NULL;
@@ -408,88 +398,32 @@ static rt_err_t data_acquisition_and_save(void)
     LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
-    uint16_t data_buf[MODBUS_RTU_MAX_ADU_LENGTH / 2] = {0};
-    uint32_t data_len = 0; // 读取的寄存器个数
-    char data_key[16] = "";
+    uint8_t* data_buf = (uint8_t*)app_mp_alloc();
+    RT_ASSERT(data_buf);
+    uint8_t* buf_write_ptr = data_buf;
     
-    /* 确保互斥修改FIFO队列 */
-    rt_mutex_take(history_fifo_mutex, RT_WAITING_FOREVER);
-    
-    /* 读取历史数据队列信息 */
-    history_fifo_info fifo_info = {
-        .length = 0, // 队列长度
-        .head_pos = 0, // 头部位置
-        .tail_pos = 0 // 尾部位置
-    };
-    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info), NULL);
-    if (len != sizeof(fifo_info))
-    {
-        /* 加载FIFO队列失败,提示将会新建一个(第一次运行?) */
-        LOG_W("%s ef_get_env_blob(history_fifo_info) load fail, create new!", __FUNCTION__);
-    }
-    
-    /* 本次采集将保存在FIFO中的位置 */
-    uint32_t pos = fifo_info.head_pos;
-    
-    /* 记录当前时间 */
+    /* 采集时间 */
     time_t now = time(RT_NULL);
+    memcpy(buf_write_ptr, &now, sizeof(now));
+    buf_write_ptr += sizeof(now);
     
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
         /* 采集UARTX数据(返回读取的寄存器个数) */
-        data_len = uart_x_data_acquisition(x, data_buf, ARRAY_SIZE(data_buf));
-        /* 保存UARTX数据 */
-        snprintf(data_key, sizeof(data_key), "u%dd%u", x, pos); // Key="uXdN"
-        EfErrCode ef_ret = ef_set_env_blob(data_key, data_buf, (data_len * sizeof(data_buf[0])));
-        if (ret != EF_NO_ERR)
-        { // 保存失败
-            /* 输出警告 */
-            LOG_W("%s ef_set_env_blob(%s) error!", __FUNCTION__, data_key);
-            /* 继续采集其他总线的数据 */
-        }
+        uint32_t reg_num = uart_x_data_acquisition(x, (uint16_t*)buf_write_ptr, MODBUS_RTU_MAX_ADU_LENGTH);
+        buf_write_ptr += reg_num * sizeof(uint16_t); // 每个寄存器数据为uint16_t
     }
     
-    /* 保存时间戳 */
-    snprintf(data_key, sizeof(data_key), "d%uts", pos); // Key="dNts"
-    EfErrCode ef_ret = ef_set_env_blob(data_key, &now, sizeof(now));
-    if (ret != EF_NO_ERR)
+    /* 保存采集的数据 */
+    size_t data_len = buf_write_ptr - data_buf;
+    ret = history_data_save(data_buf, data_len);
+    if (ret != RT_EOK)
     {
-        LOG_E("%s ef_set_env_blob(%s) error!", __FUNCTION__, data_key);
-        ret = -RT_ERROR;
-        goto __exit;
+        LOG_E("%s() history_data_save failed(%d)!", __FUNCTION__, ret);
     }
     
-    /* 更新FIFO信息 */
-    fifo_info.head_pos++; // 指向下一个空位置
-    if (fifo_info.head_pos >= HISTORY_DATA_MAX_NUM)
-    { // 超出边界
-        fifo_info.head_pos = 0; // 回到起点
-    }
-    fifo_info.length++;
-    if (fifo_info.length > HISTORY_DATA_MAX_NUM)
-    { // FIFO已满
-        /* 删除尾部最旧的数据 */
-        fifo_info.tail_pos++;
-        if (fifo_info.tail_pos >= HISTORY_DATA_MAX_NUM)
-        {  // 超出边界
-            fifo_info.tail_pos = 0; // 回到起点
-        }
-        fifo_info.length = HISTORY_DATA_MAX_NUM;
-    }
-    /* 保存新的FIFO信息 */
-    ef_ret = ef_set_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info));
-    if (ret != EF_NO_ERR)
-    {
-        LOG_E("%s ef_set_env_blob(history_fifo_info) error!", __FUNCTION__);
-        ret = -RT_ERROR;
-        goto __exit;
-    }
-    
-__exit:
-    
-    /* 释放互斥锁 */
-    rt_mutex_release(history_fifo_mutex);
+    app_mp_free(data_buf);
     
     return ret;
 }
@@ -510,22 +444,22 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     /* 配置信息 */
     config_info *cfg = cfg_get();
     
-    char data_key[16] = "";
+    /* 加载数据 */
+    uint8_t* data_buf = (uint8_t*)app_mp_alloc();
+    RT_ASSERT(data_buf);
+    uint8_t* buf_read_ptr = data_buf;
+    history_data_load_pos(read_pos, data_buf, cfg->data_size);
     
+    /* 编码成JSON格式 */
     json_data_buf[json_data_len++] = '{';
     
+    /* 读取时间戳 */
+    time_t time_stamp = 0;
+    memcpy(&time_stamp, buf_read_ptr, sizeof(time_stamp));
+    buf_read_ptr += sizeof(time_stamp);
+        
     if (need_timestamp)
     {
-        /* 读取时间戳 */
-        snprintf(data_key, sizeof(data_key), "d%uts", read_pos); // Key="dNts"
-        time_t time_stamp = 0;
-        size_t len = ef_get_env_blob(data_key, &time_stamp, sizeof(time_stamp), NULL);
-        if (len != sizeof(time_stamp))
-        {
-            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
-            return 0;
-        }
-        
         /* 时间戳编码成JSON格式并写入缓冲区 */
         struct tm* local_time = localtime(&time_stamp);
         json_data_len += rt_snprintf((json_data_buf + json_data_len), (json_buf_len - json_data_len), 
@@ -537,37 +471,15 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
-        /* 读取保存的历史数据 */
-        uint16_t data_buf[MODBUS_RTU_MAX_ADU_LENGTH / 2] = {0};
-        snprintf(data_key, sizeof(data_key), "u%dd%u", x, read_pos); // Key="uXdN"
-        int len = ef_get_env_blob(data_key, data_buf, sizeof(data_buf), NULL);
-        if (len <= 0)
-        {
-            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, data_key);
-            return 0;
-        }
-        
-#if 0
-        /* 转换成JSON格式并写入数据缓冲区 */
-        json_data_len += rt_snprintf(json_data_buf + json_data_len, 
-            json_buf_len - json_data_len, "\"u%d\":{", x); // 分组名
-#endif
-        uint32_t data_read_pos = 0; // 变量采集值的读取位置
         int i = 0;
         for (i = 0; i < cfg->uart_x_cfg[x - 1].variablecnt; ++i)
         {
             /* 每个寄存器16bit */
             uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 变量寄存器个数
             uint8_t data_type = cfg->uart_x_cfg[x - 1].type[i]; // 变量类型
-            uint16_t *var_data = (data_buf + data_read_pos); // 变量数据地址
-            data_read_pos += reg_num; // 指向下一个变量起始
-#ifndef TEST_NEW_FETURE
-            char hex_str_buf[MODBUS_RTU_MAX_ADU_LENGTH * 2 + 1] = "";
-            util_to_hex_str((const uint8_t*)var_data, reg_num * sizeof(var_data[0]), 
-                hex_str_buf, sizeof(hex_str_buf)); // 转换成HEX字符串格式
-            json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                "\"%s\":\"%s\",", cfg->uart_x_cfg[x - 1].variable[i], hex_str_buf);
-#else
+            uint16_t *var_data = (uint16_t*)buf_read_ptr; // 变量数据地址
+            buf_read_ptr += reg_num * sizeof(uint16_t); // 指向下一个变量起始
+            
             switch (data_type)
             {
                 case 0x00: // 有符号16位int(AB)
@@ -720,21 +632,15 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
                     break;
                 }
             }
-#endif
         }
-#if 0
-        if (json_data_len < json_buf_len)
-        {
-            json_data_buf[json_data_len - 1] = '}'; // 末尾','改成'}'
-            json_data_buf[json_data_len++] = ','; // 添加','
-        }
-#endif
     }
     if (json_data_len < json_buf_len)
     {
         json_data_buf[json_data_len - 1] = '}'; // 末尾','改成'}'
         json_data_buf[json_data_len] = '\0'; // 添加'\0'
     }
+    
+    app_mp_free(data_buf);
     
     return json_data_len;
 }
@@ -755,23 +661,18 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
     uint32_t json_data_len = 0;
     
     /* 读取历史数据队列信息 */
-    history_fifo_info fifo_info = {
-        .length = 0, // 队列长度
-        .head_pos = 0, // 头部位置
-        .tail_pos = 0 // 尾部位置
-    };
-    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info), NULL);
-    if (len != sizeof(fifo_info))
+    history_data_fifo_info fifo_info = {0};
+    rt_err_t ret = history_data_get_fifo_info(&fifo_info);
+    if (ret != RT_EOK)
     {
-        /* 加载FIFO队列失败(第一次运行?) */
-        LOG_E("%s ef_get_env_blob(history_fifo_info) load fail!", __FUNCTION__);
+        LOG_E("%s history_data_get_fifo_info failed(%d)!", __FUNCTION__, ret);
         return 0;
     }
     
     /* 状态检查 */
     if (fifo_info.length <= 0)
     { // 队列为空
-        LOG_E("%s history data is empty!", __FUNCTION__);
+        LOG_W("%s history data is empty!", __FUNCTION__);
         return 0;
     }
     
@@ -792,7 +693,7 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
     }
     else
     {
-        read_pos = HISTORY_DATA_MAX_NUM - n;
+        read_pos = history_data_get_max_num() - n;
     }
     
     /* 读取read_pos处的一条历史数据(JSON格式) */
@@ -809,83 +710,29 @@ rt_err_t clear_history_data(void)
     LOG_D("%s()", __FUNCTION__);
 
     rt_err_t ret = RT_EOK;
+    EfErrCode ef_ret = EF_NO_ERR;
     
-    history_fifo_info fifo_info = {
-        .length = 0, // 队列长度
-        .head_pos = 0, // 头部位置
-        .tail_pos = 0 // 尾部位置
-    };
-    
-    /* 确保互斥修改FIFO队列 */
-    rt_mutex_take(history_fifo_mutex, RT_WAITING_FOREVER);
-    
-    /* 加载FIFO队列信息 */
-    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(history_fifo_info), NULL);
-    if (len != sizeof(history_fifo_info))
+    /* 清除保存的历史数据 */
+    ret = history_data_clear();
+    if (ret != RT_EOK)
     {
-        /* 加载FIFO队列失败 */
-        LOG_W("%s ef_get_env_blob(history_fifo_info) failed!", __FUNCTION__);
-    }
-    else
-    {
-        /* 删除所有的历史数据条目 */
-        uint32_t pos = fifo_info.tail_pos;
-        while (pos != fifo_info.head_pos)
-        {
-            char data_key[16] = "";
-            int x = 1;
-            for (x = 1; x <= CFG_UART_X_NUM; ++x)
-            {
-                snprintf(data_key, sizeof(data_key), "u%dd%u", x, pos); // Key="uXdN"
-                EfErrCode ef_ret = ef_del_env(data_key);
-                if (ret != EF_NO_ERR)
-                { // 删除失败
-                    /* 输出警告 */
-                    LOG_W("%s ef_del_env(%s) error!", __FUNCTION__, data_key);
-                    /* 继续删除其他数据 */
-                }
-            }
-
-            snprintf(data_key, sizeof(data_key), "d%uts", pos); // Key="dNts"
-            EfErrCode ef_ret = ef_del_env(data_key);
-            if (ret != EF_NO_ERR)
-            { // 删除失败
-                /* 输出警告 */
-                LOG_W("%s ef_del_env(%s) error!", __FUNCTION__, data_key);
-                /* 继续删除其他数据 */
-            }
-            
-            /* 下一条 */
-            pos++;
-            if (pos >= HISTORY_DATA_MAX_NUM)
-            {
-                pos = 0;
-            }
-        }
-    }
-    
-    /* 删除历史数据队列信息 */
-    EfErrCode ef_ret = ef_del_env("history_fifo_info");
-    if (ef_ret != EF_NO_ERR)
-    {
-        LOG_E("%s ef_del_env(history_fifo_info) error(%d)!", __FUNCTION__, ef_ret);
-        ret = -RT_ERROR;
-        goto __exit;
+        LOG_W("%s history_data_clear() error(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        //goto __exit;
+        ret = RT_EOK;
     }
     
     /* 清除上报位置 */
     ef_ret = ef_del_env("report_pos");
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("%s ef_del_env(report_pos) error(%d)!", __FUNCTION__, ef_ret);
-        ret = -RT_ERROR;
-        goto __exit;
+        LOG_W("%s ef_del_env(report_pos) error(%d)!", __FUNCTION__, ef_ret);
+        //ret = -RT_ERROR;
+        //goto __exit;
+        ret = RT_EOK;
     }
     
 __exit:
-
-    /* 释放互斥锁 */
-    rt_mutex_release(history_fifo_mutex);
     
     return ret;
 }
@@ -898,16 +745,11 @@ uint32_t get_history_data_num(void)
     LOG_D("%s()", __FUNCTION__);
     
     /* 读取历史数据队列信息 */
-    history_fifo_info fifo_info = {
-        .length = 0, // 队列长度
-        .head_pos = 0, // 头部位置
-        .tail_pos = 0 // 尾部位置
-    };
-    size_t len = ef_get_env_blob("history_fifo_info", &fifo_info, sizeof(fifo_info), NULL);
-    if (len != sizeof(fifo_info))
+    history_data_fifo_info fifo_info = {0};
+    rt_err_t ret = history_data_get_fifo_info(&fifo_info);
+    if (ret != RT_EOK)
     {
-        /* 加载FIFO队列失败(第一次运行?) */
-        LOG_E("%s ef_get_env_blob(history_fifo_info) load fail!", __FUNCTION__);
+        LOG_E("%s history_data_get_fifo_info failed(%d)!", __FUNCTION__, ret);
         return 0;
     }
     
@@ -1294,21 +1136,6 @@ static void mqtt_offline_callback(mqtt_client *client)
     app_send_msg(APP_MSG_MQTT_CLIENT_OFFLINE, RT_NULL); // MQTT客户端已下线
 }
 
-/* 读取历史数据FIFO队列信息 */
-static rt_err_t get_history_fifo_info(history_fifo_info *fifo_info)
-{
-    /* 加载FIFO队列信息 */
-    size_t len = ef_get_env_blob("history_fifo_info", fifo_info, sizeof(history_fifo_info), NULL);
-    if (len != sizeof(history_fifo_info))
-    {
-        /* 加载FIFO队列失败(第一次运行?) */
-        LOG_E("%s ef_get_env_blob(history_fifo_info) failed!", __FUNCTION__);
-        return -RT_ERROR;
-    }
-    
-    return RT_EOK;
-}
-
 /* 读取待上报数据位置 */
 static rt_err_t get_report_pos(uint32_t *pos)
 {
@@ -1341,34 +1168,31 @@ static rt_err_t set_report_pos(uint32_t pos)
     return RT_EOK;
 }
 
-/* 移动待上报数据位置到下一个位置 */
-static rt_err_t move_report_pos_to_next(void)
+/* 移动待上报数据位置到下一个位置(返回0表示移动位置成功,返回1表示队列上报已全部完成) */
+static int move_report_pos_to_next(void)
 {
     LOG_D("%s()", __FUNCTION__);
     
-    rt_err_t ret = RT_EOK;
+    int ret = RT_EOK;
     /* 待上报历史数据位置 */
     uint32_t report_pos = 0;
     /* 历史数据队列信息 */
-    history_fifo_info fifo_info = {
-        .length = 0, // 队列长度
-        .head_pos = 0, // 头部位置
-        .tail_pos = 0 // 尾部位置
-    };
+    history_data_fifo_info fifo_info = {0};
     
     /* 读取历史数据队列信息 */
-    ret = get_history_fifo_info(&fifo_info);
+    ret = history_data_get_fifo_info(&fifo_info);
     if (ret != RT_EOK)
     {
-        LOG_E("%s get_history_fifo_info failed!", __FUNCTION__);
+        LOG_W("%s history_data_get_fifo_info failed(%d), history data is empty!", __FUNCTION__, ret);
+        ret = 1; // (队列上报已全部完成)
         goto __exit;
     }
     
     /* 状态检查 */
     if (fifo_info.length <= 0)
     { // 队列为空
-        LOG_E("%s history data is empty!", __FUNCTION__);
-        ret = -RT_ERROR;
+        LOG_W("%s history data is empty!", __FUNCTION__);
+        ret = 1; // (队列上报已全部完成)
         goto __exit;
     }
     
@@ -1380,19 +1204,19 @@ static rt_err_t move_report_pos_to_next(void)
         /* 从队尾开始上报 */
         report_pos = fifo_info.tail_pos;
     }
+
+    if (report_pos == fifo_info.head_pos)
+    { // 已到达队列头部(队列上报已全部完成)
+        LOG_W("%s report pos reach the fifo head!", __FUNCTION__);
+        ret = 1; // (队列上报已全部完成)
+        goto __exit;
+    }
     
     /* 移动到下一个位置 */
     report_pos++;
-    if (report_pos > HISTORY_DATA_MAX_NUM)
+    if (report_pos > history_data_get_max_num())
     {
         report_pos = 0;
-    }
-    
-    if (report_pos == fifo_info.head_pos)
-    { // 已到达队列头部(队列上报已全部完成)
-        LOG_E("%s report pos reach the fifo head!", __FUNCTION__);
-        ret = -RT_EEMPTY;
-        goto __exit;
     }
 
     /* 保存新的待上报位置 */
@@ -1411,35 +1235,32 @@ __exit:
     return ret;
 }
 
-/* 上报待上报历史数据位置的数据 */
-static rt_err_t app_data_report(void)
+/* 上报待上报历史数据位置的数据(返回0表示上报成功,返回1表示已完所有数据成上报) */
+static int app_data_report(void)
 {
     LOG_D("%s()", __FUNCTION__);
     
-    rt_err_t ret = RT_EOK;
+    int ret = RT_EOK;
     mqtt_publish_data_info *pub_info = RT_NULL;
     /* 待上报历史数据位置 */
     uint32_t report_pos = 0;
     /* 历史数据队列信息 */
-    history_fifo_info fifo_info = {
-        .length = 0, // 队列长度
-        .head_pos = 0, // 头部位置
-        .tail_pos = 0 // 尾部位置
-    };
+    history_data_fifo_info fifo_info = {0};
     
     /* 读取历史数据队列信息 */
-    ret = get_history_fifo_info(&fifo_info);
+    ret = history_data_get_fifo_info(&fifo_info);
     if (ret != RT_EOK)
     {
-        LOG_E("%s get_history_fifo_info failed!", __FUNCTION__);
+        LOG_W("%s history_data_get_fifo_info failed(%d), history data is empty!", __FUNCTION__, ret);
+        ret = 1; // (队列上报已全部完成)
         goto __exit;
     }
     
     /* 状态检查 */
     if (fifo_info.length <= 0)
     { // 队列为空
-        LOG_E("%s history data is empty!", __FUNCTION__);
-        ret = -RT_ERROR;
+        LOG_W("%s history data is empty!", __FUNCTION__);
+        ret = 1; // (队列上报已全部完成)
         goto __exit;
     }
     
@@ -1454,8 +1275,8 @@ static rt_err_t app_data_report(void)
     
     if (report_pos == fifo_info.head_pos)
     { // 已到达队列头部(队列上报已全部完成)
-        LOG_E("%s report pos reach the fifo head!", __FUNCTION__);
-        ret = -RT_EEMPTY;
+        LOG_W("%s report pos reach the fifo head!", __FUNCTION__);
+        ret = 1; // (队列上报已全部完成)
         goto __exit;
     }
     
@@ -1501,7 +1322,6 @@ static rt_err_t app_data_report(void)
             }
         }
     }
-    // else // 已到达队列头部(队列上报已全部完成)
     
     ret = RT_EOK;
     
@@ -2769,11 +2589,6 @@ static void app_deinit()
 {
     LOG_D("%s()", __FUNCTION__);
     
-    if (RT_NULL != history_fifo_mutex)
-    {
-        rt_mutex_delete(history_fifo_mutex);
-        history_fifo_mutex = RT_NULL;
-    }
     if (RT_NULL != app_mp)
     {
         rt_mp_delete(app_mp);
@@ -2918,18 +2733,19 @@ __retry:
         
         /* 上报数据 */
         ret = app_data_report();
-        if (ret == -RT_EEMPTY)
-        { // 已到达队列头部(队列上报已全部完成)
-            LOG_D("%s report history data completed.", __FUNCTION__);
-            continue;
-        }
-        else if (ret != RT_EOK)
+        if (ret < 0)
         { // 上报失败
             LOG_E("%s app_data_report failed(%d)!", __FUNCTION__, ret);
             
             /* 等待一段时间后重试 */
             goto __wait_and_retry;
         }
+        else if (ret == 1)
+        { // 已到达队列头部(队列上报已全部完成)
+            LOG_D("%s report history data completed.", __FUNCTION__);
+            continue;
+        }
+        // else (ret == RT_EOK)
         
         LOG_I("%s send data success, wait the server ACK...", __FUNCTION__);
         
@@ -2955,16 +2771,17 @@ __retry:
         
             /* 移动待上报数据位置到下一个位置 */
             ret = move_report_pos_to_next();
-            if (ret == -RT_EEMPTY)
-            { // 已到达队列头部(队列上报已全部完成)
-                LOG_D("%s report history data completed.", __FUNCTION__);
-                continue;
-            }
-            else if (ret != RT_EOK)
+            if (ret < 0)
             {
                 LOG_W("%s move_report_pos_to_next failed!", __FUNCTION__);
                 /* 移动位置失败,后续将继续上报本条数据! */
             }
+            else if (ret == 1)
+            { // 已到达队列头部(队列上报已全部完成)
+                LOG_D("%s report history data completed.", __FUNCTION__);
+                continue;
+            }
+            // else (ret == RT_EOK)
             
             /* 继续请求上报数据 */
             ret = req_data_report();
@@ -3103,15 +2920,6 @@ static rt_err_t app_init(void)
         ulog_global_filter_lvl_set(cfg->ulog_glb_lvl);
     }
     
-    /* create history fifo mutex */
-    history_fifo_mutex = rt_mutex_create("history_fifo", RT_IPC_FLAG_FIFO);
-    if (RT_NULL == history_fifo_mutex)
-    {
-        LOG_E("%s create history fifo mutex failed!", __FUNCTION__);
-        ret = -RT_ERROR;
-        goto __exit;
-    }
-    
     /* 创建主循环消息队列 */
     app_msg_queue = rt_mq_create("app_mq", sizeof(app_message), APP_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
     if (RT_NULL == app_msg_queue)
@@ -3158,6 +2966,15 @@ static rt_err_t app_init(void)
     {
         LOG_E("%s create http_ota_mutex failed!", __FUNCTION__);
         ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* 初始化历史数据存取模块 */
+    ret = history_data_init(HISTORY_DATA_PARTITION);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s history_data_init(%s) failed(%d)!", __FUNCTION__, HISTORY_DATA_PARTITION, ret);
+        //ret = -RT_ERROR;
         goto __exit;
     }
     
@@ -3323,11 +3140,6 @@ __exit:
         }
         memset(&mq_client, 0, sizeof(mq_client));
         
-        if (RT_NULL != history_fifo_mutex)
-        {
-            rt_mutex_delete(history_fifo_mutex);
-            history_fifo_mutex = RT_NULL;
-        }
         if (RT_NULL != app_mp)
         {
             rt_mp_delete(app_mp);
@@ -3572,7 +3384,7 @@ __exit:
     app_deinit();
     
     /* 重启系统 */
-    //rt_hw_cpu_reset();
+    rt_hw_cpu_reset();
     
     return ret;
 }

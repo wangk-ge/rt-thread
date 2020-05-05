@@ -522,6 +522,11 @@
               <FileType>1</FileType>
               <FilePath>applications\esp32\cmd.c</FilePath>
             </File>
+            <File>
+              <FileName>history_data.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\history_data.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -24,9 +24,22 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-/* 最长20个可变参数个数格式AT指令表达式 */
-#define ARGS_EXPR_VAR_PARM20 "=<p1>[,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p9>][,<p10>]" \
-    "[,<p11>][,<p12>][,<p13>][,<p14>][,<p15>][,<p16>][,<p17>][,<p18>][,<p19>][,<p20>]"
+/* 每路UARTX最大变量个数 */
+#define MAX_UARTX_VAR_CNT 100
+/* 最大变量名长度 */
+#define MAX_UARTX_VAR_NAME_LEN 20
+
+/* 最长100个可变参数个数格式AT指令表达式 */
+#define ARGS_EXPR_VAR_PARM100 "=<p1>[,<p2>][,<p3>][,<p4>][,<p5>][,<p6>][,<p7>][,<p8>][,<p9>][,<p10>]" \
+    "[,<p11>][,<p12>][,<p13>][,<p14>][,<p15>][,<p16>][,<p17>][,<p18>][,<p19>][,<p20>]" \
+    "[,<p21>][,<p22>][,<p23>][,<p24>][,<p25>][,<p26>][,<p27>][,<p28>][,<p29>][,<p30>]" \
+    "[,<p31>][,<p32>][,<p33>][,<p34>][,<p35>][,<p36>][,<p37>][,<p38>][,<p39>][,<p40>]" \
+    "[,<p41>][,<p42>][,<p43>][,<p44>][,<p45>][,<p46>][,<p47>][,<p48>][,<p49>][,<p50>]" \
+    "[,<p51>][,<p52>][,<p53>][,<p54>][,<p55>][,<p56>][,<p57>][,<p58>][,<p59>][,<p60>]" \
+    "[,<p61>][,<p62>][,<p63>][,<p64>][,<p65>][,<p66>][,<p67>][,<p68>][,<p69>][,<p70>]" \
+    "[,<p71>][,<p72>][,<p73>][,<p74>][,<p75>][,<p76>][,<p77>][,<p78>][,<p79>][,<p80>]" \
+    "[,<p81>][,<p82>][,<p83>][,<p84>][,<p85>][,<p86>][,<p87>][,<p88>][,<p89>][,<p90>]" \
+    "[,<p91>][,<p92>][,<p93>][,<p94>][,<p95>][,<p96>][,<p97>][,<p98>][,<p99>][,<p100>]"
 
 /* 读取串口号对应的变量个数 */
 static bool get_variablecnt(char uart_x, uint8_t *var_cnt)
@@ -51,7 +64,7 @@ static bool get_variablecnt(char uart_x, uint8_t *var_cnt)
 
 /* MODBUS相关AT指令 */
 
-/* AT+UARTXVARIABLE 设置/读取UART X相关的变量名列表(变量名最长20个字符,个数不定,最多20个) */
+/* AT+UARTXVARIABLE 设置/读取UART X相关的变量名列表 */
 
 static at_result_t at_uartxvariable_println(char uart_x)
 {
@@ -98,11 +111,13 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     
     /* 拆分参数列表并检查参数个数 */
     c_str_ref str_ref = { data_len, var_list };
-    c_str_ref param_list[21] = {{0}};
-    uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
-    if ((param_count < 1) || (param_count > 20))
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
     {
-        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
+        LOG_E("%s strref_split() param_count(%d) not in range[1,%d]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -115,6 +130,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     if (!ret)
     {
         LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
@@ -122,6 +138,7 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     if (param_count != cfg_var_cnt)
     {
         LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
@@ -129,9 +146,10 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     int i = 0;
     for (i = 0; i < param_count; ++i)
     {
-        if (param_list[i].len > 20)
+        if (param_list[i].len > MAX_UARTX_VAR_NAME_LEN)
         {
-            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            LOG_E("%s param[%d] len(%u)>%u!", __FUNCTION__, i, param_list[i].len, MAX_UARTX_VAR_NAME_LEN);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
     }
@@ -145,18 +163,21 @@ static at_result_t at_uartxvariable_setup(const struct at_cmd *cmd, const char *
     if (ef_ret != EF_NO_ERR)
     {
         LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
+    
+    app_mp_free(param_list);
 
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART1VARIABLE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 1);
-AT_CMD_EXPORT("AT+UART2VARIABLE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 2);
-AT_CMD_EXPORT("AT+UART3VARIABLE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 3);
-AT_CMD_EXPORT("AT+UART4VARIABLE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 4);
+AT_CMD_EXPORT("AT+UART1VARIABLE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2VARIABLE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3VARIABLE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4VARIABLE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxvariable_query, at_uartxvariable_setup, RT_NULL, 4);
 
-/* AT+UARTXVARIABLECNT 设置/读取UART X相关的变量个数(最多20个) */
+/* AT+UARTXVARIABLECNT 设置/读取UART X相关的变量个数 */
 
 static at_result_t at_uartxvariablecnt_println(char uart_x)
 {
@@ -193,9 +214,9 @@ static at_result_t at_uartxvariablecnt_setup(const struct at_cmd *cmd, const cha
         return AT_RESULT_PARSE_FAILE;
     }
     
-    if (cnt > 20)
+    if (cnt > MAX_UARTX_VAR_CNT)
     {
-        LOG_E("%s client_id(%u)>20!", __FUNCTION__, cnt);
+        LOG_E("%s variable_cnt(%u)>%u!", __FUNCTION__, cnt, MAX_UARTX_VAR_CNT);
         return AT_RESULT_CHECK_FAILE;
     }
     
@@ -655,7 +676,7 @@ AT_CMD_EXPORT("AT+UART2FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at
 AT_CMD_EXPORT("AT+UART3FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 3);
 AT_CMD_EXPORT("AT+UART4FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 4);
 
-/* AT+UARTXSTARTADDR 设置/读取UART X相关的寄存器开始地址列表(每个地址2字节,个数不定,最多20个) */
+/* AT+UARTXSTARTADDR 设置/读取UART X相关的寄存器开始地址列表(每个地址2字节) */
 
 static at_result_t at_uartxstartaddr_println(char uart_x)
 {
@@ -664,7 +685,7 @@ static at_result_t at_uartxstartaddr_println(char uart_x)
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 读取配置 */
-    uint16_t addr_list[20] = {0x0000};
+    uint16_t addr_list[MAX_UARTX_VAR_CNT] = {0x0000};
     size_t data_size = 0;
     size_t read_len = ef_get_env_blob(cfg_key, addr_list, sizeof(addr_list), &data_size);
     if (read_len != data_size)
@@ -702,11 +723,13 @@ static at_result_t at_uartxstartaddr_query(const struct at_cmd *cmd)
 static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char *args)
 {
     c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
-    c_str_ref param_list[21] = {{0}};
-    uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
-    if ((param_count < 1) || (param_count > 20))
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
     {
-        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
+        LOG_E("%s strref_split() param_count(%d) not in ramge[1,%u]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -719,6 +742,7 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     if (!ret)
     {
         LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
@@ -726,17 +750,19 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     if (param_count != cfg_var_cnt)
     {
         LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
     /* 转换成u16数组并检查格式 */
-    uint16_t addr_list[20] = {0x0000};
+    uint16_t addr_list[MAX_UARTX_VAR_CNT] = {0x0000};
     int i = 0;
     for (i = 0; i < param_count; ++i)
     {
         if (param_list[i].len <= 0)
         {
             LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         int32_t addr = 0;
@@ -749,11 +775,13 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
         if (ret != 1)
         {
             LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         if ((addr < 0) || (addr > 0xFFFF))
         {
             LOG_E("%s param[%d] not in range[0x0000,0xFFFF]!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         addr_list[i] = (uint16_t)((uint32_t)addr);
@@ -769,18 +797,21 @@ static at_result_t at_uartxstartaddr_setup(const struct at_cmd *cmd, const char 
     if (ef_ret != EF_NO_ERR)
     {
         LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
+    
+    app_mp_free(param_list);
 
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART1STARTADDR", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 1);
-AT_CMD_EXPORT("AT+UART2STARTADDR", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 2);
-AT_CMD_EXPORT("AT+UART3STARTADDR", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 3);
-AT_CMD_EXPORT("AT+UART4STARTADDR", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 4);
+AT_CMD_EXPORT("AT+UART1STARTADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2STARTADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3STARTADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4STARTADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxstartaddr_query, at_uartxstartaddr_setup, RT_NULL, 4);
 
-/* AT+UARTXLENGTH 设置/读取UART X相关的寄存器数量列表(每个2字节,个数不定,最多20个) */
+/* AT+UARTXLENGTH 设置/读取UART X相关的寄存器数量列表(每个2字节) */
 
 static at_result_t at_uartxlength_println(char uart_x)
 {
@@ -789,7 +820,7 @@ static at_result_t at_uartxlength_println(char uart_x)
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 读取配置 */
-    uint16_t num_list[20] = {0x0000};
+    uint16_t num_list[MAX_UARTX_VAR_CNT] = {0x0000};
     size_t data_size = 0;
     size_t read_len = ef_get_env_blob(cfg_key, num_list, sizeof(num_list), &data_size);
     if (read_len != data_size)
@@ -827,11 +858,13 @@ static at_result_t at_uartxlength_query(const struct at_cmd *cmd)
 static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *args)
 {
     c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
-    c_str_ref param_list[21] = {{0}};
-    uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
-    if ((param_count < 1) || (param_count > 20))
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
     {
-        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
+        LOG_E("%s strref_split() param_count(%d) not in range[1,%u]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -844,6 +877,7 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     if (!ret)
     {
         LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
@@ -851,17 +885,19 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     if (param_count != cfg_var_cnt)
     {
         LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
     /* 转换成u16数组并检查格式 */
-    uint16_t num_list[20] = {0x0000};
+    uint16_t num_list[MAX_UARTX_VAR_CNT] = {0x0000};
     int i = 0;
     for (i = 0; i < param_count; ++i)
     {
         if (param_list[i].len <= 0)
         {
             LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         int32_t num = 0;
@@ -874,11 +910,13 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
         if (ret != 1)
         {
             LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         if ((num < 0) || (num > 0xFFFF))
         {
             LOG_E("%s param[%d] not in range[0x0000,0xFFFF]!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         num_list[i] = (uint16_t)((uint32_t)num);
@@ -894,18 +932,21 @@ static at_result_t at_uartxlength_setup(const struct at_cmd *cmd, const char *ar
     if (ef_ret != EF_NO_ERR)
     {
         LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
+    
+    app_mp_free(param_list);
 
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART1LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 1);
-AT_CMD_EXPORT("AT+UART2LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 2);
-AT_CMD_EXPORT("AT+UART3LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 3);
-AT_CMD_EXPORT("AT+UART4LENGTH", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 4);
+AT_CMD_EXPORT("AT+UART1LENGTH", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2LENGTH", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3LENGTH", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4LENGTH", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxlength_query, at_uartxlength_setup, RT_NULL, 4);
 
-/* AT+UARTXTYPE 设置/读取UART X相关的数据类型列表(每个1字节,个数不定,最多20个) */
+/* AT+UARTXTYPE 设置/读取UART X相关的数据类型列表(每个1字节) */
 
 static at_result_t at_uartxtype_println(char uart_x)
 {
@@ -914,7 +955,7 @@ static at_result_t at_uartxtype_println(char uart_x)
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 读取配置 */
-    uint8_t type_list[20] = {0x00};
+    uint8_t type_list[MAX_UARTX_VAR_CNT] = {0x00};
     size_t data_size = 0;
     size_t read_len = ef_get_env_blob(cfg_key, type_list, sizeof(type_list), &data_size);
     if (read_len != data_size)
@@ -952,11 +993,13 @@ static at_result_t at_uartxtype_query(const struct at_cmd *cmd)
 static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args)
 {
     c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
-    c_str_ref param_list[21] = {{0}};
-    uint32_t param_count = strref_split(&str_ref, ',', param_list, ARRAY_SIZE(param_list));
-    if ((param_count < 1) || (param_count > 20))
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
     {
-        LOG_E("%s strref_split() param number(%d)<20!", __FUNCTION__, param_count);
+        LOG_E("%s strref_split() param_count(%d) not in range[1,%u]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
         return AT_RESULT_PARSE_FAILE;
     }
     
@@ -969,6 +1012,7 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
     if (!ret)
     {
         LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
@@ -976,17 +1020,19 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
     if (param_count != cfg_var_cnt)
     {
         LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
     
     /* 转换成u8数组并检查格式 */
-    uint8_t type_list[20] = {0x00};
+    uint8_t type_list[MAX_UARTX_VAR_CNT] = {0x00};
     int i = 0;
     for (i = 0; i < param_count; ++i)
     {
         if (param_list[i].len <= 0)
         {
             LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         int32_t type = 0;
@@ -999,6 +1045,7 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
         if (ret != 1)
         {
             LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         /* uartXtype
@@ -1022,6 +1069,7 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
         if ((type < 0x00) || (type > 0x0F))
         {
             LOG_E("%s param[%d] not in range[0x00,0x0F]!", __FUNCTION__, i);
+            app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
         type_list[i] = (uint8_t)((uint32_t)type);
@@ -1037,16 +1085,18 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
     if (ef_ret != EF_NO_ERR)
     {
         LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
 
+    app_mp_free(param_list);
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART1TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 1);
-AT_CMD_EXPORT("AT+UART2TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 2);
-AT_CMD_EXPORT("AT+UART3TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 3);
-AT_CMD_EXPORT("AT+UART4TYPE", ARGS_EXPR_VAR_PARM20, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 4);
+AT_CMD_EXPORT("AT+UART1TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 4);
 
 /* AT+UARTXSETTINGINF 读取UART X相关的配置信息 */
 

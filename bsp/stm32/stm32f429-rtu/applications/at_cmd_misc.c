@@ -134,7 +134,7 @@ static at_result_t at_date_time_query(const struct at_cmd *cmd)
     time_t now = time(RT_NULL);
     struct tm* local_time = localtime(&now);
     char str_time[32] = "";
-    strftime(str_time, sizeof(str_time) - 1, "%Y-%m-%d %H:%M:%S", local_time);
+    strftime(str_time, sizeof(str_time), "%Y-%m-%d %H:%M:%S", local_time);
     
     /* 打印输出时间信息 */
     at_server_printfln("+DATETIME: %s", str_time);
@@ -160,7 +160,7 @@ AT_CMD_EXPORT("AT+HISTORYDATANUM", RT_NULL, RT_NULL, at_history_data_num_query, 
 static at_result_t at_productkey_query(const struct at_cmd *cmd)
 {
     char key[64] = "";
-    size_t len = ef_get_env_blob("productkey", key, sizeof(key) - 1, RT_NULL);
+    size_t len = ef_get_env_blob("productkey", key, sizeof(key), RT_NULL);
     key[len] = '\0';
     at_server_printfln("+PRODUCTKEY: %s", key);
     
@@ -202,7 +202,7 @@ AT_CMD_EXPORT("AT+PRODUCTKEY", "=<key>", RT_NULL, at_productkey_query, at_produc
 static at_result_t at_devicecode_query(const struct at_cmd *cmd)
 {
     char devicecode[64] = "";
-    size_t len = ef_get_env_blob("devicecode", devicecode, sizeof(devicecode) - 1, RT_NULL);
+    size_t len = ef_get_env_blob("devicecode", devicecode, sizeof(devicecode), RT_NULL);
     devicecode[len] = '\0';
     at_server_printfln("+DEVICECODE: %s", devicecode);
     
@@ -244,7 +244,7 @@ AT_CMD_EXPORT("AT+DEVICECODE", "=<id>", RT_NULL, at_devicecode_query, at_devicec
 static at_result_t at_itemid_query(const struct at_cmd *cmd)
 {
     char itemid[64] = "";
-    size_t len = ef_get_env_blob("itemid", itemid, sizeof(itemid) - 1, RT_NULL);
+    size_t len = ef_get_env_blob("itemid", itemid, sizeof(itemid), RT_NULL);
     itemid[len] = '\0';
     at_server_printfln("+ITEMID: %s", itemid);
     

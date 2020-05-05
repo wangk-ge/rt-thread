@@ -54,7 +54,8 @@ extern struct fal_flash_dev nor_flash0;
     {FAL_PART_MAGIC_WROD, "param",      "onchip_flash_64k",  0,             FLASH_SIZE_GRANULARITY_64K ,                0}, \
     {FAL_PART_MAGIC_WROD, "app",        "onchip_flash_128k", 0,             (512 * 1024),                               0}, \
     {FAL_PART_MAGIC_WROD, "download",   "onchip_flash_128k", (512 * 1024),  FLASH_SIZE_GRANULARITY_128K - (512 * 1024), 0}, \
-    {FAL_PART_MAGIC_WORD, "easyflash",  NOR_FLASH_DEV_NAME,  0,             FLASH_SIZE_NOR_FLASH0,                      0}, \
+    {FAL_PART_MAGIC_WORD, "easyflash",  NOR_FLASH_DEV_NAME,  0,             8 * 4096,                                   0}, \
+    {FAL_PART_MAGIC_WORD, "data",       NOR_FLASH_DEV_NAME,  (8 * 4096),    FLASH_SIZE_NOR_FLASH0 - (8 * 4096),         0}, \
 }
 
 #endif /* FAL_PART_HAS_TABLE_CFG */
