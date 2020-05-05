@@ -37,8 +37,6 @@
 #define LOG_LVL              LOG_LVL_DBG
 #include <rtdbg.h>
 
-#define TEST_NEW_FETURE // 测试新特性
-
 /* APP主循环消息 */
 typedef enum
 {
