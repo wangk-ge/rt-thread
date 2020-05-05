@@ -123,6 +123,15 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
     
     rt_err_t ret = RT_EOK;
     
+    /* wait esp32 startup finish, send AT every 500ms, if receive OK, SYNC success*/
+    ret = at_client_obj_wait_connect(esp32_at_client, AT_ESP32_CONNECT_TIME);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_client_obj_wait_connect(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
+        //ret = -RT_ETIMEOUT;
+        goto __exit;
+    }
+    
     /* 关闭回显 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "ATE0");
     if (ret != RT_EOK)
@@ -209,16 +218,7 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
         goto __exit;
     }
     at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
-    
-    /* 创建消息队列 */
-    esp32_at_mq = rt_mq_create("at_esp32", sizeof(at_esp32_message), AT_ESP32_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
-    if (RT_NULL == esp32_at_mq)
-    {
-        LOG_E("%s rt_mq_create(at_esp32) failed!", __FUNCTION__);
-        ret = -RT_ERROR;
-        goto __exit;
-    }
-    
+
     /* 启动BLE广播 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVSTART");
     if (ret != RT_EOK)
@@ -579,20 +579,20 @@ rt_err_t at_esp32_init(void)
         goto __exit;
     }
     
-    /* wait esp32 startup finish, send AT every 500ms, if receive OK, SYNC success*/
-    ret = at_client_obj_wait_connect(esp32_at_client, AT_ESP32_CONNECT_TIME);
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_client_obj_wait_connect(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
-        //ret = -RT_ETIMEOUT;
-        goto __exit;
-    }
-    
     ret = at_esp32_ble_init(resp);
     if (ret != RT_EOK)
     {
         LOG_E("%s at_esp32_ble_init() failed(%d).", __FUNCTION__, ret);
         //ret = -RT_ETIMEOUT;
+        goto __exit;
+    }
+    
+    /* 创建消息队列 */
+    esp32_at_mq = rt_mq_create("at_esp32", sizeof(at_esp32_message), AT_ESP32_MSG_QUEUE_LEN, RT_IPC_FLAG_FIFO);
+    if (RT_NULL == esp32_at_mq)
+    {
+        LOG_E("%s rt_mq_create(at_esp32) failed!", __FUNCTION__);
+        ret = -RT_ERROR;
         goto __exit;
     }
     
