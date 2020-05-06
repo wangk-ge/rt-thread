@@ -58,6 +58,8 @@ struct at_device_tb22
     rt_mp_t sock_recv_mp;
     /* socket接收线程 */
     rt_thread_t sock_recv_thread;
+    
+    int zz; // 时区信息+CCLK:yy/MM/dd,hh:mm:ss±zz
 };
 
 #ifdef AT_USING_SOCKET

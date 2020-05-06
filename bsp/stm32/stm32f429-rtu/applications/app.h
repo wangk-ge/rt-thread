@@ -63,6 +63,12 @@ uint32_t read_history_data_json(uint32_t n, char* json_data_buf, uint32_t json_b
 /* 取得模组信号强度指示 */
 int get_modem_rssi(int *rssi);
 
+/* 取得时区 */
+int get_timezone(int *zz);
+
+/* 取得时间戳(UNIX时间戳格式) */
+uint32_t get_timestamp(void);
+
 /* 取得历史数据条目数 */
 uint32_t get_history_data_num(void);
 

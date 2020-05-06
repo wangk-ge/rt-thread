@@ -313,6 +313,27 @@ int get_modem_rssi(int *rssi)
     return at_device_control(device, AT_DEVICE_CTRL_GET_SIGNAL, rssi);
 }
 
+/* 取得时区 */
+int get_timezone(int *zz)
+{
+    struct at_device *device = at_device_get_by_name(AT_DEVICE_NAMETYPE_DEVICE, TB22_DEVICE_NAME);
+    return at_device_control(device, AT_DEVICE_CTRL_GET_TIMEZONE, zz);
+}
+
+/* 取得时间戳(UNIX时间戳格式) */
+uint32_t get_timestamp(void)
+{
+    /* 当前时区 */
+    int zz = 0;
+    get_timezone(&zz);
+    /* 本地时间 */
+    time_t now = time(RT_NULL);
+    /* 去除时区 */
+    now -= ((zz / 4) * 3600);
+    
+    return (uint32_t)now;
+}
+
 /* 取得客户端唯一编号 */
 static uint32_t get_clientid(void)
 {
@@ -401,9 +422,9 @@ static rt_err_t data_acquisition_and_save(void)
     uint8_t* buf_write_ptr = data_buf;
     
     /* 采集时间 */
-    time_t now = time(RT_NULL);
-    memcpy(buf_write_ptr, &now, sizeof(now));
-    buf_write_ptr += sizeof(now);
+    uint32_t timestamp = get_timestamp();
+    memcpy(buf_write_ptr, &timestamp, sizeof(timestamp));
+    buf_write_ptr += sizeof(timestamp);
     
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
@@ -452,14 +473,14 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     json_data_buf[json_data_len++] = '{';
     
     /* 读取时间戳 */
-    time_t time_stamp = 0;
-    memcpy(&time_stamp, buf_read_ptr, sizeof(time_stamp));
-    buf_read_ptr += sizeof(time_stamp);
+    uint32_t timestamp = 0;
+    memcpy(&timestamp, buf_read_ptr, sizeof(timestamp));
+    buf_read_ptr += sizeof(timestamp);
         
     if (need_timestamp)
     {
         /* 时间戳编码成JSON格式并写入缓冲区 */
-        struct tm* local_time = localtime(&time_stamp);
+        struct tm* local_time = localtime(&timestamp);
         json_data_len += rt_snprintf((json_data_buf + json_data_len), (json_buf_len - json_data_len), 
             "\"ts\":\"%04d%02d%02d%02d%02d%02d\",", (local_time->tm_year + 1900), (local_time->tm_mon + 1), 
             local_time->tm_mday, local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
@@ -730,7 +751,7 @@ rt_err_t clear_history_data(void)
         ret = RT_EOK;
     }
     
-__exit:
+//__exit:
     
     return ret;
 }
@@ -1287,11 +1308,11 @@ static int app_data_report(void)
         uint32_t read_len = 0;
             
         /* 编码JSON采集数据并发送 */
-        time_t time_stamp = time(RT_NULL); // 上报时间戳
+        uint32_t timestamp = get_timestamp(); // 上报时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
             "\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
-            get_clientid(), time_stamp, get_itemid());
+            get_clientid(), timestamp, get_itemid());
         
         /* 读取report_pos处的一条待上报历史数据(JSON格式) */
         read_len = read_history_pos_data_json(report_pos, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
@@ -1430,11 +1451,11 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     
     /* 编码JSON采集数据并发送 */
     {
-        time_t time_stamp = time(RT_NULL); // 上报时间戳
+        uint32_t timestamp = get_timestamp(); // 上报时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\",\"itemId\":\"%s\","
             "\"timeStamp\":\"%u\",\"requestId\":\"%.*s\",\"data\":", get_productkey(), get_devicecode(), 
-            get_clientid(), get_itemid(), time_stamp, id.len, id.c_str);
+            get_clientid(), get_itemid(), timestamp, id.len, id.c_str);
         
         /* 读取最新采集的数据(JSON格式) */
         uint32_t read_len = read_history_data_json(0, json_data_buf + json_data_len, JSON_DATA_BUF_LEN - json_data_len, false);
@@ -1826,12 +1847,12 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     /* 编码响应信息并发送 */
     {
         /* 消息内容 */
-        time_t now = time(RT_NULL);
+        uint32_t timestamp = get_timestamp();
         rt_snprintf(topic_buf, MQTT_TOPIC_BUF_LEN, "/sys/%s/%s/config/set", get_productkey(), get_devicecode());
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"operationDate\":\"%u\",\"requestId\":\"%.*s\","
             "\"code\":\"%d\",\"message\":\"%s\",\"topic\":\"%s\",\"data\":{}}", get_productkey(), get_devicecode(), 
-            now, id.len, id.c_str, cfg_ret_code, cfg_ret_code_get_message(cfg_ret_code), topic_buf);
+            timestamp, id.len, id.c_str, cfg_ret_code, cfg_ret_code_get_message(cfg_ret_code), topic_buf);
         RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
         json_data_buf[json_data_len] = '\0';
         
@@ -2047,10 +2068,10 @@ static rt_err_t send_upgrade_progress(c_str_ref* req_id, int step)
     /* 编码响应信息并发送 */
     {
         /* 消息内容 */
-        time_t now = time(RT_NULL);
+        uint32_t timestamp = get_timestamp();
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"operationDate\":\"%u\",\"requestId\":\"%.*s\","
-            "\"params\":{\"step\":\"%d\",\"desc\":\"%s\"}}", get_productkey(), get_devicecode(), now, 
+            "\"params\":{\"step\":\"%d\",\"desc\":\"%s\"}}", get_productkey(), get_devicecode(), timestamp, 
             req_id->len, req_id->c_str, step, get_upgrade_progress_desc(step));
         RT_ASSERT(json_data_len < JSON_DATA_BUF_LEN);
         json_data_buf[json_data_len] = '\0';
@@ -3199,7 +3220,6 @@ static rt_err_t mqtt_client_stop(rt_int32_t timeout)
 }
 
 /* 请求采集数据 */
-
 rt_err_t req_data_acquisition(void)
 {
     LOG_D("%s()", __FUNCTION__);

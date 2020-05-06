@@ -628,6 +628,7 @@ static void tb22_init_thread_entry(void *parameter)
     at_response_t resp = RT_NULL;
     struct at_device *device = (struct at_device *) parameter;
     //struct at_client *client = device->client;
+    struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
 
     LOG_D("start init %s device.", device->name);
 	
@@ -931,6 +932,9 @@ static void tb22_init_thread_entry(void *parameter)
             {
                 LOG_I("%s device date time: %02d/%02d/%02d,%02d:%02d:%02d%+02d", device->name, yy, MM, dd, hh, mm, ss, zz);
                 
+                /* 保存时区信息 */
+                tb22->zz = zz;
+                
 #ifdef RT_USING_RTC
                 
                 /* convert to local timezone */
@@ -1184,6 +1188,15 @@ static int tb22_control(struct at_device *device, int cmd, void *arg)
             && (arg != NULL))
         {
             *((int*)arg) = signal_strength;
+        }
+        break;
+    }
+    case AT_DEVICE_CTRL_GET_TIMEZONE:
+    {
+        struct at_device_tb22 *tb22 = (struct at_device_tb22 *)device->user_data;
+        if (arg != NULL)
+        {
+            *((int*)arg) = tb22->zz;
         }
         break;
     }
