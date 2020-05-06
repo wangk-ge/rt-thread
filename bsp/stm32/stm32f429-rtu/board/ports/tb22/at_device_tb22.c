@@ -522,6 +522,7 @@ static struct netdev *tb22_netdev_add(const char *netdev_name)
 }
 
 /* =============================  tb22 device operations ============================= */
+#if 0
 /* 切换波特率 */
 static rt_err_t tb22_change_baudrate(struct at_device *device, at_response_t resp, int to_baudrate)
 {
@@ -611,6 +612,7 @@ static rt_err_t tb22_change_baudrate(struct at_device *device, at_response_t res
 __exit:
     return result;
 }
+#endif
 
 /* initialize for tb22 */
 static void tb22_init_thread_entry(void *parameter)

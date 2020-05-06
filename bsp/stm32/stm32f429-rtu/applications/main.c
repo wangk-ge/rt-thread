@@ -46,6 +46,7 @@ typedef enum
     APP_MSG_MQTT_PUBLISH_REQ, // MQTT发布数据请求
     APP_MSG_MQTT_CLIENT_ONLINE, // MQTT客户端器上线
     APP_MSG_MQTT_CLIENT_OFFLINE, // MQTT客户端器下线
+    APP_MSG_RESTART_REQ, // 重启系统请求
 } app_msg_type;
 
 /* 数据上报事件 */
@@ -448,6 +449,17 @@ static rt_err_t data_acquisition_and_save(void)
 }
 
 /* 
+ * 读取FIFO队列中指定位置的一条历史数据的采集时间戳
+ *
+ */
+static uint32_t read_history_pos_data_timestamp(uint32_t read_pos)
+{
+    uint32_t timestamp = 0;
+    history_data_load_pos(read_pos, (uint8_t*)&timestamp, sizeof(timestamp));
+    return timestamp;
+}
+
+/* 
  * 读取FIFO队列中指定位置的一条历史数据(JSON格式) 
  *
  * 返回读到的数据字节数
@@ -662,6 +674,55 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
     app_mp_free(data_buf);
     
     return json_data_len;
+}
+
+/* 
+ * 读取前n个时刻的一条历史数据的采集时间戳
+ *
+ *   n=0 读取最近一条历史数据
+ *   n>0 读取前n个时刻的一条历史数据
+ *
+ */
+uint32_t read_history_data_timestamp(uint32_t n)
+{
+    /* 读取历史数据队列信息 */
+    history_data_fifo_info fifo_info = {0};
+    rt_err_t ret = history_data_get_fifo_info(&fifo_info);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s history_data_get_fifo_info failed(%d)!", __FUNCTION__, ret);
+        return 0;
+    }
+    
+    /* 状态检查 */
+    if (fifo_info.length <= 0)
+    { // 队列为空
+        LOG_W("%s history data is empty!", __FUNCTION__);
+        return 0;
+    }
+    
+    /* 范围检查 */
+    if (n >= fifo_info.length)
+    {
+        /* 超范围 */
+        LOG_E("%s n(%u) not in range[0,%u]!", __FUNCTION__, n, fifo_info.length - 1);
+        return 0;
+    }
+    
+    /* 读取前第n条历史数据 */
+    n += 1;
+    uint32_t read_pos = fifo_info.head_pos; // head_pos指向空位置
+    if (fifo_info.head_pos >= n)
+    {
+        read_pos = fifo_info.head_pos - n;
+    }
+    else
+    {
+        read_pos = history_data_get_max_num() - n;
+    }
+    
+    /* 读取read_pos处的一条历史数据的采集时间戳 */
+    return read_history_pos_data_timestamp(read_pos);
 }
 
 /* 
@@ -1090,6 +1151,7 @@ static void tbss_netdev_status_callback(struct netdev *netdev, enum netdev_cb_ty
             break;
         case NETDEV_CB_STATUS_LINK_DOWN:        /* changed to 'link down' */
             LOG_D("NETDEV_CB_STATUS_LINK_DOWN");
+            app_send_msg(APP_MSG_RESTART_REQ, RT_NULL); // 发送重启系统请求
             break;
         case NETDEV_CB_STATUS_INTERNET_UP:      /* changed to 'internet up' */
             LOG_D("NETDEV_CB_STATUS_INTERNET_UP");
@@ -1308,7 +1370,7 @@ static int app_data_report(void)
         uint32_t read_len = 0;
             
         /* 编码JSON采集数据并发送 */
-        uint32_t timestamp = get_timestamp(); // 上报时间戳
+        uint32_t timestamp = read_history_pos_data_timestamp(report_pos); // 采集时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\","
             "\"timeStamp\":\"%u\",\"itemId\":\"%s\",\"data\":", get_productkey(), get_devicecode(), 
@@ -1451,7 +1513,7 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     
     /* 编码JSON采集数据并发送 */
     {
-        uint32_t timestamp = get_timestamp(); // 上报时间戳
+        uint32_t timestamp = read_history_data_timestamp(0); // 采集时间戳
         rt_int32_t json_data_len = rt_snprintf(json_data_buf, JSON_DATA_BUF_LEN, 
             "{\"productKey\":\"%s\",\"deviceCode\":\"%s\",\"clientId\":\"%010u\",\"itemId\":\"%s\","
             "\"timeStamp\":\"%u\",\"requestId\":\"%.*s\",\"data\":", get_productkey(), get_devicecode(), 
@@ -3362,6 +3424,12 @@ int main(void)
             case APP_MSG_MQTT_CLIENT_OFFLINE: // MQTT客户端已下线
             {
                 // TODO
+                break;
+            }
+            case APP_MSG_RESTART_REQ: // 重启系统请求
+            {
+                /* 重启系统 */
+                rt_hw_cpu_reset();
                 break;
             }
             default:
