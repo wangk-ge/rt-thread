@@ -575,6 +575,8 @@ static int tb22_socket_send(struct at_socket *socket, const char *buff, size_t b
     at_response_t resp = RT_NULL;
     #define RETRY_SEND_CNT (3) // 重试发送次数
     int retry_cnt = RETRY_SEND_CNT;
+    int sock = 0, len = 0;
+    int i = 0;
 
     RT_ASSERT(buff != RT_NULL);
     
@@ -607,13 +609,34 @@ __retry:
         if (at_obj_exec_cmd(device->client, resp, "AT+NSOSD=%d,%d,%s,0,%d", device_socket, (int)cur_pkt_size, at_sock_send_buf, tb22_sock->sequence) < 0)
         {
             LOG_E("%s at_obj_exec_cmd failed!", __FUNCTION__);
-            result = -RT_ERROR;
-            goto __exit;
+            
+            if (retry_cnt == RETRY_SEND_CNT)
+            { // 第一次尝试就失败
+                result = -RT_ERROR;
+                goto __exit;
+            }
+            
+            // 可能由于前次发送还在进行中,会返回ERROR
+            
+            /* 递减重试次数 */
+            --retry_cnt;
+            
+            if (retry_cnt > 0)
+            {
+                LOG_D("%s retry(%d) wait.", __FUNCTION__, RETRY_SEND_CNT - retry_cnt);
+                /* 继续等待发送结果 */
+                goto __wait;
+            }
+            else
+            {
+                LOG_E("%s retch max retry count(%d), give up!", __FUNCTION__, RETRY_SEND_CNT);
+                result = -RT_ETIMEOUT;
+                /* 放弃 */
+                goto __exit;
+            }
         }
         
         /* 找到<socket>,<length>这行响应 */
-        int sock = 0, len = 0;
-        int i = 0;
         for (i = 1; i <= resp->line_counts; ++i)
         { // 为了处理相应中间夹杂着主动上报干扰的情况
             if (at_resp_parse_line_args(resp, i, "%d,%d", &sock, &len) <= 0)
@@ -642,6 +665,7 @@ __retry:
         /* 实际发送数据长度(bytes) */
         cur_pkt_size = len;
         
+__wait:
         /* 
          * 进行正常数据传输业务时，在业务数据交互过程中，若60s后未收到下行数据，
          * 则判定本次数据业务因超时而失败，再次尝试发送数据；
