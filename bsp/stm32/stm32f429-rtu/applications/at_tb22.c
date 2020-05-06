@@ -36,6 +36,7 @@ static struct at_device_tb22 _dev =
     .power_pin = TB22_POWER_PIN,
     .reset_pin = TB22_RESET_PIN,
     .recv_bufsz = TB22_RECV_BUFF_LEN,
+    .zz = 32, // 默认为东8区
 };
 
 static int tb22_device_register(void)
