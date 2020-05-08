@@ -57,8 +57,8 @@ typedef enum
 #define RS485_1_DEVICE_NAME "/dev/uart2"
 #define RS485_2_DEVICE_NAME "/dev/uart8"
 #define RS485_3_DEVICE_NAME "/dev/uart6"
-//#define RS485_4_DEVICE_NAME "/dev/uart7"
-#define RS485_4_DEVICE_NAME "/dev/uart5"
+#define RS485_4_DEVICE_NAME "/dev/uart7"
+//#define RS485_4_DEVICE_NAME "/dev/uart5"
 
 /* RS485接收使能GPIO引脚 */
 #define RS485_1_REN_PIN GET_PIN(E, 10) // PE10(高电平发送,低电平接收)
@@ -117,6 +117,9 @@ typedef enum
 /* 上报时等待MQTT连接的时间(s) */
 #define DATA_REPORT_WAIT_CONNECT_TIME (60)
 
+/* MQTT离线超时时间(s) */
+#define MQTT_OFFLINE_TIMEOUT (5 * 60)
+
 /* 主消息循环消息类型定义 */
 typedef struct
 {
@@ -157,8 +160,8 @@ static rs485_device_info rs485_dev_infos[CFG_UART_X_NUM] =
     {RS485_1_DEVICE_NAME, RS485_1_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
     {RS485_2_DEVICE_NAME, RS485_2_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
     {RS485_3_DEVICE_NAME, RS485_3_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
-    //{RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
-    {RS485_4_DEVICE_NAME, 0xFFFFFFFF, MODBUS_RTU_RS232, RT_NULL},
+    {RS485_4_DEVICE_NAME, RS485_4_REN_PIN, MODBUS_RTU_RS485, RT_NULL},
+    //{RS485_4_DEVICE_NAME, 0xFFFFFFFF, MODBUS_RTU_RS232, RT_NULL},
 };
 
 /* 主消息循环队列 */
@@ -171,6 +174,8 @@ static rt_mp_t app_mp = RT_NULL;
 static rt_timer_t report_timer = RT_NULL;
 /* 定时采集定时器 */
 static rt_timer_t acquisition_timer = RT_NULL;
+/* MQTT离线超时检测定时器 */
+static rt_timer_t mqtt_offline_check_timer = RT_NULL;
 
 /* HTTP OTA线程 */
 static rt_thread_t http_ota_thread = RT_NULL;
@@ -1185,6 +1190,13 @@ static void acquisition_timer_timeout(void *parameter)
     LOG_D("%s()", __FUNCTION__);
     
     app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
+}
+
+static void mqtt_offline_check_timer_timeout(void *parameter)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    app_send_msg(APP_MSG_RESTART_REQ, RT_NULL); // 发送重启系统请求
 }
 
 static void mqtt_sub_default_callback(mqtt_client *client, message_data *msg)
@@ -2690,6 +2702,11 @@ static void app_deinit()
         rt_timer_delete(acquisition_timer);
         acquisition_timer = RT_NULL;
     }
+    if (RT_NULL != mqtt_offline_check_timer)
+    {
+        rt_timer_delete(mqtt_offline_check_timer);
+        mqtt_offline_check_timer = RT_NULL;
+    }
     if (RT_NULL != http_ota_mutex)
     {
         rt_mutex_delete(http_ota_mutex);
@@ -3041,6 +3058,17 @@ static rt_err_t app_init(void)
         goto __exit;
     }
     
+    /* create mqtt offline check timer */
+    mqtt_offline_check_timer = rt_timer_create("offline check", mqtt_offline_check_timer_timeout, 
+                            RT_NULL, rt_tick_from_millisecond(MQTT_OFFLINE_TIMEOUT * 1000), 
+                            RT_TIMER_FLAG_ONE_SHOT);
+    if (RT_NULL == mqtt_offline_check_timer)
+    {
+        LOG_E("%s create mqtt offline check timer failed!", __FUNCTION__);
+        ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* 创建HTTP OTA互斥锁 */
     http_ota_mutex = rt_mutex_create("http_ota", RT_IPC_FLAG_FIFO);
     if (RT_NULL == http_ota_mutex)
@@ -3241,6 +3269,11 @@ __exit:
             rt_timer_delete(acquisition_timer);
             acquisition_timer = RT_NULL;
         }
+        if (RT_NULL != mqtt_offline_check_timer)
+        {
+            rt_timer_delete(mqtt_offline_check_timer);
+            mqtt_offline_check_timer = RT_NULL;
+        }
         if (RT_NULL != http_ota_mutex)
         {
             rt_mutex_delete(http_ota_mutex);
@@ -3376,6 +3409,8 @@ int main(void)
                     LOG_E("%s mqtt_client_start failed(%d)!", __FUNCTION__, ret);
                     goto __exit;
                 }
+                /* 启动MQTT离线检查定时器 */
+                rt_timer_start(mqtt_offline_check_timer);
                 break;
             }
             case APP_MSG_DATA_ACQUISITION_REQ: // 数据采集请求
@@ -3417,13 +3452,17 @@ int main(void)
             }
             case APP_MSG_MQTT_CLIENT_ONLINE: // MQTT客户端已上线
             {
+                /* 停止MQTT离线检查定时器 */
+                rt_timer_stop(mqtt_offline_check_timer);
+                
                 /* 检查是否成功进行了OTA,并上报进度信息 */
                 check_and_report_ota_process();
                 break;
             }
-            case APP_MSG_MQTT_CLIENT_OFFLINE: // MQTT客户端已下线
+            case APP_MSG_MQTT_CLIENT_OFFLINE: // MQTT客户端已离线
             {
-                // TODO
+                /* 启动MQTT离线检查定时器 */
+                rt_timer_start(mqtt_offline_check_timer);
                 break;
             }
             case APP_MSG_RESTART_REQ: // 重启系统请求
