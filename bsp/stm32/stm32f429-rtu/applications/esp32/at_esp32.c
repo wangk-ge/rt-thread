@@ -54,6 +54,7 @@ extern   "C"
 #define AT_ESP32_MSG_QUEUE_LEN      (8)
 #define AT_ESP32_THREAD_PRIORITY    (RT_MAIN_THREAD_PRIORITY + 1) // ESP32数据处理线程优先级(优先级低于主线程)
 #define AT_ESP32_THREAD_STACK_SIZE  (2048)
+//#define AT_ESP32_USE_BLE_DEV_NAME // 启用广播BLE设备名
 
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
@@ -219,6 +220,7 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
     }
     at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
 
+#ifdef AT_ESP32_USE_BLE_DEV_NAME
     /* 设置BLE广播包
      * (设备名: RTU_BLE)
      *
@@ -233,6 +235,7 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
         //ret = -RT_ERROR;
         goto __exit;
     }
+#endif
     
     /* 启动BLE广播 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVSTART");
