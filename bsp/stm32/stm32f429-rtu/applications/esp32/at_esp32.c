@@ -219,6 +219,21 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
     }
     at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
 
+    /* 设置BLE广播包
+     * (设备名: RTU_BLE)
+     *
+     * The adv data is
+     * 02 01 06 //<length>,<type>,<data>
+     * 08 09 5254555F424C45 //<length>,<type>,<data>
+     */
+    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVDATA=02010608095254555F424C45");
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_obj_exec_cmd(AT+BLEADVDATA=02010608095254555F424C45) failed(%d)!", __FUNCTION__, ret);
+        //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
     /* 启动BLE广播 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVSTART");
     if (ret != RT_EOK)
