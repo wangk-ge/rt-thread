@@ -474,7 +474,7 @@ static void at_esp32_thread_entry(void *param)
                     LOG_E("%s at_esp32_ble_init() failed(%d)!", __FUNCTION__, ret);
                     
                     /* 请求重启系统 */
-                    req_restart();
+                    //req_restart(); // 如果ESP32 AT失效,重启系统也无法恢复
                 }
                 break;
             }
@@ -497,7 +497,7 @@ static void at_esp32_thread_entry(void *param)
                     LOG_E("%s at_obj_exec_cmd(AT+BLECFGMTU?) failed(%d)!", __FUNCTION__, ret);
                     
                     /* 请求重启系统 */
-                    req_restart();
+                    //req_restart(); // 如果ESP32 AT失效,重启系统也无法恢复
                     
                     break;
                 }
@@ -529,7 +529,7 @@ static void at_esp32_thread_entry(void *param)
                     LOG_E("%s at_obj_exec_cmd(AT+BLEADVSTART) failed(%d)!", __FUNCTION__, ret);
                     
                     /* 请求重启系统 */
-                    req_restart();
+                    //req_restart(); // 如果ESP32 AT失效,重启系统也无法恢复
                 }
                 break;
             }

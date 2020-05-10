@@ -3115,7 +3115,8 @@ static rt_err_t app_init(void)
     {
         LOG_E("%s at_esp32_init failed(%d)!", __FUNCTION__, ret);
         //ret = -RT_ERROR;
-        goto __exit;
+        //goto __exit; // 如果ESP32 AT失效,重启系统也无法恢复
+        ret = RT_EOK;
     }
     
     /* 初始化MQTT连接参数 */
