@@ -447,22 +447,32 @@ static void server_parser(at_server_t server)
 #define ESC_KEY                 0x1B
 #define BACKSPACE_KEY           0x08
 #define DELECT_KEY              0x7F
+#define AT_PACKET_TIMEOUT       (5 * 1000)
 
     char cur_cmd_name[AT_CMD_NAME_LEN] = { 0 };
     at_cmd_t cur_cmd = RT_NULL;
     char *cur_cmd_args = RT_NULL, ch, last_ch;
-
+    rt_int32_t timeout = RT_WAITING_FOREVER;
+    
     RT_ASSERT(server);
     RT_ASSERT(server->status != AT_STATUS_UNINITIALIZED);
 
     while (1)
     {
-        server->get_char(server, &ch, RT_WAITING_FOREVER);
+        rt_err_t result = server->get_char(server, &ch, timeout);
+#if 0 // 不允许AT Server退出
         if (ESC_KEY == ch)
         {
             break;
         }
-
+#endif
+        /* 超时没有输入将清空缓冲区 */
+        if (result == -RT_ETIMEOUT)
+        {
+            timeout = RT_WAITING_FOREVER;
+            goto __retry;
+        }
+        
         if (server->echo_mode)
         {
             if (ch == AT_CMD_CR || (ch == AT_CMD_LF && last_ch != AT_CMD_CR))
@@ -498,6 +508,8 @@ static void server_parser(at_server_t server)
 
         if(!strstr(server->recv_buffer, server->end_mark))
         {
+            /* 缓冲区中的数据如果超过该时间间隔还没能组成一个完整的AT命令将会被认为是垃圾数据并清空 */
+            timeout = AT_PACKET_TIMEOUT;
             continue;
         }
 
