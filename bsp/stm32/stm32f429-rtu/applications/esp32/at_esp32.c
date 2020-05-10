@@ -63,6 +63,7 @@ extern   "C"
 typedef enum
 {
     AT_ESP32_MSG_NONE = 0,
+    AT_ESP32_MSG_READY, // 收到ready上报(AT固件成功启动)
     AT_ESP32_MSG_DATA_RECV, // 收到数据
     AT_ESP32_MSG_CONN, // 已连接
     AT_ESP32_MSG_DISCONN, // 已断开
@@ -123,15 +124,6 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
     LOG_D("%s()", __FUNCTION__);
     
     rt_err_t ret = RT_EOK;
-    
-    /* wait esp32 startup finish, send AT every 500ms, if receive OK, SYNC success*/
-    ret = at_client_obj_wait_connect(esp32_at_client, AT_ESP32_CONNECT_TIME);
-    if (ret != RT_EOK)
-    {
-        LOG_E("%s at_client_obj_wait_connect(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
-        //ret = -RT_ETIMEOUT;
-        goto __exit;
-    }
     
     /* 关闭回显 */
     ret = at_obj_exec_cmd(esp32_at_client, resp, "ATE0");
@@ -369,18 +361,14 @@ static void esp32_at_urc_ready_func(struct at_client *client, const char *data, 
 {
     LOG_D("%s() data=%.*s", __FUNCTION__, (int)size, data);
     
-    at_response_t resp = app_alloc_at_resp(0, rt_tick_from_millisecond(1000));
-    RT_ASSERT(resp != RT_NULL)
-    
-    rt_err_t ret = at_esp32_ble_init(resp);
+    /* 消息发送到处理线程进行处理 */
+    at_esp32_message esp32_msg = {
+        .msg = AT_ESP32_MSG_READY,
+    };
+    rt_err_t ret = at_esp32_send_msg(&esp32_msg);
     if (ret != RT_EOK)
     {
-        LOG_E("%s at_esp32_ble_init() failed(%d)!", __FUNCTION__, ret);
-    }
-    
-    if (resp)
-    {
-        app_free_at_resp(resp);
+        LOG_E("%s at_esp32_send_msg(AT_ESP32_MSG_READY) failed(%d)!", __FUNCTION__, ret);
     }
 }
 
@@ -472,6 +460,24 @@ static void at_esp32_thread_entry(void *param)
         
         switch (esp32_msg.msg)
         {
+            case AT_ESP32_MSG_READY: // 收到ready上报(AT固件成功启动)
+            {
+                at_response_t resp = app_alloc_at_resp(0, rt_tick_from_millisecond(1000));
+                RT_ASSERT(resp != RT_NULL)
+                
+                rt_err_t ret = at_esp32_ble_init(resp);
+                
+                app_free_at_resp(resp);
+                
+                if (ret != RT_EOK)
+                {
+                    LOG_E("%s at_esp32_ble_init() failed(%d)!", __FUNCTION__, ret);
+                    
+                    /* 请求重启系统 */
+                    req_restart();
+                }
+                break;
+            }
             case AT_ESP32_MSG_DATA_RECV: // 收到数据
             {
                 /* 数据输入到CMD模块进行解析 */
@@ -481,14 +487,19 @@ static void at_esp32_thread_entry(void *param)
             case AT_ESP32_MSG_CONN: // 已连接
             {
                 /* 查询MTU大小 */
-                
                 at_response_t resp = app_alloc_at_resp(0, rt_tick_from_millisecond(1000));
                 RT_ASSERT(resp != RT_NULL)
+                
                 /* 启动BLE广播 */
                 ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLECFGMTU?");
                 if (ret != RT_EOK)
                 {
                     LOG_E("%s at_obj_exec_cmd(AT+BLECFGMTU?) failed(%d)!", __FUNCTION__, ret);
+                    
+                    /* 请求重启系统 */
+                    req_restart();
+                    
+                    break;
                 }
                 else
                 {
@@ -499,6 +510,7 @@ static void at_esp32_thread_entry(void *param)
                         esp32_mtu = (uint32_t)mtu;
                     }
                 }
+                
                 app_free_at_resp(resp);
                 break;
             }
@@ -506,13 +518,19 @@ static void at_esp32_thread_entry(void *param)
             {
                 at_response_t resp = app_alloc_at_resp(0, rt_tick_from_millisecond(1000));
                 RT_ASSERT(resp != RT_NULL)
+                
                 /* 启动BLE广播 */
                 ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVSTART");
+                
+                app_free_at_resp(resp);
+                
                 if (ret != RT_EOK)
                 {
                     LOG_E("%s at_obj_exec_cmd(AT+BLEADVSTART) failed(%d)!", __FUNCTION__, ret);
+                    
+                    /* 请求重启系统 */
+                    req_restart();
                 }
-                app_free_at_resp(resp);
                 break;
             }
             default:
@@ -594,6 +612,15 @@ rt_err_t at_esp32_init(void)
     {
         LOG_E("%s at_obj_exec_cmd(AT+RST) failed(%d)!", __FUNCTION__, ret);
         //ret = -RT_ERROR;
+        goto __exit;
+    }
+    
+    /* wait esp32 startup finish, send AT every 500ms, if receive OK, SYNC success*/
+    ret = at_client_obj_wait_connect(esp32_at_client, AT_ESP32_CONNECT_TIME);
+    if (ret != RT_EOK)
+    {
+        LOG_E("%s at_client_obj_wait_connect(%s) failed.", __FUNCTION__, AT_ESP32_UART_DEVICE_NAME);
+        //ret = -RT_ETIMEOUT;
         goto __exit;
     }
     

@@ -18,6 +18,7 @@ http-parser/http_parser.c
 esp32/at_esp32.c
 esp32/cmd.c
 history_data.c
+wdt.c
 """)
 
 CPPPATH += [cwd + '/http-parser']

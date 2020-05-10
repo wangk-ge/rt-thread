@@ -32,6 +32,7 @@
 #include "http_ota.h"
 #include "at_esp32.h"
 #include "history_data.h"
+#include "wdt.h"
 
 #define LOG_TAG              "main"
 #define LOG_LVL              LOG_LVL_DBG
@@ -119,6 +120,9 @@ typedef enum
 
 /* MQTT离线超时时间(s) */
 #define MQTT_OFFLINE_TIMEOUT (5 * 60)
+
+/* 看门狗超时时间(s) */
+#define APP_WDT_TIMEOUT (30)
 
 /* 主消息循环消息类型定义 */
 typedef struct
@@ -1156,7 +1160,7 @@ static void tbss_netdev_status_callback(struct netdev *netdev, enum netdev_cb_ty
             break;
         case NETDEV_CB_STATUS_LINK_DOWN:        /* changed to 'link down' */
             LOG_D("NETDEV_CB_STATUS_LINK_DOWN");
-            app_send_msg(APP_MSG_RESTART_REQ, RT_NULL); // 发送重启系统请求
+            req_restart(); // 请求重启系统
             break;
         case NETDEV_CB_STATUS_INTERNET_UP:      /* changed to 'internet up' */
             LOG_D("NETDEV_CB_STATUS_INTERNET_UP");
@@ -1196,7 +1200,7 @@ static void mqtt_offline_check_timer_timeout(void *parameter)
 {
     LOG_D("%s()", __FUNCTION__);
     
-    app_send_msg(APP_MSG_RESTART_REQ, RT_NULL); // 发送重启系统请求
+    req_restart(); // 请求重启系统
 }
 
 static void mqtt_sub_default_callback(mqtt_client *client, message_data *msg)
@@ -3322,6 +3326,14 @@ rt_err_t req_data_acquisition(void)
     return app_send_msg(APP_MSG_DATA_ACQUISITION_REQ, RT_NULL); // 发送数据采集请求
 }
 
+/* 请求重启系统 */
+rt_err_t req_restart(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    return app_send_msg(APP_MSG_RESTART_REQ, RT_NULL); // 发送重启系统请求
+}
+
 /* 请求上报数据 */
 rt_err_t req_data_report(void)
 {
@@ -3383,6 +3395,14 @@ int main(void)
     LOG_I("%s at_server_init() success", __FUNCTION__);
     
     at_server_printfln("ready");
+    
+    /* 启动开门狗 */
+    ret = wdt_start(APP_WDT_TIMEOUT);
+    if (RT_EOK != ret)
+    {
+        LOG_E("%s wdt_start(%u) failed(%d)!", __FUNCTION__, APP_WDT_TIMEOUT, ret);
+        goto __exit;
+    }
     
     /* 主消息循环 */
     while (1)
