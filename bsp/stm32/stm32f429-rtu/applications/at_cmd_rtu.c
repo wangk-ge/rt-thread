@@ -37,8 +37,7 @@ static at_result_t at_clientid_query(const struct at_cmd *cmd)
     size_t len = ef_get_env_blob("client_id", &client_id, sizeof(client_id), RT_NULL);
     if (len != sizeof(client_id))
     {
-        LOG_E("%s ef_get_env_blob(client_id) error!", __FUNCTION__);
-        return AT_RESULT_FAILE;
+        LOG_W("%s ef_get_env_blob(client_id) failed, use 0000000000!", __FUNCTION__);
     }
     
     at_server_printfln("+CLIENTID: %010u", client_id);

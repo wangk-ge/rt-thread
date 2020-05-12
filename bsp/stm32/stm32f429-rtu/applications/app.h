@@ -69,6 +69,18 @@ int get_timezone(int *zz);
 /* 取得时间戳(UNIX时间戳格式) */
 uint32_t get_timestamp(void);
 
+/* 取得客户端唯一编号 */
+uint32_t get_clientid(void);
+
+/* 取得产品编号 */
+const char* get_productkey(void);
+
+/* 取得设备ID */
+const char* get_devicecode(void);
+
+/* 取得标签ID */
+const char* get_itemid(void);
+
 /* 取得历史数据条目数 */
 uint32_t get_history_data_num(void);
 

@@ -345,14 +345,14 @@ uint32_t get_timestamp(void)
 }
 
 /* 取得客户端唯一编号 */
-static uint32_t get_clientid(void)
+uint32_t get_clientid(void)
 {
     config_info *cfg = cfg_get();
     return cfg->client_id;
 }
 
 /* 取得产品编号 */
-static const char* get_productkey(void)
+const char* get_productkey(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->productkey == NULL)
@@ -363,7 +363,7 @@ static const char* get_productkey(void)
 }
 
 /* 取得设备ID */
-static const char* get_devicecode(void)
+const char* get_devicecode(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->devicecode == NULL)
@@ -374,7 +374,7 @@ static const char* get_devicecode(void)
 }
 
 /* 取得标签ID */
-static const char* get_itemid(void)
+const char* get_itemid(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->itemid == NULL)

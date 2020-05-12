@@ -384,17 +384,8 @@ static void _CMD_HandlerCLIENTID(const c_str_ref* pctStrRefParam)
 {
     if (NULL == pctStrRefParam)
     { // 读取
-        rt_uint32_t client_id = 0;
-        size_t len = ef_get_env_blob("client_id", &client_id, sizeof(client_id), RT_NULL);
-        if (len != sizeof(client_id))
-        {
-            LOG_E("%s ef_get_env_blob(client_id) error!", __FUNCTION__);
-            _CMD_Response("[ERR]");
-        }
-        else
-        {
-            _CMD_Response("[CLIENTID=%010u]", client_id);
-        }
+        rt_uint32_t client_id = get_clientid();
+        _CMD_Response("[CLIENTID=%010u]", client_id);
     }
     else
     { // 设置
@@ -415,10 +406,7 @@ static void _CMD_HandlerPRODUCTKEY(const c_str_ref* pctStrRefParam)
 {
     if (NULL == pctStrRefParam)
     { // 读取
-        char key[64] = "";
-        size_t len = ef_get_env_blob("productkey", key, sizeof(key), RT_NULL);
-        key[len] = '\0';
-        _CMD_Response("[PRODUCTKEY=%s]", key);
+        _CMD_Response("[PRODUCTKEY=%s]", get_productkey());
     }
     else
     { // 设置
@@ -439,10 +427,7 @@ static void _CMD_HandlerDEVICECODE(const c_str_ref* pctStrRefParam)
 {
     if (NULL == pctStrRefParam)
     { // 读取
-        char devicecode[64] = "";
-        size_t len = ef_get_env_blob("devicecode", devicecode, sizeof(devicecode), RT_NULL);
-        devicecode[len] = '\0';
-        _CMD_Response("[DEVICECODE=%s]", devicecode);
+        _CMD_Response("[DEVICECODE=%s]", get_devicecode());
     }
     else
     { // 设置
@@ -463,10 +448,7 @@ static void _CMD_HandlerITEMID(const c_str_ref* pctStrRefParam)
 {
     if (NULL == pctStrRefParam)
     { // 读取
-        char itemid[64] = "";
-        size_t len = ef_get_env_blob("itemid", itemid, sizeof(itemid) - 1, RT_NULL);
-        itemid[len] = '\0';
-        _CMD_Response("[ITEMID=%s]", itemid);
+        _CMD_Response("[ITEMID=%s]", get_itemid());
     }
     else
     { // 设置
