@@ -414,6 +414,16 @@ bool cfg_load(void)
 
 #undef LOAD_CONFIG_ITEM
     
+    /* 加载client_id */
+    {
+        cfg_info.client_id = 0; // 默认值0000000000
+        len = ef_get_env_blob("client_id", &(cfg_info.client_id), sizeof(cfg_info.client_id), NULL);
+        if (len != sizeof(cfg_info.client_id))
+        {
+            LOG_W("%s ef_get_env_blob(client_id) failed, use 0000000000!", __FUNCTION__);
+        }
+    }
+    
     /* 加载a_ip */
     {
         size_t a_ip_len = 0;

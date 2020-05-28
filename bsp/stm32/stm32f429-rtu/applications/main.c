@@ -345,14 +345,14 @@ uint32_t get_timestamp(void)
 }
 
 /* 取得客户端唯一编号 */
-static uint32_t get_clientid(void)
+uint32_t get_clientid(void)
 {
     config_info *cfg = cfg_get();
     return cfg->client_id;
 }
 
 /* 取得产品编号 */
-static const char* get_productkey(void)
+const char* get_productkey(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->productkey == NULL)
@@ -363,7 +363,7 @@ static const char* get_productkey(void)
 }
 
 /* 取得设备ID */
-static const char* get_devicecode(void)
+const char* get_devicecode(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->devicecode == NULL)
@@ -374,7 +374,7 @@ static const char* get_devicecode(void)
 }
 
 /* 取得标签ID */
-static const char* get_itemid(void)
+const char* get_itemid(void)
 {
     config_info *cfg = cfg_get();
     if (cfg->itemid == NULL)
@@ -1453,9 +1453,9 @@ static void topic_telemetry_get_handler(mqtt_client *client, message_data *msg)
     jsmn_init(&json_paser);
     jsmntok_t tok_list[32];
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
-    if (list_len == JSMN_ERROR_PART)
+    if (list_len <= 0)
     {
-        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+        LOG_E("%s jsmn_parse failed(%d)!", __FUNCTION__, list_len);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1597,9 +1597,9 @@ static void topic_config_get_handler(mqtt_client *client, message_data *msg)
     jsmn_init(&json_paser);
     jsmntok_t tok_list[32];
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
-    if (list_len == JSMN_ERROR_PART)
+    if (list_len <= 0)
     {
-        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+        LOG_E("%s jsmn_parse failed(%d)!", __FUNCTION__, list_len);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1774,9 +1774,9 @@ static void topic_config_set_handler(mqtt_client *client, message_data *msg)
     jsmn_init(&json_paser);
     jsmntok_t tok_list[32];
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
-    if (list_len == JSMN_ERROR_PART)
+    if (list_len <= 0)
     {
-        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+        LOG_E("%s jsmn_parse failed(%d)!", __FUNCTION__, list_len);
         ret = -RT_ERROR;
         goto __exit;
     }
@@ -1996,9 +1996,9 @@ static void topic_telemetry_result_handler(mqtt_client *client, message_data *ms
     jsmn_init(&json_paser);
     jsmntok_t tok_list[32];
     int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
-    if (list_len == JSMN_ERROR_PART)
+    if (list_len <= 0)
     {
-        LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+        LOG_E("%s jsmn_parse failed(%d)!", __FUNCTION__, list_len);
         goto __exit;
     }
     
@@ -2446,9 +2446,9 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
         jsmn_init(&json_paser);
         jsmntok_t tok_list[32];
         int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
-        if (list_len == JSMN_ERROR_PART)
+        if (list_len <= 0)
         {
-            LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+            LOG_E("%s jsmn_parse failed(%d)!", __FUNCTION__, list_len);
             goto __exit;
         }
         
@@ -2554,9 +2554,9 @@ static void topic_upgrade_update_handler(mqtt_client *client, message_data *msg)
         jsmn_init(&json_paser);
         jsmntok_t tok_list[32];
         int list_len = jsmn_parse(&json_paser, json_str, json_str_len, tok_list, ARRAY_SIZE(tok_list));
-        if (list_len == JSMN_ERROR_PART)
+        if (list_len <= 0)
         {
-            LOG_E("%s jsmn_parse failed!", __FUNCTION__);
+            LOG_E("%s jsmn_parse failed(%d)!", __FUNCTION__, list_len);
             goto __exit;
         }
         

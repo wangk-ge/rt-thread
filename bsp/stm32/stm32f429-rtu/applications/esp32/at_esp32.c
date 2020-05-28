@@ -54,7 +54,7 @@ extern   "C"
 #define AT_ESP32_MSG_QUEUE_LEN      (8)
 #define AT_ESP32_THREAD_PRIORITY    (RT_MAIN_THREAD_PRIORITY + 1) // ESP32数据处理线程优先级(优先级低于主线程)
 #define AT_ESP32_THREAD_STACK_SIZE  (2048)
-//#define AT_ESP32_USE_BLE_DEV_NAME // 启用广播BLE设备名
+#define AT_ESP32_USE_BLE_DEV_NAME // 启用广播BLE设备名
 
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
@@ -213,19 +213,58 @@ static rt_err_t at_esp32_ble_init(at_response_t resp)
     at_resp_parse_line_args_by_kw(resp, "+BLEADDR:", "+BLEADDR:%s", esp32_ble_addr);
 
 #ifdef AT_ESP32_USE_BLE_DEV_NAME
-    /* 设置BLE广播包
-     * (设备名: RTU_BLE)
+    /* 设置advertising name
+    * (示例: RTU_BLE)
      *
      * The adv data is
      * 02 01 06 //<length>,<type>,<data>
      * 08 09 5254555F424C45 //<length>,<type>,<data>
      */
-    ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVDATA=02010608095254555F424C45");
-    if (ret != RT_EOK)
     {
-        LOG_E("%s at_obj_exec_cmd(AT+BLEADVDATA=02010608095254555F424C45) failed(%d)!", __FUNCTION__, ret);
-        //ret = -RT_ERROR;
-        goto __exit;
+        /* 使用BLE地址作为advertising name */
+        const char *ble_dev_name = esp32_ble_addr;
+        size_t name_len = (size_t)strlen(ble_dev_name);
+        char hex_str_buf[64] = "";
+        uint32_t hex_str_len = 0;
+        
+        memcpy(hex_str_buf, STR_ITEM("020106"));
+        hex_str_len += STR_LEN("020106");
+        
+        /* <length> */
+        uint8_t length = name_len + 1;
+        util_to_hex_str((const uint8_t*)&length, 1, 
+            hex_str_buf + hex_str_len, 
+            sizeof(hex_str_buf) - hex_str_len);
+        hex_str_len += 2;
+        
+        /* <type> */
+        memcpy(hex_str_buf + hex_str_len, STR_ITEM("09"));
+        hex_str_len += 2;
+        
+        /* <data> */
+        util_to_hex_str((const uint8_t*)ble_dev_name, (size_t)name_len, 
+            hex_str_buf + hex_str_len, sizeof(hex_str_buf) - hex_str_len);
+        hex_str_len += name_len * 2;
+        
+        ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLEADVDATA=\"%s\"", hex_str_buf);
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s at_obj_exec_cmd(AT+BLEADVDATA=\"%s\") failed(%d)!", __FUNCTION__, hex_str_buf, ret);
+            //ret = -RT_ERROR;
+            goto __exit;
+        }
+    }
+    
+    /* 设置GAP name */
+    {
+        /* 使用BLE地址作为GAP name */
+        ret = at_obj_exec_cmd(esp32_at_client, resp, "AT+BLENAME=\"%s\"", esp32_ble_addr);
+        if (ret != RT_EOK)
+        {
+            LOG_E("%s at_obj_exec_cmd(AT+BLENAME=\"%s\") failed(%d)!", __FUNCTION__, esp32_ble_addr, ret);
+            //ret = -RT_ERROR;
+            goto __exit;
+        }
     }
 #endif
     
