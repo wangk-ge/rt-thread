@@ -1225,6 +1225,143 @@ AT_CMD_EXPORT("AT+UART2TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query
 AT_CMD_EXPORT("AT+UART3TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 3);
 AT_CMD_EXPORT("AT+UART4TYPE", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxtype_query, at_uartxtype_setup, RT_NULL, 4);
 
+/* AT+UARTXDELAY 设置/读取UART X相关的采集延时列表(每个1字节) */
+
+static at_result_t at_uartxdelay_println(char uart_x)
+{
+    /* 生成配置KEY值 */
+    char cfg_key[32] = "uartXdelay";
+    cfg_key[STR_LEN("uart")] = uart_x;
+    
+    /* 读取配置 */
+    uint8_t delay_list[MAX_UARTX_VAR_CNT] = {0x00};
+    size_t data_size = 0;
+    size_t read_len = ef_get_env_blob(cfg_key, delay_list, sizeof(delay_list), &data_size);
+    if (read_len != data_size)
+    {
+        LOG_E("%s ef_get_env_blob(%s) error(read_len=%u)!", __FUNCTION__, cfg_key, read_len);
+        return AT_RESULT_FAILE;
+    }
+
+    at_server_printf("+UART%cDELAY: ", uart_x);
+    
+    /* 转换成字符串输出 */
+    size_t delay_cnt = data_size / sizeof(delay_list[0]);
+    int i = 0;
+    if (delay_cnt > 0)
+    {
+        for (i = 0; i < (delay_cnt - 1); ++i)
+        {
+            at_server_printf("0x%02x,", delay_list[i]);
+        }
+        
+        at_server_printfln("0x%02x", delay_list[i]); // 最后一个没有逗号
+    }
+    
+    return AT_RESULT_OK;
+}
+
+static at_result_t at_uartxdelay_query(const struct at_cmd *cmd)
+{
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    return at_uartxdelay_println(uart_x);
+}
+
+static at_result_t at_uartxdelay_setup(const struct at_cmd *cmd, const char *args)
+{
+    c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
+    {
+        LOG_E("%s strref_split() param_count(%d) not in range[1,%u]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
+        return AT_RESULT_PARSE_FAILE;
+    }
+    
+    /* 串口号UART X的X实际字符 */
+    char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 转换成u8数组并检查格式 */
+    uint8_t delay_list[MAX_UARTX_VAR_CNT] = {0x00};
+    int i = 0;
+    for (i = 0; i < param_count; ++i)
+    {
+        if (param_list[i].len <= 0)
+        {
+            LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        int32_t delay = 0;
+        /* 
+            %i:整数，如果字符串以0x或者0X开头，则按16进制进行转换，
+            如果以0开头，则按8进制进行转换，否则按10进制转换，
+            需要一个类型为int*的的参数存放转换结果
+        */
+        rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &delay);
+        if (ret != 1)
+        {
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        /* uartXdelay
+         * 范围0x01~0x0a，对应100ms~1000ms
+         */
+        if ((delay < 0x01) || (delay > 0x0a))
+        {
+            LOG_E("%s param[%d] not in range[0x01,0x0a]!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        delay_list[i] = (uint8_t)((uint32_t)delay);
+    }
+    
+    /* 生成配置KEY值 */
+    char cfg_key[32] = "uartXdelay";
+    cfg_key[STR_LEN("uart")] = uart_x;
+    
+    /* 保存配置 */
+    size_t list_len = (size_t)i;
+    EfErrCode ef_ret = ef_set_env_blob(cfg_key, delay_list, list_len * sizeof(delay_list[0]));
+    if (ef_ret != EF_NO_ERR)
+    {
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+
+    app_mp_free(param_list);
+    return AT_RESULT_OK;
+}
+
+AT_CMD_EXPORT("AT+UART1DELAY", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxdelay_query, at_uartxdelay_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2DELAY", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxdelay_query, at_uartxdelay_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3DELAY", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxdelay_query, at_uartxdelay_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4DELAY", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxdelay_query, at_uartxdelay_setup, RT_NULL, 4);
+
 /* AT+UARTXSETTINGINF 读取UART X相关的配置信息 */
 
 static at_result_t at_uartxsettinginf_exec(const struct at_cmd *cmd)
@@ -1245,6 +1382,7 @@ static at_result_t at_uartxsettinginf_exec(const struct at_cmd *cmd)
     at_uartxstartaddr_println(uart_x);
     at_uartxlength_println(uart_x);
     at_uartxtype_println(uart_x);
+    at_uartxdelay_println(uart_x);
     
     return AT_RESULT_OK;
 }

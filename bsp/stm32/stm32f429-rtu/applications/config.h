@@ -48,6 +48,7 @@ typedef struct
     uint8_t* slaveraddr; /* uartXslaveraddr: 从机地址 */
     uint8_t* function; /* uartXfunction: 功能码 */
     uint8_t* type; /* uartXtype: 变量类型 */
+    uint8_t* delay; /* uartXdelay: 采集延时(单位100ms) */
 } uart_x_config_info;
 
 /* 全部配置信息 */

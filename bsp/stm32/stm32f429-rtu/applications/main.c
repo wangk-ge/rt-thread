@@ -415,6 +415,7 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
         uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
         uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
         uint8_t function = cfg->uart_x_cfg[index].function[i]; // 功能码
+        uint8_t delay = cfg->uart_x_cfg[index].delay[i]; // 采集延时(单位100ms)
         
         modbus_set_slave(mb_ctx, cfg->uart_x_cfg[index].slaveraddr[i]); // 从机地址
         
@@ -451,7 +452,7 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
         else
         { // 成功
             /* 等待一段时间再读取下一个变量 */
-            rt_thread_delay(rt_tick_from_millisecond(100));
+            rt_thread_mdelay(delay * 100);
         }
         
         data_len += (uint32_t)length;

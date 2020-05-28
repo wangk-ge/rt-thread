@@ -128,6 +128,11 @@ static void cfg_info_clear(void)
         {
             rt_free(cfg_info.uart_x_cfg[i].type);
         }
+        
+        if (cfg_info.uart_x_cfg[i].delay != NULL)
+        {
+            rt_free(cfg_info.uart_x_cfg[i].delay);
+        }
     }
     
     if (cfg_info.a_ip != NULL)
@@ -288,6 +293,23 @@ static bool cfg_load_uart_x(int x)
         }
         snprintf(cfg_key, sizeof(cfg_key), "uart%dtype", x);
         len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].type, variablecnt * sizeof(uint8_t), NULL);
+        if (len != variablecnt * sizeof(uint8_t))
+        {
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
+            ret = false;
+            goto __exit;
+        }
+        
+        /* delay */
+        cfg_info.uart_x_cfg[index].delay = (uint8_t*)rt_malloc(variablecnt * sizeof(uint8_t));
+        if (cfg_info.uart_x_cfg[index].delay == NULL)
+        {
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(uint8_t));
+            ret = false;
+            goto __exit;
+        }
+        snprintf(cfg_key, sizeof(cfg_key), "uart%ddelay", x);
+        len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].delay, variablecnt * sizeof(uint8_t), NULL);
         if (len != variablecnt * sizeof(uint8_t))
         {
             LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
@@ -459,32 +481,43 @@ bool cfg_load(void)
     {
         size_t a_ip_len = 0;
         ef_get_env_blob("a_ip", RT_NULL, 0, &a_ip_len);
-        if (a_ip_len > 0)
-        {
-            cfg_info.a_ip = rt_malloc(a_ip_len + 1);
-            if (cfg_info.a_ip == RT_NULL)
-            {
-                LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, a_ip_len + 1);
-                ret = false;
-                goto __exit;
-            }
-            
-            size_t len = ef_get_env_blob("a_ip", cfg_info.a_ip, a_ip_len, RT_NULL);
-            if (len != a_ip_len)
-            {
-                LOG_E("%s ef_get_env_blob(a_ip) error!", __FUNCTION__);
-                ret = false;
-                goto __exit;
-            }
-            cfg_info.a_ip[a_ip_len] = '\0';
+        if (a_ip_len <= 0)
+        { // 失败或没有配置
+            LOG_E("%s ef_get_env_blob(a_ip) error!", __FUNCTION__);
+            ret = false;
+            goto __exit;
         }
+        
+        cfg_info.a_ip = rt_malloc(a_ip_len + 1);
+        if (cfg_info.a_ip == RT_NULL)
+        {
+            LOG_E("%s rt_malloc(%u) error!", __FUNCTION__, a_ip_len + 1);
+            ret = false;
+            goto __exit;
+        }
+        
+        size_t len = ef_get_env_blob("a_ip", cfg_info.a_ip, a_ip_len, RT_NULL);
+        if (len != a_ip_len)
+        {
+            LOG_E("%s ef_get_env_blob(a_ip) error!", __FUNCTION__);
+            ret = false;
+            goto __exit;
+        }
+        cfg_info.a_ip[a_ip_len] = '\0';
     }
     
     /* 加载b_ip */
     {
         size_t b_ip_len = 0;
         ef_get_env_blob("b_ip", RT_NULL, 0, &b_ip_len);
-        if (b_ip_len > 0)
+        if (b_ip_len <= 0)
+        { // 失败或没有配置
+            LOG_W("%s ef_get_env_blob(b_ip) error!", __FUNCTION__);
+            //ret = false;
+            //goto __exit;
+            /* b_ip暂未使用,允许加载失败 */
+        }
+        else
         {
             cfg_info.b_ip = rt_malloc(b_ip_len + 1);
             if (cfg_info.b_ip == RT_NULL)
@@ -646,6 +679,7 @@ void cfg_load_minimum(void)
         cfg_info.uart_x_cfg[i].slaveraddr = NULL; /* uartXslaveraddr: 从机地址 */
         cfg_info.uart_x_cfg[i].function = NULL; /* uartXfunction: 功能码 */
         cfg_info.uart_x_cfg[i].type = NULL; /* uartXtype: 变量类型 */
+        cfg_info.uart_x_cfg[i].delay = NULL; /* uartXdelay: 采集延时 */
     }
     
     /* 计算每条数据的大小(字节数) */
@@ -725,6 +759,11 @@ void cfg_print(void)
         for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
         {
             LOG_I("  0x%02x", cfg_info.uart_x_cfg[i].type[j]);
+        }
+        LOG_I("uart%ddelay:", x);
+        for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
+        {
+            LOG_I("  0x%02x", cfg_info.uart_x_cfg[i].delay[j]);
         }
         LOG_I("uart%dbaudrate: %u", x, cfg_info.uart_x_cfg[i].baudrate);
         LOG_I("uart%dwordlength: %u", x, cfg_info.uart_x_cfg[i].wordlength);

@@ -125,6 +125,11 @@ static const ef_env default_env_set[] = {
         {"uart2type", "\x0D", 1}, // 默认值0x0D
         {"uart3type", "\x0D", 1}, // 默认值0x0D
         {"uart4type", "\x0D", 1}, // 默认值0x0D
+        /* uartXdelay */
+        {"uart1delay", "\x01", 1}, // 默认值0x01=100ms
+        {"uart2delay", "\x01", 1}, // 默认值0x01=100ms
+        {"uart3delay", "\x01", 1}, // 默认值0x01=100ms
+        {"uart4delay", "\x01", 1}, // 默认值0x01=100ms
 };
 
 static char log_buf[RT_CONSOLEBUF_SIZE];
