@@ -407,9 +407,7 @@ bool cfg_load(void)
     
     LOAD_CONFIG_ITEM(ulog_glb_lvl);
     LOAD_CONFIG_ITEM(client_id);
-    LOAD_CONFIG_ITEM(a_ip);
     LOAD_CONFIG_ITEM(a_port);
-    LOAD_CONFIG_ITEM(b_ip);
     LOAD_CONFIG_ITEM(b_port);
     LOAD_CONFIG_ITEM(acquisition);
     LOAD_CONFIG_ITEM(cycle);
