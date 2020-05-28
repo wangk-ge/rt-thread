@@ -114,6 +114,16 @@ static void cfg_info_clear(void)
             rt_free(cfg_info.uart_x_cfg[i].variable);
         }
         
+        if (cfg_info.uart_x_cfg[i].slaveraddr != NULL)
+        {
+            rt_free(cfg_info.uart_x_cfg[i].slaveraddr);
+        }
+        
+        if (cfg_info.uart_x_cfg[i].function != NULL)
+        {
+            rt_free(cfg_info.uart_x_cfg[i].function);
+        }
+        
         if (cfg_info.uart_x_cfg[i].type != NULL)
         {
             rt_free(cfg_info.uart_x_cfg[i].type);
@@ -234,6 +244,40 @@ static bool cfg_load_uart_x(int x)
             goto __exit;
         }
         
+        /* slaveraddr */
+        cfg_info.uart_x_cfg[index].slaveraddr = (uint8_t*)rt_malloc(variablecnt * sizeof(uint8_t));
+        if (cfg_info.uart_x_cfg[index].slaveraddr == NULL)
+        {
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(uint8_t));
+            ret = false;
+            goto __exit;
+        }
+        snprintf(cfg_key, sizeof(cfg_key), "uart%dslaveraddr", x);
+        len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].slaveraddr, variablecnt * sizeof(uint8_t), NULL);
+        if (len != variablecnt * sizeof(uint8_t))
+        {
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
+            ret = false;
+            goto __exit;
+        }
+        
+        /* function */
+        cfg_info.uart_x_cfg[index].function = (uint8_t*)rt_malloc(variablecnt * sizeof(uint8_t));
+        if (cfg_info.uart_x_cfg[index].function == NULL)
+        {
+            LOG_E("%s rt_malloc(%d) failed!", __FUNCTION__, variablecnt * sizeof(uint8_t));
+            ret = false;
+            goto __exit;
+        }
+        snprintf(cfg_key, sizeof(cfg_key), "uart%dfunction", x);
+        len = ef_get_env_blob(cfg_key, cfg_info.uart_x_cfg[index].function, variablecnt * sizeof(uint8_t), NULL);
+        if (len != variablecnt * sizeof(uint8_t))
+        {
+            LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
+            ret = false;
+            goto __exit;
+        }
+        
         /* type */
         cfg_info.uart_x_cfg[index].type = (uint8_t*)rt_malloc(variablecnt * sizeof(uint8_t));
         if (cfg_info.uart_x_cfg[index].type == NULL)
@@ -333,8 +377,6 @@ static bool cfg_load_uart_x(int x)
     LOAD_UART_X_CONFIG_ITEM(wordlength, x); /* wordlength */
     LOAD_UART_X_CONFIG_ITEM(parity, x); /* parity */
     LOAD_UART_X_CONFIG_ITEM(stopbits, x); /* stopbits */
-    LOAD_UART_X_CONFIG_ITEM(slaveraddr, x); /* slaveraddr */
-    LOAD_UART_X_CONFIG_ITEM(function, x); /* function */
     
 #undef LOAD_UART_X_CONFIG_ITEM
     
@@ -601,8 +643,8 @@ void cfg_load_minimum(void)
         cfg_info.uart_x_cfg[i].wordlength = 8; /* uartXwordlength: 数据位 */
         cfg_info.uart_x_cfg[i].parity = 0; /* uartXparity: 校验位 */
         cfg_info.uart_x_cfg[i].stopbits = 2; /* uartXstopbits: 停止位 */
-        cfg_info.uart_x_cfg[i].slaveraddr = 0x01; /* uartXslaveraddr: 从机地址 */
-        cfg_info.uart_x_cfg[i].function = 0x03; /* uartXfunction: 功能码 */
+        cfg_info.uart_x_cfg[i].slaveraddr = NULL; /* uartXslaveraddr: 从机地址 */
+        cfg_info.uart_x_cfg[i].function = NULL; /* uartXfunction: 功能码 */
         cfg_info.uart_x_cfg[i].type = NULL; /* uartXtype: 变量类型 */
     }
     
@@ -664,6 +706,16 @@ void cfg_print(void)
         {
             LOG_I("  0x%04x", cfg_info.uart_x_cfg[i].startaddr[j]);
         }
+        LOG_I("uart%dslaveraddr:", x);
+        for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
+        {
+            LOG_I("  0x%02x", cfg_info.uart_x_cfg[i].slaveraddr[j]);
+        }
+        LOG_I("uart%dfunction:", x);
+        for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
+        {
+            LOG_I("  0x%02x", cfg_info.uart_x_cfg[i].function[j]);
+        }
         LOG_I("uart%dlength:", x);
         for (j = 0; j < cfg_info.uart_x_cfg[i].variablecnt; ++j)
         {
@@ -678,8 +730,6 @@ void cfg_print(void)
         LOG_I("uart%dwordlength: %u", x, cfg_info.uart_x_cfg[i].wordlength);
         LOG_I("uart%dparity: %u", x, cfg_info.uart_x_cfg[i].parity);
         LOG_I("uart%dstopbits: %u", x, cfg_info.uart_x_cfg[i].stopbits);
-        LOG_I("uart%dslaveraddr: 0x%02x", x, cfg_info.uart_x_cfg[i].slaveraddr);
-        LOG_I("uart%dfunction: 0x%02x", x, cfg_info.uart_x_cfg[i].function);
     }
 }
 

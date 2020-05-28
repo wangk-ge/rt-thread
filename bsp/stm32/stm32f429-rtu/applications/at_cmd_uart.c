@@ -530,7 +530,7 @@ AT_CMD_EXPORT("AT+UART2STOPBITS", "=<bits>", RT_NULL, at_uartxstopbits_query, at
 AT_CMD_EXPORT("AT+UART3STOPBITS", "=<bits>", RT_NULL, at_uartxstopbits_query, at_uartxstopbits_setup, RT_NULL, 3);
 AT_CMD_EXPORT("AT+UART4STOPBITS", "=<bits>", RT_NULL, at_uartxstopbits_query, at_uartxstopbits_setup, RT_NULL, 4);
 
-/* AT+UARTXSLAVERADDR 设置/读取UART X从机地址 */
+/* AT+UARTXSLAVERADDR 设置/读取UART X相关的从机地址列表(每个1字节) */
 
 static at_result_t at_uartxslaveraddr_println(char uart_x)
 {
@@ -539,16 +539,30 @@ static at_result_t at_uartxslaveraddr_println(char uart_x)
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 读取配置 */
-    uint8_t addr = 0;
-    size_t len = ef_get_env_blob(cfg_key, &addr, sizeof(addr), RT_NULL);
-    if (len != sizeof(addr))
+    uint8_t slaveraddr_list[MAX_UARTX_VAR_CNT] = {0x00};
+    size_t data_size = 0;
+    size_t read_len = ef_get_env_blob(cfg_key, slaveraddr_list, sizeof(slaveraddr_list), &data_size);
+    if (read_len != data_size)
     {
-        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error(read_len=%u)!", __FUNCTION__, cfg_key, read_len);
         return AT_RESULT_FAILE;
     }
-    
-    at_server_printfln("+UART%cSLAVERADDR: 0x%02x", uart_x, addr);
 
+    at_server_printf("+UART%cSLAVERADDR: ", uart_x);
+    
+    /* 转换成字符串输出 */
+    size_t slaveraddr_cnt = data_size / sizeof(slaveraddr_list[0]);
+    int i = 0;
+    if (slaveraddr_cnt > 0)
+    {
+        for (i = 0; i < (slaveraddr_cnt - 1); ++i)
+        {
+            at_server_printf("0x%02x,", slaveraddr_list[i]);
+        }
+        
+        at_server_printfln("0x%02x", slaveraddr_list[i]); // 最后一个没有逗号
+    }
+    
     return AT_RESULT_OK;
 }
 
@@ -562,48 +576,96 @@ static at_result_t at_uartxslaveraddr_query(const struct at_cmd *cmd)
 
 static at_result_t at_uartxslaveraddr_setup(const struct at_cmd *cmd, const char *args)
 {
-    rt_uint32_t addr = 0;
-    const char *req_expr = "=%x";
-
-    int argc = at_req_parse_args(args, req_expr, &addr);
-    if (argc != 1)
+    c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
     {
-        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
+        LOG_E("%s strref_split() param_count(%d) not in range[1,%u]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
         return AT_RESULT_PARSE_FAILE;
-    }
-    
-    // 检查数据从机地址有效性
-    if (addr > 0xFF)
-    {
-        LOG_E("%s addr(0x%x) range[0,0xFF]!", __FUNCTION__, addr);
-        return AT_RESULT_CHECK_FAILE;
     }
     
     /* 串口号UART X的X实际字符 */
     char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 转换成u8数组并检查格式 */
+    uint8_t slaveraddr_list[MAX_UARTX_VAR_CNT] = {0x00};
+    int i = 0;
+    for (i = 0; i < param_count; ++i)
+    {
+        if (param_list[i].len <= 0)
+        {
+            LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        int32_t slaveraddr = 0;
+        /* 
+            %i:整数，如果字符串以0x或者0X开头，则按16进制进行转换，
+            如果以0开头，则按8进制进行转换，否则按10进制转换，
+            需要一个类型为int*的的参数存放转换结果
+        */
+        rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &slaveraddr);
+        if (ret != 1)
+        {
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        
+        if (slaveraddr > 0xFF)
+        {
+            LOG_E("%s param[%d] not in range[0x00,0xFF]!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        slaveraddr_list[i] = (uint8_t)((uint32_t)slaveraddr);
+    }
     
     /* 生成配置KEY值 */
     char cfg_key[32] = "uartXslaveraddr";
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 保存配置 */
-    uint8_t addr_val = (uint8_t)addr;
-    EfErrCode ef_ret = ef_set_env_blob(cfg_key, &addr_val, sizeof(addr_val));
+    size_t list_len = (size_t)i;
+    EfErrCode ef_ret = ef_set_env_blob(cfg_key, slaveraddr_list, list_len * sizeof(slaveraddr_list[0]));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("%s ef_set_env_blob(%s,0x%02x) error(%d)!", __FUNCTION__, cfg_key, addr_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
 
+    app_mp_free(param_list);
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART1SLAVERADDR", "=<addr>", RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 1);
-AT_CMD_EXPORT("AT+UART2SLAVERADDR", "=<addr>", RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 2);
-AT_CMD_EXPORT("AT+UART3SLAVERADDR", "=<addr>", RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 3);
-AT_CMD_EXPORT("AT+UART4SLAVERADDR", "=<addr>", RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 4);
+AT_CMD_EXPORT("AT+UART1SLAVERADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2SLAVERADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3SLAVERADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4SLAVERADDR", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxslaveraddr_query, at_uartxslaveraddr_setup, RT_NULL, 4);
 
-/* AT+UARTXFUNCTION 设置/读取UART X功能吗 */
+/* AT+UARTXFUNCTION 设置/读取UART X相关的功能码列表(每个1字节) */
 
 static at_result_t at_uartxfunction_println(char uart_x)
 {
@@ -612,16 +674,30 @@ static at_result_t at_uartxfunction_println(char uart_x)
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 读取配置 */
-    uint8_t code = 0;
-    size_t len = ef_get_env_blob(cfg_key, &code, sizeof(code), RT_NULL);
-    if (len != sizeof(code))
+    uint8_t function_list[MAX_UARTX_VAR_CNT] = {0x00};
+    size_t data_size = 0;
+    size_t read_len = ef_get_env_blob(cfg_key, function_list, sizeof(function_list), &data_size);
+    if (read_len != data_size)
     {
-        LOG_E("%s ef_get_env_blob(%s) error!", __FUNCTION__, cfg_key);
+        LOG_E("%s ef_get_env_blob(%s) error(read_len=%u)!", __FUNCTION__, cfg_key, read_len);
         return AT_RESULT_FAILE;
     }
-    
-    at_server_printfln("+UART%cFUNCTION: 0x%02x", uart_x, code);
 
+    at_server_printf("+UART%cFUNCTION: ", uart_x);
+    
+    /* 转换成字符串输出 */
+    size_t function_cnt = data_size / sizeof(function_list[0]);
+    int i = 0;
+    if (function_cnt > 0)
+    {
+        for (i = 0; i < (function_cnt - 1); ++i)
+        {
+            at_server_printf("0x%02x,", function_list[i]);
+        }
+        
+        at_server_printfln("0x%02x", function_list[i]); // 最后一个没有逗号
+    }
+    
     return AT_RESULT_OK;
 }
 
@@ -635,46 +711,97 @@ static at_result_t at_uartxfunction_query(const struct at_cmd *cmd)
 
 static at_result_t at_uartxfunction_setup(const struct at_cmd *cmd, const char *args)
 {
-    rt_uint32_t code = 0;
-    const char *req_expr = "=%x";
-
-    int argc = at_req_parse_args(args, req_expr, &code);
-    if (argc != 1)
+    c_str_ref str_ref = { rt_strlen(args) - 1, args + 1 }; // 不包含'='
+    c_str_ref *param_list = (c_str_ref*)app_mp_alloc();
+    RT_ASSERT(param_list);
+    uint32_t param_count = strref_split(&str_ref, ',', param_list, MAX_UARTX_VAR_CNT + 1);
+    if ((param_count < 1) || (param_count > MAX_UARTX_VAR_CNT))
     {
-        LOG_E("%s at_req_parse_args(%s) argc(%d)!=1!", __FUNCTION__, req_expr, argc);
+        LOG_E("%s strref_split() param_count(%d) not in range[1,%u]!", __FUNCTION__, param_count, MAX_UARTX_VAR_CNT);
+        app_mp_free(param_list);
         return AT_RESULT_PARSE_FAILE;
-    }
-    
-    // 检查功能吗有效性
-    if (code > 0xFF)
-    {
-        LOG_E("%s code(0x%x) range[0,0xFF]!", __FUNCTION__, code);
-        return AT_RESULT_CHECK_FAILE;
     }
     
     /* 串口号UART X的X实际字符 */
     char uart_x = *(cmd->name + STR_LEN("AT+UART"));
+    
+    /* 读取配置的变量个数 */
+    uint8_t cfg_var_cnt = 0;
+    bool ret = get_variablecnt(uart_x, &cfg_var_cnt);
+    if (!ret)
+    {
+        LOG_E("%s get_variablecnt(UART%c) failed!", __FUNCTION__, uart_x);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 变量个数检查 */
+    if (param_count != cfg_var_cnt)
+    {
+        LOG_E("%s param_count=%u cfg_var_cnt=%u!", __FUNCTION__, param_count, cfg_var_cnt);
+        app_mp_free(param_list);
+        return AT_RESULT_FAILE;
+    }
+    
+    /* 转换成u8数组并检查格式 */
+    uint8_t function_list[MAX_UARTX_VAR_CNT] = {0x00};
+    int i = 0;
+    for (i = 0; i < param_count; ++i)
+    {
+        if (param_list[i].len <= 0)
+        {
+            LOG_E("%s param[%d] is empty!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        int32_t function_code = 0;
+        /* 
+            %i:整数，如果字符串以0x或者0X开头，则按16进制进行转换，
+            如果以0开头，则按8进制进行转换，否则按10进制转换，
+            需要一个类型为int*的的参数存放转换结果
+        */
+        rt_int32_t ret = sscanf(param_list[i].c_str, "%i", &function_code);
+        if (ret != 1)
+        {
+            LOG_E("%s param[%d] format invalid!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        /* uartXfunction
+            MODBUS_FC_READ_HOLDING_REGISTERS    0x03
+            MODBUS_FC_READ_INPUT_REGISTERS      0x04
+         */
+        if ((function_code < 0x03) || (function_code > 0x04))
+        {
+            LOG_E("%s param[%d] not in range[0x03,0x04]!", __FUNCTION__, i);
+            app_mp_free(param_list);
+            return AT_RESULT_PARSE_FAILE;
+        }
+        function_list[i] = (uint8_t)((uint32_t)function_code);
+    }
     
     /* 生成配置KEY值 */
     char cfg_key[32] = "uartXfunction";
     cfg_key[STR_LEN("uart")] = uart_x;
     
     /* 保存配置 */
-    uint8_t code_val = (uint8_t)code;
-    EfErrCode ef_ret = ef_set_env_blob(cfg_key, &code_val, sizeof(code_val));
+    size_t list_len = (size_t)i;
+    EfErrCode ef_ret = ef_set_env_blob(cfg_key, function_list, list_len * sizeof(function_list[0]));
     if (ef_ret != EF_NO_ERR)
     {
-        LOG_E("%s ef_set_env_blob(%s,0x%02x) error(%d)!", __FUNCTION__, cfg_key, code_val, ef_ret);
+        LOG_E("%s ef_set_env_blob(%s) error(%d)!", __FUNCTION__, cfg_key, ef_ret);
+        app_mp_free(param_list);
         return AT_RESULT_FAILE;
     }
 
+    app_mp_free(param_list);
     return AT_RESULT_OK;
 }
 
-AT_CMD_EXPORT("AT+UART1FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 1);
-AT_CMD_EXPORT("AT+UART2FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 2);
-AT_CMD_EXPORT("AT+UART3FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 3);
-AT_CMD_EXPORT("AT+UART4FUNCTION", "=<code>", RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 4);
+AT_CMD_EXPORT("AT+UART1FUNCTION", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 1);
+AT_CMD_EXPORT("AT+UART2FUNCTION", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 2);
+AT_CMD_EXPORT("AT+UART3FUNCTION", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 3);
+AT_CMD_EXPORT("AT+UART4FUNCTION", ARGS_EXPR_VAR_PARM100, RT_NULL, at_uartxfunction_query, at_uartxfunction_setup, RT_NULL, 4);
 
 /* AT+UARTXSTARTADDR 设置/读取UART X相关的寄存器开始地址列表(每个地址2字节) */
 

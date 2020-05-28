@@ -414,14 +414,27 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
     {
         uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
         uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
+        uint8_t function = cfg->uart_x_cfg[index].function[i]; // 功能码
+        
+        modbus_set_slave(mb_ctx, cfg->uart_x_cfg[index].slaveraddr[i]); // 从机地址
         
         #define MODBUS_READ_MAX_TETRY_CNT 3 // 最大重试次数
         int iRetryCnt = MODBUS_READ_MAX_TETRY_CNT;
+        int read_bytes = 0;
         
         __retry:
         
-        /* Reads the holding registers of remote device and put the data into an array */
-        int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
+        if (function == 0x03)
+        {
+            /* Reads the holding registers of remote device and put the data into an array */
+            read_bytes = modbus_read_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
+        }
+        else //if (function == 0x04)
+        {
+            /* Reads the input registers of remote device and put the data into an array */
+            read_bytes = modbus_read_input_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
+        }
+        
         if (read_bytes != length)
         { // 失败
             
@@ -2780,7 +2793,6 @@ static rt_err_t app_modbus_init(void)
             /* function shall set the Request To Send mode to communicate on a RS485 serial bus. */
             modbus_rtu_set_rts(mb_ctx, device_info->rts_pin, MODBUS_RTU_RTS_UP);
         }
-        modbus_set_slave(mb_ctx, cfg->uart_x_cfg[i].slaveraddr); // 从机地址
         modbus_set_response_timeout(mb_ctx, MODBUS_RESP_TIMEOUT, 0); // 响应超时时间
         //modbus_set_debug(mb_ctx, 1); // 使能MODBUS库调试LOG
         

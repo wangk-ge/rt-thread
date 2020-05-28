@@ -45,8 +45,8 @@ typedef struct
     uint8_t wordlength; /* uartXwordlength: 数据位 */
     uint8_t parity; /* uartXparity: 校验位 */
     uint8_t stopbits; /* uartXstopbits: 停止位 */
-    uint8_t slaveraddr; /* uartXslaveraddr: 从机地址 */
-    uint8_t function; /* uartXfunction: 功能码 */
+    uint8_t* slaveraddr; /* uartXslaveraddr: 从机地址 */
+    uint8_t* function; /* uartXfunction: 功能码 */
     uint8_t* type; /* uartXtype: 变量类型 */
 } uart_x_config_info;
 
