@@ -119,10 +119,16 @@ typedef enum
 #define DATA_REPORT_WAIT_CONNECT_TIME (60)
 
 /* MQTT离线超时时间(s) */
-#define MQTT_OFFLINE_TIMEOUT (5 * 60)
+#define MQTT_OFFLINE_TIMEOUT (30 * 60)
 
 /* 看门狗超时时间(s) */
 #define APP_WDT_TIMEOUT (30)
+
+/* MODBUS响应超时时间(s) */
+#define MODBUS_RESP_TIMEOUT (1)
+
+/* 连续上报失败最大允许次数(超过后将重启系统) */
+#define REPORT_FAIL_MAX_CNT (10)
 
 /* 主消息循环消息类型定义 */
 typedef struct
@@ -408,11 +414,31 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
     {
         uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
         uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
+        
+        #define MODBUS_READ_MAX_TETRY_CNT 3 // 最大重试次数
+        int iRetryCnt = MODBUS_READ_MAX_TETRY_CNT;
+        
+        __retry:
+        
         /* Reads the holding registers of remote device and put the data into an array */
         int read_bytes = modbus_read_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
         if (read_bytes != length)
-        {
-            LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u)!", __FUNCTION__, startaddr, length, read_bytes);
+        { // 失败
+            
+            --iRetryCnt;
+            
+            LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u), try %d!", __FUNCTION__, startaddr, length, read_bytes, 
+                (MODBUS_READ_MAX_TETRY_CNT - iRetryCnt));
+            
+            if (iRetryCnt > 0)
+            {    
+                goto __retry;
+            }
+        }
+        else
+        { // 成功
+            /* 等待一段时间再读取下一个变量 */
+            rt_thread_delay(rt_tick_from_millisecond(100));
         }
         
         data_len += (uint32_t)length;
@@ -2755,8 +2781,8 @@ static rt_err_t app_modbus_init(void)
             modbus_rtu_set_rts(mb_ctx, device_info->rts_pin, MODBUS_RTU_RTS_UP);
         }
         modbus_set_slave(mb_ctx, cfg->uart_x_cfg[i].slaveraddr); // 从机地址
-        modbus_set_response_timeout(mb_ctx, 3, 0); // 超时时间:1S
-        //modbus_set_debug(mb_ctx, 1);
+        modbus_set_response_timeout(mb_ctx, MODBUS_RESP_TIMEOUT, 0); // 响应超时时间
+        //modbus_set_debug(mb_ctx, 1); // 使能MODBUS库调试LOG
         
         /* 连接MODBUS端口 */
         int iret = modbus_connect(mb_ctx);
@@ -2792,6 +2818,8 @@ __exit:
 static void data_report_thread_entry(void *param)
 {
     LOG_D("%s()", __FUNCTION__);
+    
+    uint32_t u32ReportFailCnt = 0; // 上报失败连续次数
     
     rt_int32_t ack_time_out = rt_tick_from_millisecond(DATA_REPORT_ACK_TIMEOUT);
     int retry_count = 0;
@@ -2870,6 +2898,9 @@ __retry:
         {
             /* 上报成功 */
             LOG_I("%s recv the server ACK success.", __FUNCTION__);
+            
+            /* 清零上报失败连续次数 */
+            u32ReportFailCnt = 0;
         
             /* 移动待上报数据位置到下一个位置 */
             ret = move_report_pos_to_next();
@@ -2909,10 +2940,17 @@ __wait_and_retry:
             goto __retry;
         }
         else    
-        { // 已达到最大重试次数
+        { // 已达到最大重试次数, 放弃
             LOG_W("%s retch max retry count(%d), give up!", __FUNCTION__, DATA_REPORT_MAX_RERTY_CNT);
+
+            /* 累加上报失败连续次数 */
+            ++u32ReportFailCnt;
             
-            /* 放弃 */
+            if (u32ReportFailCnt > REPORT_FAIL_MAX_CNT)
+            { // 上报失败次数超过最大允许值
+                /* 请求重启系统 */
+                req_restart();
+            }
         }
     }
     
@@ -3007,8 +3045,11 @@ static rt_err_t app_init(void)
         if (!ret)
         {
             LOG_E("%s cfg_load error!", __FUNCTION__);
-            ret = -RT_ERROR;
-            goto __exit;
+            
+            /* 加载最小配置(最小配置只保证系统能正常启动并连上服务器,以便可以执行远程升级或者诊断) */
+            cfg_load_minimum();
+            
+            ret = RT_EOK;
         }
         /* LOG输出所有加载的配置信息 */
         cfg_print();
@@ -3400,8 +3441,16 @@ int main(void)
     /* 启动开门狗 */
     ret = wdt_start(APP_WDT_TIMEOUT);
     if (RT_EOK != ret)
-    {
+    { // 出现严重错误
         LOG_E("%s wdt_start(%u) failed(%d)!", __FUNCTION__, APP_WDT_TIMEOUT, ret);
+        goto __exit;
+    }
+    
+    /* 启动MQTT离线检查定时器 */
+    ret = rt_timer_start(mqtt_offline_check_timer);
+    if (RT_EOK != ret)
+    { // 出现严重错误
+        LOG_E("%s rt_timer_start(mqtt_offline_check_timer) failed(%d)!", __FUNCTION__, ret);
         goto __exit;
     }
     
@@ -3430,8 +3479,6 @@ int main(void)
                     LOG_E("%s mqtt_client_start failed(%d)!", __FUNCTION__, ret);
                     goto __exit;
                 }
-                /* 启动MQTT离线检查定时器 */
-                rt_timer_start(mqtt_offline_check_timer);
                 break;
             }
             case APP_MSG_DATA_ACQUISITION_REQ: // 数据采集请求

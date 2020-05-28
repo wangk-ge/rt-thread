@@ -364,7 +364,7 @@ bool cfg_set_default(void)
     /* 取得默认配置集 */
     ef_get_default_env(&default_env_set, &default_env_set_size);
     
-    /* 全部从新设置为默认配置 */
+    /* 全部重新设置为默认配置 */
     int i = 0;
     for (i = 0; i < default_env_set_size; ++i)
     {
@@ -389,11 +389,10 @@ bool cfg_set_default(void)
 *************************************************/
 bool cfg_load(void)
 {
+    LOG_D("%s()", __FUNCTION__);
+    
     bool ret = true;
     size_t len = 0;
-    
-    /* 清除缓存的配置数据,释放内存 */
-    cfg_info_clear();
     
     /* 加载通用配置项 */
 #define LOAD_CONFIG_ITEM(item) \
@@ -413,16 +412,6 @@ bool cfg_load(void)
     LOAD_CONFIG_ITEM(cycle);
 
 #undef LOAD_CONFIG_ITEM
-    
-    /* 加载client_id */
-    {
-        cfg_info.client_id = 0; // 默认值0000000000
-        len = ef_get_env_blob("client_id", &(cfg_info.client_id), sizeof(cfg_info.client_id), NULL);
-        if (len != sizeof(cfg_info.client_id))
-        {
-            LOG_W("%s ef_get_env_blob(client_id) failed, use 0000000000!", __FUNCTION__);
-        }
-    }
     
     /* 加载a_ip */
     {
@@ -571,19 +560,54 @@ __exit:
     { // 加载失败
         /* 清除缓存的配置数据,释放内存 */
         cfg_info_clear();
-        
-        LOG_D("%s() ef_env_set_default.", __FUNCTION__);
-        /* 恢复默认配置 */
-        EfErrCode ef_ret = ef_env_set_default();
-        if (ef_ret != EF_NO_ERR)
-        {
-            LOG_E("%s() ef_env_set_default failed(%d)!", __FUNCTION__, ef_ret);
-        }
-        
-        /* 配置加载失败,将会重启系统重新尝试加载配置 */
     }
     
     return ret;
+}
+
+/*************************************************
+* Function: cfg_load_minimum
+* Description: 加载最小配置(最小配置只保证系统能正常启动并连上服务器,以便可以执行远程升级或者诊断)
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+void cfg_load_minimum(void)
+{
+    LOG_D("%s()", __FUNCTION__);
+    
+    cfg_info.client_id = 0; // 客户端编号,默认值000000000
+    cfg_info.a_ip = "47.103.22.229"; // 通道A IP
+    cfg_info.b_ip = "47.103.22.229"; // 通道B IP
+    cfg_info.a_port = 1883; // 通道A 端口
+    cfg_info.b_port = 1883; // 通道B 端口
+    cfg_info.ulog_glb_lvl = 7; // LOG输出等级
+    cfg_info.acquisition = 5; // 数据采集间隔时间(分钟)
+    cfg_info.cycle = 30; // 数据发布间隔时间(分钟)
+    cfg_info.productkey = NULL; // productKey
+    cfg_info.devicecode = NULL; // deviceCode
+    cfg_info.itemid = NULL; // itemId
+    
+    /* UARTX最小配置项 */
+    int i = 0;
+    for (i = 0; i < ARRAY_SIZE(cfg_info.uart_x_cfg); ++i)
+    {
+        cfg_info.uart_x_cfg[i].variable = NULL; /* uartXvariable: 变量名 */
+        cfg_info.uart_x_cfg[i].baudrate = 9600; /* uartXbaudrate: 波特率 */
+        cfg_info.uart_x_cfg[i].startaddr = NULL; /* uartXstartaddr: 开始地址 */
+        cfg_info.uart_x_cfg[i].length = NULL; /* uartXlength: 读取寄存器数量 */
+        cfg_info.uart_x_cfg[i].variablecnt = 0; /* uartXvariablecnt: 变量个数 */
+        cfg_info.uart_x_cfg[i].wordlength = 8; /* uartXwordlength: 数据位 */
+        cfg_info.uart_x_cfg[i].parity = 0; /* uartXparity: 校验位 */
+        cfg_info.uart_x_cfg[i].stopbits = 2; /* uartXstopbits: 停止位 */
+        cfg_info.uart_x_cfg[i].slaveraddr = 0x01; /* uartXslaveraddr: 从机地址 */
+        cfg_info.uart_x_cfg[i].function = 0x03; /* uartXfunction: 功能码 */
+        cfg_info.uart_x_cfg[i].type = NULL; /* uartXtype: 变量类型 */
+    }
+    
+    /* 计算每条数据的大小(字节数) */
+    calc_data_size();
 }
 
 /*************************************************
@@ -609,7 +633,8 @@ config_info* cfg_get(void)
 *************************************************/
 void cfg_print(void)
 {
-    //LOG_I("all config info");
+    LOG_D("%s()", __FUNCTION__);
+    
     LOG_I("client_id: %010d", cfg_info.client_id);
     LOG_I("a_ip: %s", cfg_info.a_ip);
     LOG_I("a_port: %u", cfg_info.a_port);

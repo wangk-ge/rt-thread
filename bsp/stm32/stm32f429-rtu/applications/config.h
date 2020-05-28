@@ -80,7 +80,7 @@ typedef struct
 * History:
 *************************************************/
 bool cfg_set_default(void);
-
+    
 /*************************************************
 * Function: cfg_load
 * Description:  从Flash加载配置项到内存
@@ -90,6 +90,16 @@ bool cfg_set_default(void);
 * History:
 *************************************************/
 bool cfg_load(void);
+
+/*************************************************
+* Function: cfg_load_minimum
+* Description: 加载最小配置(最小配置只保证系统能正常启动并连上服务器,以便可以执行远程升级或者诊断)
+* Author: 
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+void cfg_load_minimum(void);
 
 /*************************************************
 * Function: cfg_get()
