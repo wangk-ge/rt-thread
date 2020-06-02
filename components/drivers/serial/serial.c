@@ -49,10 +49,26 @@
 #undef putc
 #endif
 
+#define SERIAL_TX_MP_BLOCK_COUNT (2)
+/* MODBUS RTU max ADU length is 256 */
+#define SERIAL_TX_MP_BLOCK_SIZE (256)
+
 static rt_err_t serial_fops_rx_ind(rt_device_t dev, rt_size_t size)
 {
     rt_wqueue_wakeup(&(dev->wait_queue), (void*)POLLIN);
 
+    return RT_EOK;
+}
+
+static rt_err_t serial_fops_tx_done(rt_device_t dev, void *buffer)
+{
+    struct rt_serial_device *serial = (struct rt_serial_device *)dev;
+    
+    if (serial->serial_tx_mp)
+    { // use dma tx
+        rt_mp_free(buffer);
+    }
+    
     return RT_EOK;
 }
 
@@ -62,9 +78,12 @@ static int serial_fops_open(struct dfs_fd *fd)
     rt_err_t ret = 0;
     rt_uint16_t flags = 0;
     rt_device_t device;
+    struct rt_serial_device *serial;
 
     device = (rt_device_t)fd->data;
     RT_ASSERT(device != RT_NULL);
+
+    serial = (struct rt_serial_device *)device;
 
     switch (fd->flags & O_ACCMODE)
     {
@@ -75,10 +94,20 @@ static int serial_fops_open(struct dfs_fd *fd)
     case O_WRONLY:
         LOG_D("fops open: O_WRONLY!");
         flags = RT_DEVICE_FLAG_WRONLY;
+        if (device->flag & RT_DEVICE_FLAG_DMA_TX)
+        { // support dma tx
+            /* use dma tx */
+            flags |= RT_DEVICE_FLAG_DMA_TX;
+        }
         break;
     case O_RDWR:
         LOG_D("fops open: O_RDWR!");
         flags = RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_RDWR;
+        if (device->flag & RT_DEVICE_FLAG_DMA_TX)
+        { // support dma tx
+            /* use dma tx */
+            flags |= RT_DEVICE_FLAG_DMA_TX;
+        }
         break;
     default:
         LOG_E("fops open: unknown mode - %d!", fd->flags & O_ACCMODE);
@@ -87,19 +116,45 @@ static int serial_fops_open(struct dfs_fd *fd)
 
     if ((fd->flags & O_ACCMODE) != O_WRONLY)
         rt_device_set_rx_indicate(device, serial_fops_rx_ind);
+    if (flags & RT_DEVICE_FLAG_DMA_TX)
+    { // use dma tx
+        char name[RT_NAME_MAX] = "";
+        rt_snprintf(name, RT_NAME_MAX, "mp_tx_%s", rt_strstr(fd->path, "/") + 1);
+        serial->serial_tx_mp = rt_mp_create(name, SERIAL_TX_MP_BLOCK_COUNT, SERIAL_TX_MP_BLOCK_SIZE);
+        rt_device_set_tx_complete(device, serial_fops_tx_done);
+    }
+    else
+    {
+        serial->serial_tx_mp = RT_NULL;
+    }
     ret = rt_device_open(device, flags);
     if (ret == RT_EOK) return 0;
-
+    
+    if (serial->serial_tx_mp)
+    { // use dma tx
+        rt_mp_delete(serial->serial_tx_mp);
+        serial->serial_tx_mp = RT_NULL;
+    }
+    
     return ret;
 }
 
 static int serial_fops_close(struct dfs_fd *fd)
 {
     rt_device_t device;
+    struct rt_serial_device *serial;
 
     device = (rt_device_t)fd->data;
+    serial = (struct rt_serial_device *)device;
 
     rt_device_set_rx_indicate(device, RT_NULL);
+    rt_device_set_tx_complete(device, RT_NULL);
+    if (serial->serial_tx_mp)
+    { // use dma tx
+        rt_mp_delete(serial->serial_tx_mp);
+        serial->serial_tx_mp = RT_NULL;
+    }
+    
     rt_device_close(device);
 
     return 0;
@@ -149,9 +204,43 @@ static int serial_fops_read(struct dfs_fd *fd, void *buf, size_t count)
 static int serial_fops_write(struct dfs_fd *fd, const void *buf, size_t count)
 {
     rt_device_t device;
-
+    struct rt_serial_device *serial;
+    
     device = (rt_device_t)fd->data;
-    return rt_device_write(device, -1, buf, count);
+    serial = (struct rt_serial_device *)device;
+    
+    if (serial->serial_tx_mp)
+    { // use dma tx
+        size_t write_len = 0;
+        
+        while (write_len < count)
+        {
+            void* alloc_buf = rt_mp_alloc(serial->serial_tx_mp, RT_WAITING_FOREVER);
+            RT_ASSERT(alloc_buf != RT_NULL);
+            size_t copy_len = count - write_len;
+            if (copy_len > SERIAL_TX_MP_BLOCK_SIZE)
+            {
+                copy_len = SERIAL_TX_MP_BLOCK_SIZE;
+            }
+            rt_memcpy(alloc_buf, (uint8_t*)buf + write_len, copy_len);
+            
+            rt_size_t ret = rt_device_write(device, -1, alloc_buf, copy_len);
+            if (ret <= 0)
+            {
+                rt_mp_free(alloc_buf);
+                
+                return ret;
+            }
+            
+            write_len += ret;
+        }
+        
+        return write_len;
+    }
+    else
+    {
+        return rt_device_write(device, -1, buf, count);
+    }
 }
 
 static int serial_fops_poll(struct dfs_fd *fd, struct rt_pollreq *req)
@@ -559,6 +648,7 @@ static rt_err_t rt_serial_init(struct rt_device *dev)
     /* initialize rx/tx */
     serial->serial_rx = RT_NULL;
     serial->serial_tx = RT_NULL;
+    serial->serial_tx_mp = RT_NULL;
 
     /* apply configuration */
     if (serial->ops->configure)

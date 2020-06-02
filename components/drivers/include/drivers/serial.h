@@ -144,6 +144,8 @@ struct rt_serial_device
 
     void *serial_rx;
     void *serial_tx;
+    
+    rt_mp_t serial_tx_mp;
 };
 typedef struct rt_serial_device rt_serial_t;
 
