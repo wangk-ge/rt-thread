@@ -28,8 +28,8 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 
-#define DBG_TAG    "UART"
-#define DBG_LVL    DBG_INFO
+#define LOG_TAG    "UART"
+#define LOG_LVL    LOG_LVL_DBG
 #include <rtdbg.h>
 
 #ifdef RT_USING_POSIX
