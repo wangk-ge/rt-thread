@@ -94,20 +94,24 @@ static int serial_fops_open(struct dfs_fd *fd)
     case O_WRONLY:
         LOG_D("fops open: O_WRONLY!");
         flags = RT_DEVICE_FLAG_WRONLY;
+#if 0
         if (device->flag & RT_DEVICE_FLAG_DMA_TX)
         { // support dma tx
             /* use dma tx */
             flags |= RT_DEVICE_FLAG_DMA_TX;
         }
+#endif
         break;
     case O_RDWR:
         LOG_D("fops open: O_RDWR!");
         flags = RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_RDWR;
+#if 0
         if (device->flag & RT_DEVICE_FLAG_DMA_TX)
         { // support dma tx
             /* use dma tx */
             flags |= RT_DEVICE_FLAG_DMA_TX;
         }
+#endif    
         break;
     default:
         LOG_E("fops open: unknown mode - %d!", fd->flags & O_ACCMODE);
@@ -335,8 +339,8 @@ rt_inline int _serial_poll_tx(struct rt_serial_device *serial, const rt_uint8_t 
 
         ++ data;
         -- length;
-    }
-
+    } 
+    
     return size - length;
 }
 

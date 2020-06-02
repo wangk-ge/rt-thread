@@ -832,6 +832,7 @@ static void stm32_uart_get_dma_config(void)
 #endif
 #endif
 
+#if 0 // UART7_TX DMA is conflict with UART3_RX DMA
 #ifdef BSP_USING_UART7
     uart_obj[UART7_INDEX].uart_dma_flag = 0;
 #ifdef BSP_UART7_RX_USING_DMA
@@ -843,6 +844,7 @@ static void stm32_uart_get_dma_config(void)
     uart_obj[UART7_INDEX].uart_dma_flag |= RT_DEVICE_FLAG_DMA_TX;
     static struct dma_config uart7_dma_tx = UART7_DMA_TX_CONFIG;
     uart_config[UART7_INDEX].dma_tx = &uart7_dma_tx;
+#endif
 #endif
 #endif
 
