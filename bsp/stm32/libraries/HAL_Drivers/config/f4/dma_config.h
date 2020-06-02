@@ -83,11 +83,11 @@ extern "C" {
 #define UART3_TX_DMA_CHANNEL             DMA_CHANNEL_4
 #define UART3_TX_DMA_IRQ                 DMA1_Stream3_IRQn
 #elif defined(BSP_UART7_TX_USING_DMA) && !defined(UART7_TX_DMA_INSTANCE)
-#define UART7_DMA_RX_IRQHandler          DMA1_Stream3_IRQHandler
-#define UART7_RX_DMA_RCC                 RCC_AHB1ENR_DMA1EN
-#define UART7_RX_DMA_INSTANCE            DMA1_Stream3
-#define UART7_RX_DMA_CHANNEL             DMA_CHANNEL_5
-#define UART7_RX_DMA_IRQ                 DMA1_Stream3_IRQn
+#define UART7_DMA_TX_IRQHandler          DMA1_Stream3_IRQHandler
+#define UART7_TX_DMA_RCC                 RCC_AHB1ENR_DMA1EN
+#define UART7_TX_DMA_INSTANCE            DMA1_Stream3
+#define UART7_TX_DMA_CHANNEL             DMA_CHANNEL_5
+#define UART7_TX_DMA_IRQ                 DMA1_Stream3_IRQn
 #endif
 
 /* DMA1 stream4 */
