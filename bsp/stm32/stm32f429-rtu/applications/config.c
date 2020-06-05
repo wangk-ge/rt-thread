@@ -395,7 +395,6 @@ static bool cfg_load_uart_x(int x)
     }
     
     LOAD_UART_X_CONFIG_ITEM(baudrate, x); /* baudrate */
-    LOAD_UART_X_CONFIG_ITEM(variablecnt, x); /* variablecnt */
     LOAD_UART_X_CONFIG_ITEM(wordlength, x); /* wordlength */
     LOAD_UART_X_CONFIG_ITEM(parity, x); /* parity */
     LOAD_UART_X_CONFIG_ITEM(stopbits, x); /* stopbits */
