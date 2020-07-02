@@ -390,15 +390,15 @@ const char* get_itemid(void)
     return cfg->itemid;
 }
 
-/* 采集UARTX数据(返回读取的寄存器个数) */
-static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_len)
+/* 采集UARTX数据(返回读取的字节数) */
+static uint32_t uart_x_data_acquisition(int x, uint8_t *data_buf, uint32_t buf_len)
 {
     LOG_D("%s(UART%d)", __FUNCTION__, x);
     
     /* 内部函数不做参数检查,由调用者保证参数有效性 */
     int index = x - 1;
     
-    uint32_t data_len = 0; // 采集的数据长度(寄存器个数)
+    uint32_t data_bytes = 0; // 已采集的数据长度(字节数)
     
     RT_ASSERT(index < ARRAY_SIZE(rs485_dev_infos));
     modbus_t *mb_ctx = rs485_dev_infos[index].mb_ctx;
@@ -412,6 +412,13 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
     uint8_t variablecnt = cfg->uart_x_cfg[index].variablecnt; // 变量个数
     for (i = 0; i < variablecnt; ++i)
     {
+        /* 检查缓冲区是否足够 */
+        if (data_bytes >= buf_len)
+        {
+            LOG_E("%s buf_len(%u) is not enough!", __FUNCTION__, buf_len);
+            break;
+        }
+        
         uint16_t startaddr = cfg->uart_x_cfg[index].startaddr[i]; // 寄存器地址
         uint16_t length = cfg->uart_x_cfg[index].length[i]; // 寄存器个数
         uint8_t function = cfg->uart_x_cfg[index].function[i]; // 功能码
@@ -421,27 +428,55 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
         
         #define MODBUS_READ_MAX_TETRY_CNT 3 // 最大重试次数
         int iRetryCnt = MODBUS_READ_MAX_TETRY_CNT;
-        int read_bytes = 0;
+        int read_ret = 0;
         
         __retry:
         
-        if (function == 0x03)
+        if (function == 0x01)
         {
-            /* Reads the holding registers of remote device and put the data into an array */
-            read_bytes = modbus_read_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
+            /*
+                Read the status of the nb bits (coils) to the address addr of the remote device. 
+                The result of reading is stored in dest array as unsigned bytes (8 bits) set to TRUE or FALSE.
+                You must take care to allocate enough memory to store the results in dest (at least nb * sizeof(uint8_t)).
+                The function uses the Modbus function code 0x01 (read coil status).
+                Return the number of read bits if successful. Otherwise it shall return -1 and set errno.
+            */
+            read_ret = modbus_read_bits(mb_ctx, startaddr, length, (uint8_t*)(data_buf + data_bytes)); // 读线圈状态
+        }
+        else if (function == 0x02)
+        {
+            /*
+                Read the content of the nb input bits to the address addr of the remote device. 
+                The result of reading is stored in dest array as unsigned bytes (8 bits) set to TRUE or FALSE.
+                You must take care to allocate enough memory to store the results in dest (at least nb * sizeof(uint8_t)).
+                The function uses the Modbus function code 0x02 (read input status).
+                Return the number of read input status if successful. Otherwise it shall return -1 and set errno.
+            */
+            read_ret = modbus_read_input_bits(mb_ctx, startaddr, length, (uint8_t*)(data_buf + data_bytes)); // 读离散输入状态
+        }
+        else if (function == 0x03)
+        {
+            /* 
+                Reads the holding registers of remote device and put the data into an array
+                Return the number of read registers if successful. Otherwise it shall return -1 and set errno.
+            */
+            read_ret = modbus_read_registers(mb_ctx, startaddr, length, (uint16_t*)(data_buf + data_bytes)); // 读保持寄存器
         }
         else //if (function == 0x04)
         {
-            /* Reads the input registers of remote device and put the data into an array */
-            read_bytes = modbus_read_input_registers(mb_ctx, startaddr, length, (data_buf + data_len)); // 读取寄存器数据
+            /* 
+                Reads the input registers of remote device and put the data into an array
+                Return the number of read input registers if successful. Otherwise it shall return -1 and set errno.
+            */
+            read_ret = modbus_read_input_registers(mb_ctx, startaddr, length, (uint16_t*)(data_buf + data_bytes)); // 读输入寄存器
         }
         
-        if (read_bytes != length)
+        if (read_ret != length)
         { // 失败
             
             --iRetryCnt;
             
-            LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u), try %d!", __FUNCTION__, startaddr, length, read_bytes, 
+            LOG_W("%s modbus_read_registers(0x%04x,%u) return(%u), try %d!", __FUNCTION__, startaddr, length, read_ret, 
                 (MODBUS_READ_MAX_TETRY_CNT - iRetryCnt));
             
             if (iRetryCnt > 0)
@@ -455,10 +490,19 @@ static uint32_t uart_x_data_acquisition(int x, uint16_t *data_buf, uint32_t buf_
             rt_thread_mdelay(delay * 100);
         }
         
-        data_len += (uint32_t)length;
+        /* 已采集字节数 */
+        if ((function == 0x01)
+            || (function == 0x02))
+        {
+            data_bytes += (uint32_t)length * sizeof(uint8_t);
+        }
+        else// if ((function == 0x03) || (function == 0x04))
+        {
+            data_bytes += (uint32_t)length * sizeof(uint16_t);
+        }
     }
     
-    return data_len;
+    return data_bytes;
 }
 
 /* 采集数据并保存到Flash */
@@ -479,9 +523,9 @@ static rt_err_t data_acquisition_and_save(void)
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
-        /* 采集UARTX数据(返回读取的寄存器个数) */
-        uint32_t reg_num = uart_x_data_acquisition(x, (uint16_t*)buf_write_ptr, MODBUS_RTU_MAX_ADU_LENGTH);
-        buf_write_ptr += reg_num * sizeof(uint16_t); // 每个寄存器数据为uint16_t
+        /* 采集UARTX数据(返回读取的字节数) */
+        uint32_t data_bytes = uart_x_data_acquisition(x, buf_write_ptr, APP_MP_BLOCK_SIZE);
+        buf_write_ptr += data_bytes;
     }
     
     /* 保存采集的数据 */
@@ -554,162 +598,203 @@ static uint32_t read_history_pos_data_json(uint32_t read_pos, char* json_data_bu
         int i = 0;
         for (i = 0; i < cfg->uart_x_cfg[x - 1].variablecnt; ++i)
         {
-            /* 每个寄存器16bit */
             uint16_t reg_num = cfg->uart_x_cfg[x - 1].length[i]; // 变量寄存器个数
             uint8_t data_type = cfg->uart_x_cfg[x - 1].type[i]; // 变量类型
-            uint16_t *var_data = (uint16_t*)buf_read_ptr; // 变量数据地址
-            buf_read_ptr += reg_num * sizeof(uint16_t); // 指向下一个变量起始
             
-            switch (data_type)
+            if ((cfg->uart_x_cfg[x - 1].function[i] == 0x01)
+                || (cfg->uart_x_cfg[x - 1].function[i] == 0x02))
             {
-                case 0x00: // 有符号16位int(AB)
+                /* 每个寄存器8bit */
+                uint8_t *var_data = (uint8_t*)buf_read_ptr; // 变量数据地址
+                buf_read_ptr += reg_num * sizeof(uint8_t); // 指向下一个变量起始
+                switch (data_type)
                 {
-                    int16_t int16_data = (int16_t)var_data[0];
-                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(int16_data));
-                    break;
-                }
-                case 0x01: // 有符号16位int(BA)
-                {
-                    int16_t int16_data = (int16_t)((var_data[0] << 8) | (var_data[0] >> 8));
-                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(int16_data));
-                    break;
-                }
-                case 0x02: // 无符号16位int(AB)
-                {
-                    uint16_t uint16_data = (uint16_t)var_data[0];
-                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint16_data);
-                    break;
-                }
-                case 0x03: // 无符号16位int(BA)
-                {
-                    uint16_t uint16_data= (uint16_t)((var_data[0] << 8) | (var_data[0] >> 8));
-                    json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint16_data);
-                    break;
-                }
-                case 0x04: // 有符号32位int(ABCD)
-                {
-                    int32_t int32_data = (int32_t)modbus_get_long_abcd(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
-                    break;
-                }
-                case 0x05: // 有符号32位int(DCBA)
-                {
-                    int32_t int32_data = (int32_t)modbus_get_long_dcba(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
-                    break;
-                }
-                case 0x06: // 有符号32位int(BADC)
-                {
-                    int32_t int32_data = (int32_t)modbus_get_long_badc(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
-                    break;
-                }
-                case 0x07: // 有符号32位int(CDAB)
-                {
-                    int32_t int32_data = (int32_t)modbus_get_long_cdab(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
-                    break;
-                }
-                case 0x08: // 无符号32位int(ABCD)
-                {
-                    uint32_t uint32_data = (uint32_t)modbus_get_long_abcd(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
-                    break;
-                }
-                case 0x09: // 无符号32位int(DCBA)
-                {
-                    uint32_t uint32_data = (uint32_t)modbus_get_long_dcba(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
-                    break;
-                }
-                case 0x0A: // 无符号32位int(BADC)
-                {
-                    uint32_t uint32_data = (uint32_t)modbus_get_long_badc(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
-                    break;
-                }
-                case 0x0B: // 无符号32位int(CDAB)
-                {
-                    uint32_t uint32_data = (uint32_t)modbus_get_long_cdab(var_data);
-                    json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                        "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
-                    break;
-                }
-                case 0x0C: // IEEE754浮点数(ABCD)
-                {
-                    float float_data = modbus_get_float_abcd(var_data);
-                    if (isnan(float_data))
+                    case 0x10: // 位(只有功能码01和02有此类型,数据为0或者1)
                     {
-                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        uint8_t uint8_data = var_data[0];
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint8_data);
+                        break;
                     }
-                    else
+                    default:
                     {
-                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        LOG_E("%s invalid data_type(0x%02x)!", __FUNCTION__, data_type);
+                        break;
                     }
-                    break;
                 }
-                case 0x0D: // IEEE754浮点数(DCBA)
+            }
+            else // if ((cfg->uart_x_cfg[x - 1].function[i] == 0x03) || (cfg->uart_x_cfg[x - 1].function[i] == 0x04))
+            {
+                /* 每个寄存器16bit */
+                uint16_t *var_data = (uint16_t*)buf_read_ptr; // 变量数据地址
+                buf_read_ptr += reg_num * sizeof(uint16_t); // 指向下一个变量起始
+                
+                switch (data_type)
                 {
-                    float float_data = modbus_get_float_dcba(var_data);
-                    if (isnan(float_data))
+                    case 0x00: // 有符号16位int(AB)
                     {
-                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        int16_t int16_data = (int16_t)var_data[0];
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(int16_data));
+                        break;
                     }
-                    else
+                    case 0x01: // 有符号16位int(BA)
                     {
-                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        int16_t int16_data = (int16_t)((var_data[0] << 8) | (var_data[0] >> 8));
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], (int)(int16_data));
+                        break;
                     }
-                    break;
-                }
-                case 0x0E: // IEEE754浮点数(BADC)
-                {
-                    float float_data = modbus_get_float_badc(var_data);
-                    if (isnan(float_data))
+                    case 0x02: // 无符号16位int(AB)
                     {
-                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        uint16_t uint16_data = (uint16_t)var_data[0];
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint16_data);
+                        break;
                     }
-                    else
+                    case 0x03: // 无符号16位int(BA)
                     {
-                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        uint16_t uint16_data= (uint16_t)((var_data[0] << 8) | (var_data[0] >> 8));
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint16_data);
+                        break;
                     }
-                    break;
-                }
-                case 0x0F: // IEEE754浮点数(CDAB)
-                {
-                    float float_data = modbus_get_float_cdab(var_data);
-                    if (isnan(float_data))
+                    case 0x04: // 有符号32位int(ABCD)
                     {
+                        int32_t int32_data = (int32_t)modbus_get_long_abcd(var_data);
                         json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                            "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
+                        break;
                     }
-                    else
+                    case 0x05: // 有符号32位int(DCBA)
                     {
+                        int32_t int32_data = (int32_t)modbus_get_long_dcba(var_data);
                         json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
-                            "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                            "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
+                        break;
                     }
-                    break;
-                }
-                default:
-                {
-                    RT_ASSERT(0);
-                    break;
+                    case 0x06: // 有符号32位int(BADC)
+                    {
+                        int32_t int32_data = (int32_t)modbus_get_long_badc(var_data);
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
+                        break;
+                    }
+                    case 0x07: // 有符号32位int(CDAB)
+                    {
+                        int32_t int32_data = (int32_t)modbus_get_long_cdab(var_data);
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%d,", cfg->uart_x_cfg[x - 1].variable[i], int32_data);
+                        break;
+                    }
+                    case 0x08: // 无符号32位int(ABCD)
+                    {
+                        uint32_t uint32_data = (uint32_t)modbus_get_long_abcd(var_data);
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                        break;
+                    }
+                    case 0x09: // 无符号32位int(DCBA)
+                    {
+                        uint32_t uint32_data = (uint32_t)modbus_get_long_dcba(var_data);
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                        break;
+                    }
+                    case 0x0A: // 无符号32位int(BADC)
+                    {
+                        uint32_t uint32_data = (uint32_t)modbus_get_long_badc(var_data);
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                        break;
+                    }
+                    case 0x0B: // 无符号32位int(CDAB)
+                    {
+                        uint32_t uint32_data = (uint32_t)modbus_get_long_cdab(var_data);
+                        json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], uint32_data);
+                        break;
+                    }
+                    case 0x0C: // IEEE754浮点数(ABCD)
+                    {
+                        float float_data = modbus_get_float_abcd(var_data);
+                        if (isnan(float_data))
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        }
+                        else
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        }
+                        break;
+                    }
+                    case 0x0D: // IEEE754浮点数(DCBA)
+                    {
+                        float float_data = modbus_get_float_dcba(var_data);
+                        if (isnan(float_data))
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        }
+                        else
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        }
+                        break;
+                    }
+                    case 0x0E: // IEEE754浮点数(BADC)
+                    {
+                        float float_data = modbus_get_float_badc(var_data);
+                        if (isnan(float_data))
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        }
+                        else
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        }
+                        break;
+                    }
+                    case 0x0F: // IEEE754浮点数(CDAB)
+                    {
+                        float float_data = modbus_get_float_cdab(var_data);
+                        if (isnan(float_data))
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%s,", cfg->uart_x_cfg[x - 1].variable[i], "null");
+                        }
+                        else
+                        {
+                            json_data_len += snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                                "\"%s\":%f,", cfg->uart_x_cfg[x - 1].variable[i], float_data);
+                        }
+                        break;
+                    }
+                    case 0x11: // 无符号8位int,取字节高位：AB取A
+                    {
+                        uint8_t uint8_data = MODBUS_GET_HIGH_BYTE((uint16_t)var_data[0]);
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint8_data);
+                        break;
+                    }
+                    case 0x12: // 无符号8位int,取字节低位：AB取B
+                    {
+                        uint8_t uint8_data = MODBUS_GET_LOW_BYTE((uint16_t)var_data[0]);
+                        json_data_len += rt_snprintf(json_data_buf + json_data_len, json_buf_len - json_data_len, 
+                            "\"%s\":%u,", cfg->uart_x_cfg[x - 1].variable[i], (uint32_t)uint8_data);
+                        break;
+                    }
+                    default:
+                    {
+                        //RT_ASSERT(0);
+                        LOG_E("%s invalid data_type(0x%02x)!", __FUNCTION__, data_type);
+                        break;
+                    }
                 }
             }
         }

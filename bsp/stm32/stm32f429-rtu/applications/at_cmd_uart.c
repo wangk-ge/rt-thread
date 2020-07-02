@@ -1192,10 +1192,13 @@ static at_result_t at_uartxtype_setup(const struct at_cmd *cmd, const char *args
          *  0x0D=IEEE754浮点数(DCBA)
          *  0x0E=IEEE754浮点数(BADC)
          *  0x0F=IEEE754浮点数(CDAB)
+         *  0x10=位(只有功能码01和02有此类型,数据为0或者1)
+         *  0x11=无符号8位int,取字节高位：AB取A
+         *  0x12=无符号8位int,取字节低位：AB取B
          */
-        if ((type < 0x00) || (type > 0x0F))
+        if ((type < 0x00) || (type > 0x12))
         {
-            LOG_E("%s param[%d] not in range[0x00,0x0F]!", __FUNCTION__, i);
+            LOG_E("%s param[%d] not in range[0x00,0x12]!", __FUNCTION__, i);
             app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }

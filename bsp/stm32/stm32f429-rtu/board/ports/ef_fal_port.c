@@ -120,6 +120,9 @@ static const ef_env default_env_set[] = {
          *  0x0D=IEEE754浮点数(DCBA)
          *  0x0E=IEEE754浮点数(BADC)
          *  0x0F=IEEE754浮点数(CDAB)
+         *  0x10=位(只有功能码01和02有此类型,数据为0或者1)
+         *  0x11=无符号8位int,取字节高位：AB取A
+         *  0x12=无符号8位int,取字节低位：AB取B
          */
         {"uart1type", "\x0D", 1}, // 默认值0x0D
         {"uart2type", "\x0D", 1}, // 默认值0x0D
