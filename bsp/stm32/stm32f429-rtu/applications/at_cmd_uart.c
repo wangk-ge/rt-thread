@@ -768,12 +768,14 @@ static at_result_t at_uartxfunction_setup(const struct at_cmd *cmd, const char *
             return AT_RESULT_PARSE_FAILE;
         }
         /* uartXfunction
+            MODBUS_FC_READ_COILS                0x01
+            MODBUS_FC_READ_DISCRETE_INPUTS      0x02
             MODBUS_FC_READ_HOLDING_REGISTERS    0x03
             MODBUS_FC_READ_INPUT_REGISTERS      0x04
          */
-        if ((function_code < 0x03) || (function_code > 0x04))
+        if ((function_code < 0x01) || (function_code > 0x04))
         {
-            LOG_E("%s param[%d] not in range[0x03,0x04]!", __FUNCTION__, i);
+            LOG_E("%s param[%d] not in range[0x01,0x04]!", __FUNCTION__, i);
             app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }
