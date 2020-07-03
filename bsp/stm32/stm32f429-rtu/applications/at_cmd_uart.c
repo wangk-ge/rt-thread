@@ -1333,11 +1333,11 @@ static at_result_t at_uartxdelay_setup(const struct at_cmd *cmd, const char *arg
             return AT_RESULT_PARSE_FAILE;
         }
         /* uartXdelay
-         * 范围0x01~0x0a，对应100ms~1000ms
+         * 范围0x01~0x14，对应100ms~2000ms
          */
-        if ((delay < 0x01) || (delay > 0x0a))
+        if ((delay < 0x01) || (delay > 0x14))
         {
-            LOG_E("%s param[%d] not in range[0x01,0x0a]!", __FUNCTION__, i);
+            LOG_E("%s param[%d] not in range[0x01,0x14]!", __FUNCTION__, i);
             app_mp_free(param_list);
             return AT_RESULT_PARSE_FAILE;
         }

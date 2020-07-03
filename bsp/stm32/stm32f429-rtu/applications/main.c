@@ -125,7 +125,7 @@ typedef enum
 #define APP_WDT_TIMEOUT (30)
 
 /* MODBUS响应超时时间(s) */
-#define MODBUS_RESP_TIMEOUT (1)
+#define MODBUS_RESP_TIMEOUT (2)
 
 /* 连续上报失败最大允许次数(超过后将重启系统) */
 #define REPORT_FAIL_MAX_CNT (10)
