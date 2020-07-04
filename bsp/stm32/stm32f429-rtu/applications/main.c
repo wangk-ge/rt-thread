@@ -519,17 +519,19 @@ static rt_err_t data_acquisition_and_save(void)
     uint32_t timestamp = get_timestamp();
     memcpy(buf_write_ptr, &timestamp, sizeof(timestamp));
     buf_write_ptr += sizeof(timestamp);
+    size_t data_len = buf_write_ptr - data_buf;
     
     int x = 1;
     for (x = 1; x <= CFG_UART_X_NUM; ++x)
     {
         /* 采集UARTX数据(返回读取的字节数) */
-        uint32_t data_bytes = uart_x_data_acquisition(x, buf_write_ptr, APP_MP_BLOCK_SIZE);
+        uint32_t data_bytes = uart_x_data_acquisition(x, buf_write_ptr, (APP_MP_BLOCK_SIZE - data_len));
         buf_write_ptr += data_bytes;
+        data_len = buf_write_ptr - data_buf;
     }
     
     /* 保存采集的数据 */
-    size_t data_len = buf_write_ptr - data_buf;
+    data_len = buf_write_ptr - data_buf;
     ret = history_data_save(data_buf, data_len);
     if (ret != RT_EOK)
     {
