@@ -22,7 +22,7 @@ from xml.etree.ElementTree import SubElement
 
 from building import *
 
-MODULE_VER_NUM = 0
+MODULE_VER_NUM = 4
 
 source_pattern = ['*.c', '*.cpp', '*.cxx', '*.s', '*.S', '*.asm']
 
@@ -109,12 +109,12 @@ def ExcludeFiles(infiles, files):
 def ExcludePaths(rootpath, paths):
     ret = []
 
-    files = os.listdir(rootpath)
+    files = os.listdir(OSPath(rootpath))
     for file in files:
         if file.startswith('.'):
             continue
 
-        fullname = os.path.join(rootpath, file)
+        fullname = os.path.join(OSPath(rootpath), file)
 
         if os.path.isdir(fullname):
             # print(fullname)
@@ -228,7 +228,7 @@ def HandleToolOption(tools, env, project, reset):
         with open('rtconfig_preinc.h', mode = 'w+') as f:
             f.write(file_header)
             for cppdef in CPPDEFINES:
-                f.write("#define " + cppdef + '\n')
+                f.write("#define " + cppdef.replace('=', ' ') + '\n')
             f.write(file_tail)
         #  change the c.compiler.include.files
         files = option.findall('listOptionValue')
@@ -301,10 +301,12 @@ def HandleToolOption(tools, env, project, reset):
         option = linker_paths_option
         # remove old lib paths
         for item in option.findall('listOptionValue'):
-            option.remove(item)
+            if IsRttEclipsePathFormat(item.get('value')):
+                # clean old configuration
+                option.remove(item)
         # add new old lib paths
         for path in env['LIBPATH']:
-            SubElement(option, 'listOptionValue', {'builtIn': 'false', 'value': path})
+            SubElement(option, 'listOptionValue', {'builtIn': 'false', 'value': ConverToRttEclipsePathFormat(RelativeProjectPath(env, path).replace('\\', '/'))})
 
     return
 
@@ -346,12 +348,13 @@ def GenExcluding(env, project):
     rtt_root = os.path.abspath(env['RTT_ROOT'])
     bsp_root = os.path.abspath(env['BSP_ROOT'])
     coll_dirs = CollectPaths(project['DIRS'])
-    all_paths = [OSPath(path) for path in coll_dirs]
+    all_paths_temp = [OSPath(path) for path in coll_dirs]
+    all_paths = []
 
-    # remove unused path
-    for path in all_paths:
-        if not path.startswith(rtt_root) and not path.startswith(bsp_root):
-            all_paths.remove(path)
+    # add used path
+    for path in all_paths_temp:
+        if path.startswith(rtt_root) or path.startswith(bsp_root):
+            all_paths.append(path)
 
     if bsp_root.startswith(rtt_root):
         # bsp folder is in the RT-Thread root folder, such as the RT-Thread source code on GitHub
