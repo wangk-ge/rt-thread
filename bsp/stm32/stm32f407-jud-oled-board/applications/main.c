@@ -53,8 +53,11 @@ extern   "C"
 /* Vcom设备名 */
 #define VCOM_DEVICE_NAME "vcom"
 
-/* defined the TS_LED pin: PE1 */
-#define TS_LED_PIN GET_PIN(E, 1)
+/* defined the LED pin */
+#define LED_0_PIN GET_PIN(B, 5)
+#define LED_1_PIN GET_PIN(B, 4)
+
+#define OLED_EN_PIN GET_PIN(C, 5)
 	
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
@@ -217,8 +220,14 @@ int main(void)
 	CMD_Init();
 	
 	/* set TS_LED pin mode to output */
-    rt_pin_mode(TS_LED_PIN, PIN_MODE_OUTPUT);
-	rt_pin_write(TS_LED_PIN, PIN_LOW);
+    rt_pin_mode(LED_0_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LED_0_PIN, PIN_HIGH);
+    rt_pin_mode(LED_1_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LED_1_PIN, PIN_HIGH);
+    
+    /* 开启OLED电源 */
+    rt_pin_mode(OLED_EN_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(OLED_EN_PIN, PIN_HIGH);
 	
 	/* 创建EVENT */
 	app_event = rt_event_create("app_event", RT_IPC_FLAG_FIFO);
