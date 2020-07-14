@@ -20,14 +20,7 @@ int rt_hw_spi_config(uint8_t spi_mode, uint32_t max_hz, uint8_t cs_pin)
     rt_err_t res;
 
     // Attach Device
-    spi_cs.pin = cs_pin;
-    rt_pin_mode(spi_cs.pin, PIN_MODE_OUTPUT);
-    res = rt_spi_bus_attach_device(&u8g2_spi_dev, U8G2_SPI_DEVICE_NAME, U8G2_SPI_BUS_NAME, (void*)&spi_cs);
-    if (res != RT_EOK)
-    {
-        rt_kprintf("[u8g2] Failed to attach device %s\n", U8G2_SPI_DEVICE_NAME);
-        return res;
-    }
+    
 
     // Set device SPI Mode
     struct rt_spi_configuration cfg;

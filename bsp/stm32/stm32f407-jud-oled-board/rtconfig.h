@@ -170,6 +170,7 @@
 /* C++ version: v2.x.x */
 
 #define PKG_U8G2_VER_NUM 0x19999
+#define BSP_USING_SPI1
 
 /* miscellaneous packages */
 
@@ -194,7 +195,6 @@
 #define BSP_UART1_TX_USING_DMA
 #define BSP_USING_ON_CHIP_FLASH
 #define BSP_USING_SPI
-#define BSP_USING_SPI1
 #define BSP_USING_USBD
 #define BSP_USBD_TYPE_FS
 

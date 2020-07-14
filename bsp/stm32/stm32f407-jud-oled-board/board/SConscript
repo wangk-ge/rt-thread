@@ -14,6 +14,7 @@ CubeMX_Config/Src/stm32f4xx_hal_msp.c
 
 if GetDepend(['PKG_USING_U8G2']):
     src += Glob('ports/u8g2_port.c')
+    src += Glob('ports/spi_oled_init.c')
 
 path =  [cwd]
 path += [cwd + '/CubeMX_Config/Inc']
