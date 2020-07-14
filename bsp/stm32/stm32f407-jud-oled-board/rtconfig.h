@@ -49,11 +49,12 @@
 
 #define RT_USING_COMPONENTS_INIT
 #define RT_USING_USER_MAIN
-#define RT_MAIN_THREAD_STACK_SIZE 2048
+#define RT_MAIN_THREAD_STACK_SIZE 4096
 #define RT_MAIN_THREAD_PRIORITY 10
 
 /* C++ features */
 
+#define RT_USING_CPLUSPLUS
 
 /* Command shell */
 
@@ -181,7 +182,6 @@
 /* game examples */
 
 #define U8G2_USING_GAME_EXAMPLE_SPACE_TRASH
-#define U8G2_USING_GAME_EXAMPLE_TREX
 #define PKG_USING_U8G2_CPP_LATEST_VERSION
 
 /* C   version: v1.x.x */
@@ -189,7 +189,6 @@
 /* C++ version: v2.x.x */
 
 #define PKG_U8G2_VER_NUM 0x29999
-#define BSP_USING_SPI1
 
 /* miscellaneous packages */
 
@@ -214,6 +213,7 @@
 #define BSP_UART1_TX_USING_DMA
 #define BSP_USING_ON_CHIP_FLASH
 #define BSP_USING_SPI
+#define BSP_USING_SPI1
 #define BSP_USING_USBD
 #define BSP_USBD_TYPE_FS
 
