@@ -8,7 +8,7 @@ static struct rt_i2c_bus_device *i2c_bus = RT_NULL;
 #endif
 
 #if defined U8G2_USE_HW_SPI
-static struct rt_spi_device u8g2_spi_dev;
+static struct rt_spi_device* u8g2_spi_dev = RT_NULL;
 struct rt_hw_spi_cs
 {
     rt_uint32_t pin;
@@ -20,7 +20,14 @@ int rt_hw_spi_config(uint8_t spi_mode, uint32_t max_hz, uint8_t cs_pin)
     rt_err_t res;
 
     // Attach Device
-    
+    struct rt_spi_device* spi_device = (struct rt_spi_device*)rt_device_find(U8G2_SPI_DEVICE_NAME);
+    if (RT_NULL == spi_device)
+    {
+		rt_kprintf("rt_hw_spi_config() call rt_device_find(%s) failed!\r\n", 
+			U8G2_SPI_DEVICE_NAME);
+		return -RT_ERROR;
+    }
+    u8g2_spi_dev = spi_device;
 
     // Set device SPI Mode
     struct rt_spi_configuration cfg;
@@ -33,7 +40,7 @@ int rt_hw_spi_config(uint8_t spi_mode, uint32_t max_hz, uint8_t cs_pin)
         case 3: cfg.mode = RT_SPI_MASTER | RT_SPI_MODE_3 | RT_SPI_MSB; break;
     }
     cfg.max_hz = max_hz; /* 20M,SPI max 42MHz,ssd1351 4-wire spi */
-    rt_spi_configure(&u8g2_spi_dev, &cfg);
+    rt_spi_configure(u8g2_spi_dev, &cfg);
 
     return RT_EOK;
 }
@@ -273,7 +280,7 @@ uint8_t u8x8_byte_rt_4wire_hw_spi(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, vo
         {
             uint8_t *data = (uint8_t *)arg_ptr;
             rt_size_t length = (rt_size_t)arg_int;
-            rt_spi_send(&u8g2_spi_dev, (uint8_t*)data, length);
+            rt_spi_send(u8g2_spi_dev, (uint8_t*)data, length);
             break;
         }
         case U8X8_MSG_BYTE_INIT:

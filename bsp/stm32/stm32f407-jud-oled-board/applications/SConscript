@@ -13,6 +13,7 @@ cyclequeue.c
 
 if GetDepend(['PKG_USING_U8G2']):
     src += Glob('sh1107_128128_4wire_hw_spi_example.c')
+    src += Glob('space_trash.c')
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)
 

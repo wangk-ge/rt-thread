@@ -410,6 +410,11 @@
               <FileType>1</FileType>
               <FilePath>applications\sh1107_128128_4wire_hw_spi_example.c</FilePath>
             </File>
+            <File>
+              <FileName>space_trash.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>applications\space_trash.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
