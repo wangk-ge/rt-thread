@@ -163,13 +163,32 @@
 
 /* U8G2 Examples */
 
-#define PKG_USING_U8G2_C_LATEST_VERSION
+
+/* full buffer examples    (fast, large RAM consumption) */
+
+#define U8G2_USING_FRAME_EXAMPLE_FPS
+#define U8G2_USING_FRAME_EXAMPLE_GRAPHIC_TEST
+#define U8G2_USING_FRAME_EXAMPLE_ICON_MENU
+#define U8G2_USING_FRAME_EXAMPLE_SELECTION_LIST
+#define U8G2_USING_FRAME_EXAMPLE_WEATHER
+
+/* page buffer examples    (slow, small RAM consumption) */
+
+
+/* u8x8 text only examples (fonts with fixed size)       */
+
+
+/* game examples */
+
+#define U8G2_USING_GAME_EXAMPLE_SPACE_TRASH
+#define U8G2_USING_GAME_EXAMPLE_TREX
+#define PKG_USING_U8G2_CPP_LATEST_VERSION
 
 /* C   version: v1.x.x */
 
 /* C++ version: v2.x.x */
 
-#define PKG_U8G2_VER_NUM 0x19999
+#define PKG_U8G2_VER_NUM 0x29999
 #define BSP_USING_SPI1
 
 /* miscellaneous packages */
