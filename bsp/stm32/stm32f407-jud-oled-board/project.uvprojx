@@ -1475,6 +1475,11 @@
               <FileType>8</FileType>
               <FilePath>packages\u8g2-cpp-latest\examples\games\SpaceTrash.cpp</FilePath>
             </File>
+            <File>
+              <FileName>TRex.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>packages\u8g2-cpp-latest\examples\games\TRex.cpp</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>

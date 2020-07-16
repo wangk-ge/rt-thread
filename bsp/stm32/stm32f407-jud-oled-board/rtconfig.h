@@ -182,6 +182,7 @@
 /* game examples */
 
 #define U8G2_USING_GAME_EXAMPLE_SPACE_TRASH
+#define U8G2_USING_GAME_EXAMPLE_TREX
 #define PKG_USING_U8G2_CPP_LATEST_VERSION
 
 /* C   version: v1.x.x */
