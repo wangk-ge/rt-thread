@@ -185,6 +185,7 @@
 #define SHT20_AVERAGE_TIMES 10
 #define SHT20_SAMPLE_PERIOD 1000
 #define PKG_USING_SHT2X_LATEST_VERSION
+#define BSP_USING_SPI2
 
 /* miscellaneous packages */
 
@@ -217,7 +218,6 @@
 #define BSP_UART2_TX_USING_DMA
 #define BSP_USING_ON_CHIP_FLASH
 #define BSP_USING_SPI
-#define BSP_USING_SPI2
 #define BSP_USING_I2C1
 #define BSP_I2C1_SCL_PIN 26
 #define BSP_I2C1_SDA_PIN 27

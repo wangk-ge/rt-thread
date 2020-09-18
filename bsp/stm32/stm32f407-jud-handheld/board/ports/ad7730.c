@@ -170,7 +170,7 @@ static rt_err_t ad7730_config(rt_device_t dev)
 	rt_err_t ret = RT_EOK;
 	
 #if 0
-	/* ≈‰÷√AC CHOP DL */
+	/* ÈÖçÁΩÆAC CHOP DL */
 	/* -------------- Filter Config ----------------------- */
 	send_data[0] = FR2_SINC_AVERAGING_256;
 	send_data[1] = (FR1_SKIP_OFF | FR1_FAST_OFF);

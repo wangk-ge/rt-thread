@@ -10,6 +10,7 @@ cmd.c
 strref.c
 util.c
 cyclequeue.c
+ota.c
 """)
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)
