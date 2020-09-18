@@ -17,6 +17,7 @@
 
 #include "cp15.h"
 #include "mmu.h"
+#include "raspi.h"
 
 #ifdef BSP_USING_CORETIMER
 static rt_uint64_t timerStep;
@@ -24,6 +25,8 @@ static rt_uint64_t timerStep;
 
 int rt_hw_get_gtimer_frq(void);
 void rt_hw_set_gtimer_val(rt_uint64_t value);
+int rt_hw_get_gtimer_val(void);
+int rt_hw_get_cntpct_val(void);
 void rt_hw_gtimer_enable(void);
 
 void core0_timer_enable_interrupt_controller()
@@ -98,6 +101,9 @@ void rt_hw_board_init(void)
     armv8_map(0x3f200000, 0x3f200000, 0x16000, MEM_ATTR_IO);//uart
     armv8_map(0x40000000, 0x40000000, 0x1000, MEM_ATTR_IO);//core timer
     armv8_map(0x3F300000, 0x3F300000, 0x1000, MEM_ATTR_IO);//sdio
+    armv8_map(0xc00000, 0xc00000, 0x1000, MEM_ATTR_IO);//mbox
+    armv8_map(0x3f804000, 0x3f804000, 0x1000, MEM_ATTR_IO);//i2c0
+    armv8_map(0x3f205000, 0x3f205000, 0x1000, MEM_ATTR_IO);//i2c1
     mmu_enable();
     
     /* initialize hardware interrupt */

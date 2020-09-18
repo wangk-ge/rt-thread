@@ -7,6 +7,8 @@
  * Date           Author            Notes
  * 2018-11-06     balanceTWK        first version
  * 2019-04-23     WillianChan       Fix GPIO serial number disorder
+ * 2020-06-16     thread-liu        add STM32MP1
+ * 2020-09-01     thread-liu        add GPIOZ  
  */
 
 #include <board.h>
@@ -203,6 +205,24 @@ static const struct pin_index pins[] =
     __STM32_PIN(173, K, 13),
     __STM32_PIN(174, K, 14),
     __STM32_PIN(175, K, 15),
+#if defined(GPIOZ)
+    __STM32_PIN(176, Z, 0),
+    __STM32_PIN(177, Z, 1),
+    __STM32_PIN(178, Z, 2),
+    __STM32_PIN(179, Z, 3),
+    __STM32_PIN(180, Z, 4),
+    __STM32_PIN(181, Z, 5),
+    __STM32_PIN(182, Z, 6),
+    __STM32_PIN(183, Z, 7),
+    __STM32_PIN(184, Z, 8),
+    __STM32_PIN(185, Z, 9),
+    __STM32_PIN(186, Z, 10),
+    __STM32_PIN(187, Z, 11),
+    __STM32_PIN(188, Z, 12),
+    __STM32_PIN(189, Z, 13),
+    __STM32_PIN(190, Z, 14),
+    __STM32_PIN(191, Z, 15),
+#endif /* defined(GPIOZ) */
 #endif /* defined(GPIOK) */
 #endif /* defined(GPIOJ) */
 #endif /* defined(GPIOI) */
@@ -235,6 +255,23 @@ static const struct pin_irq_map pin_irq_map[] =
     {GPIO_PIN_13, EXTI4_15_IRQn},
     {GPIO_PIN_14, EXTI4_15_IRQn},
     {GPIO_PIN_15, EXTI4_15_IRQn}, 
+#elif defined(SOC_SERIES_STM32MP1)
+    {GPIO_PIN_0, EXTI0_IRQn},
+    {GPIO_PIN_1, EXTI1_IRQn},
+    {GPIO_PIN_2, EXTI2_IRQn},
+    {GPIO_PIN_3, EXTI3_IRQn},
+    {GPIO_PIN_4, EXTI4_IRQn},
+    {GPIO_PIN_5, EXTI5_IRQn},
+    {GPIO_PIN_6, EXTI6_IRQn},
+    {GPIO_PIN_7, EXTI7_IRQn},
+    {GPIO_PIN_8, EXTI8_IRQn},
+    {GPIO_PIN_9, EXTI9_IRQn},
+    {GPIO_PIN_10, EXTI10_IRQn},
+    {GPIO_PIN_11, EXTI11_IRQn},
+    {GPIO_PIN_12, EXTI12_IRQn},
+    {GPIO_PIN_13, EXTI13_IRQn},
+    {GPIO_PIN_14, EXTI14_IRQn},
+    {GPIO_PIN_15, EXTI15_IRQn}, 
 #else
     {GPIO_PIN_0, EXTI0_IRQn},
     {GPIO_PIN_1, EXTI1_IRQn},
@@ -294,6 +331,51 @@ static const struct pin_index *get_pin(uint8_t pin)
 
     return index;
 };
+
+static rt_base_t stm32_pin_get(const char *name)
+{
+    rt_base_t pin = 0;
+    int hw_port_num, hw_pin_num = 0;
+    int i, name_len = 1;
+    int mul = 1;
+
+    name_len = rt_strlen(name);
+
+    if ((name_len < 4) || (name_len >= 6))
+    {
+        return -RT_EINVAL;
+    }
+    if ((name[0] != 'P') || (name[2] != '.'))
+    {
+        return -RT_EINVAL;
+    }
+
+    if ((name[1] >= 'A') && (name[1] <= 'Z'))
+    {
+        hw_port_num = (int)(name[1] - 'A');
+    }
+    else
+    {
+        return -RT_EINVAL;
+    }
+
+    for (i = name_len - 1; i > 2; i--)
+    {
+        hw_pin_num += ((int)(name[i] - '0') * mul);
+        mul = mul * 10;
+    }
+
+    pin = 16 * hw_port_num + hw_pin_num;
+
+    if (pin < ITEM_NUM(pins))
+    {
+        return pin;
+    }
+    else
+    {
+        return -RT_EINVAL;
+    }
+}
 
 static void stm32_pin_write(rt_device_t dev, rt_base_t pin, rt_base_t value)
 {
@@ -609,6 +691,7 @@ const static struct rt_pin_ops _stm32_pin_ops =
     stm32_pin_attach_irq,
     stm32_pin_dettach_irq,
     stm32_pin_irq_enable,
+    stm32_pin_get,
 };
 
 rt_inline void pin_irq_hdr(int irqno)
@@ -619,7 +702,7 @@ rt_inline void pin_irq_hdr(int irqno)
     }
 }
 
-#if defined(SOC_SERIES_STM32G0)
+#if defined(SOC_SERIES_STM32G0) || defined(SOC_SERIES_STM32MP1)
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 {
     pin_irq_hdr(bit2bitno(GPIO_Pin));
@@ -668,6 +751,103 @@ void EXTI4_15_IRQHandler(void)
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_14);
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_15);
     rt_interrupt_leave();
+}
+
+#elif defined(SOC_STM32MP157A)
+void EXTI0_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+   rt_interrupt_leave();
+}
+
+void EXTI1_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+   rt_interrupt_leave();
+}
+
+void EXTI2_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
+   rt_interrupt_leave();
+}
+
+void EXTI3_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
+   rt_interrupt_leave();
+}
+
+void EXTI4_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
+   rt_interrupt_leave();
+}
+
+void EXTI5_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5);
+   rt_interrupt_leave();
+}
+
+void EXTI6_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);
+   rt_interrupt_leave();
+}
+
+void EXTI7_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_7);
+   rt_interrupt_leave();
+}
+
+void EXTI8_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);
+   rt_interrupt_leave();
+}
+
+void EXTI9_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_9);
+   rt_interrupt_leave();
+}
+
+void EXTI10_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_10);
+   rt_interrupt_leave();
+}
+
+void EXTI11_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_11);
+   rt_interrupt_leave();
+}
+
+void EXTI12_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);
+   rt_interrupt_leave();
+}
+
+void EXTI13_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+   rt_interrupt_leave();
+}
+
+void EXTI14_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_14);
+   rt_interrupt_leave();
+}
+
+void EXTI15_IRQHandler(void) {
+   rt_interrupt_enter(); 
+   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_15);
+   rt_interrupt_leave();
 }
 
 #else

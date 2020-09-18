@@ -47,6 +47,7 @@
 #define RT_CONSOLE_DEVICE_NAME "uart1"
 #define RT_VER_NUM 0x40003
 #define ARCH_CPU_64BIT
+#define ARCH_ARMV8
 
 /* RT-Thread Components */
 
@@ -101,6 +102,10 @@
 #define RT_PIPE_BUFSZ 512
 #define RT_USING_SERIAL
 #define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_HWTIMER
+#define RT_USING_I2C
+#define RT_I2C_DEBUG
+#define RT_USING_I2C_BITOPS
 #define RT_USING_PIN
 #define RT_USING_SDIO
 #define RT_SDIO_STACK_SIZE 2048
@@ -109,6 +114,8 @@
 #define RT_MMCSD_THREAD_PREORITY 22
 #define RT_MMCSD_MAX_PARTITION 16
 #define RT_SDIO_DEBUG
+#define RT_USING_SPI
+#define RT_USING_WDT
 
 /* Using USB */
 
@@ -177,12 +184,6 @@
 
 /* samples: kernel and components samples */
 
-
-/* Privated Packages of RealThread */
-
-
-/* Network Utilities */
-
 #define BCM2836_SOC
 
 /* Hardware Drivers Config */
@@ -193,10 +194,21 @@
 #define RT_USING_UART1
 #define BSP_USING_PIN
 #define BSP_USING_CORETIMER
+#define BSP_USING_SYSTIMER
+#define RT_USING_SYSTIMER1
+#define RT_USING_SYSTIMER3
+#define BSP_USING_I2C
+#define BSP_USING_I2C1
+#define BSP_USING_SPI
+#define BSP_USING_SPI0_BUS
+#define BSP_USING_SPI0_DEVICE0
+#define BSP_USING_WDT
 #define BSP_USING_SDIO
 #define BSP_USING_SDIO0
 
 /* Board Peripheral Drivers */
 
+#define BSP_USING_HDMI
+#define BSP_USING_HDMI_DISPLAY
 
 #endif
