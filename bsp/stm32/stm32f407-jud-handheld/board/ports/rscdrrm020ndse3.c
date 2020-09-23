@@ -28,28 +28,28 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #endif
 
-/* SPI×ÜÏßÃû */
+/* SPIæ€»çº¿å */
 #define RSCDRRM020NDSE3_SPI_BUS_NAME "spi2"
-/* EEPROM SPIÉè±¸Ãû */
+/* EEPROM SPIè®¾å¤‡å */
 #define RSCDRRM020NDSE3_SPI_EE_DEVICE_NAME "spi20"
-/* ADC SPIÉè±¸Ãû */
+/* ADC SPIè®¾å¤‡å */
 #define RSCDRRM020NDSE3_SPI_ADC_DEVICE_NAME "spi21"
-/* defined the PWER_EN pin: PE7 */
-#define RSCDRRM020NDSE3_PWER_EN_PIN		GET_PIN(E, 7)
+/* defined the PWER_EN pin: PB11 */
+#define RSCDRRM020NDSE3_PWER_EN_PIN		GET_PIN(B, 11)
 /* defined the RDY pin: PB12 */
 #define RSCDRRM020NDSE3_RDY_PIN			GET_PIN(B, 12)
-/* defined the CS_ADC pin: PC2 */
-#define RSCDRRM020NDSE3_CS_AD_PIN	 	GET_PIN(C, 2)
-/* defined the CS_EE pin: PC3 */
-#define RSCDRRM020NDSE3_CS_EE_PIN	 	GET_PIN(C, 3)
-/* ´«¸ĞÆ÷EEPROM´óĞ¡(×Ö½ÚÊı) */
+/* defined the CS_ADC pin: PB10 */
+#define RSCDRRM020NDSE3_CS_AD_PIN	 	GET_PIN(B, 10)
+/* defined the CS_EE pin: PE15 */
+#define RSCDRRM020NDSE3_CS_EE_PIN	 	GET_PIN(E, 15)
+/* ä¼ æ„Ÿå™¨EEPROMå¤§å°(å­—èŠ‚æ•°) */
 #define RSCDRRM020NDSE3_EEPROM_SIZE		(452)
 
-/* ADC²É¼¯Ä£Ê½ */
+/* ADCé‡‡é›†æ¨¡å¼ */
 #define RSCDRRM020NDSE3_ADC_NORMAL 0x00
 #define RSCDRRM020NDSE3_ADC_FAST 0x10
 
-/* ADC²É¼¯ÆµÂÊ(NormalÄ£Ê½ÏÂ) */
+/* ADCé‡‡é›†é¢‘ç‡(Normalæ¨¡å¼ä¸‹) */
 #define RSCDRRM020NDSE3_ADC_20HZ 0x00
 #define RSCDRRM020NDSE3_ADC_45HZ 0x20
 #define RSCDRRM020NDSE3_ADC_90HZ 0x40
@@ -57,53 +57,53 @@
 #define RSCDRRM020NDSE3_ADC_330HZ 0x80
 #define RSCDRRM020NDSE3_ADC_600HZ 0xA0
 #define RSCDRRM020NDSE3_ADC_1000HZ 0xC0
-/* ADC²É¼¯ÆµÂÊ(FASTÄ£Ê½ÏÂ·­±¶) */
+/* ADCé‡‡é›†é¢‘ç‡(FASTæ¨¡å¼ä¸‹ç¿»å€) */
 
-/* ADC²É¼¯ÀàĞÍ */
-#define RSCDRRM020NDSE3_ADC_TEMPERATURE 0x06 // ÎÂ¶È
-#define RSCDRRM020NDSE3_ADC_PRESSURE 0x04 // Ñ¹Á¦
+/* ADCé‡‡é›†ç±»å‹ */
+#define RSCDRRM020NDSE3_ADC_TEMPERATURE 0x06 // æ¸©åº¦
+#define RSCDRRM020NDSE3_ADC_PRESSURE 0x04 // å‹åŠ›
 
-/* ADCÄ¬ÈÏ²ÉÑùÂÊÅäÖÃ */
-#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX 6 // Ä¬ÈÏ²ÉÑùÂÊË÷Òı,6=330HZ(Êµ¼ÊÎÂ¶È²É¼¯»áÕ¼ÓÃÉÙÁ¿ÖÜÆÚ)
-#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ 330 // Ä¬ÈÏ²ÉÑùÂÊÊµ¼ÊÖµ
+/* ADCé»˜è®¤é‡‡æ ·ç‡é…ç½® */
+#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX 6 // é»˜è®¤é‡‡æ ·ç‡ç´¢å¼•,6=330HZ(å®é™…æ¸©åº¦é‡‡é›†ä¼šå ç”¨å°‘é‡å‘¨æœŸ)
+#define RSCDRRM020NDSE3_ADC_DEFAUT_FREQ 330 // é»˜è®¤é‡‡æ ·ç‡å®é™…å€¼
 
-/* ADCÎÂ¶È²É¼¯ÖÜÆÚ(ms) */
+/* ADCæ¸©åº¦é‡‡é›†å‘¨æœŸ(ms) */
 #define RSCDRRM020NDSE3_ADC_TEMP_INTERVAL 100
 
-/* EVENT¶¨Òå */
+/* EVENTå®šä¹‰ */
 #define RSCDRRM020NDSE3_EVENT_DATA_READY 0x00000001
 
 #define rscdrrm020ndse3_lock(dev)      rt_mutex_take(&((struct rscdrrm020ndse3_device*)dev)->lock, RT_WAITING_FOREVER);
 #define rscdrrm020ndse3_unlock(dev)    rt_mutex_release(&((struct rscdrrm020ndse3_device*)dev)->lock);
 
-/* ´«¸ĞÆ÷Éè±¸¶ÔÏó */
+/* ä¼ æ„Ÿå™¨è®¾å¤‡å¯¹è±¡ */
 static struct rscdrrm020ndse3_device rscdrrm020ndse3_dev;
 
-/* ´«¸ĞÆ÷Éè±¸Ïß³Ì */
+/* ä¼ æ„Ÿå™¨è®¾å¤‡çº¿ç¨‹ */
 static struct rt_thread* rscdrrm020ndse3_thread = RT_NULL;
 
 static rt_event_t rscdrrm020ndse3_event = RT_NULL;
 
-/* ÂË²¨Æ÷Ïà¹Ø±äÁ¿(ÓÃÓÚ×Ô¶¯¹éÁã) */
-static uint32_t rscdrrm020ndse3_filter_min_val = 0xFFFFFFFF; // Ñù±¾ÖĞµÄ×îĞ¡Öµ
-static uint32_t rscdrrm020ndse3_filter_max_val = 0; // Ñù±¾ÖĞµÄ×î´óÖµ
-static uint32_t rscdrrm020ndse3_filter_sum = 0; // Ñù±¾ÀÛ¼ÓºÍ(ÓÃÓÚ¼ÆËã¾ùÖµ)
-static uint32_t rscdrrm020ndse3_filter_sample_cnt = 0; // µ±Ç°ÒÑ²É¼¯µÄÑù±¾Êı
-static uint32_t rscdrrm020ndse3_filter_n = (10 * RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX + 10); // ×Ü¹²ĞèÒªµÄ²É¼¯´ÎÊı
+/* æ»¤æ³¢å™¨ç›¸å…³å˜é‡(ç”¨äºè‡ªåŠ¨å½’é›¶) */
+static uint32_t rscdrrm020ndse3_filter_min_val = 0xFFFFFFFF; // æ ·æœ¬ä¸­çš„æœ€å°å€¼
+static uint32_t rscdrrm020ndse3_filter_max_val = 0; // æ ·æœ¬ä¸­çš„æœ€å¤§å€¼
+static uint32_t rscdrrm020ndse3_filter_sum = 0; // æ ·æœ¬ç´¯åŠ å’Œ(ç”¨äºè®¡ç®—å‡å€¼)
+static uint32_t rscdrrm020ndse3_filter_sample_cnt = 0; // å½“å‰å·²é‡‡é›†çš„æ ·æœ¬æ•°
+static uint32_t rscdrrm020ndse3_filter_n = (10 * RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX + 10); // æ€»å…±éœ€è¦çš„é‡‡é›†æ¬¡æ•°
 
-/* ×Ô¶¯¹éÁãÍê³É»Øµ÷º¯Êı */
+/* è‡ªåŠ¨å½’é›¶å®Œæˆå›è°ƒå‡½æ•° */
 static ATUO_ZERO_CPL_FUNC s_pfnAutoZeroCompleted = NULL;
 
-/* ¿ØÖÆÁ¬Ğø²É¼¯Ñ¹Á¦µÄ´ÎÊı(Á¬Ğø²É¼¯Ö®¼ä»á²åÈëÎÂ¶È²É¼¯) */
-static uint32_t pressure_continuous_cnt = 0; // µ±Ç°ÒÑÁ¬Ğø²É¼¯´ÎÊı
-static uint32_t pressure_continuous_n = ((RSCDRRM020NDSE3_ADC_TEMP_INTERVAL * RSCDRRM020NDSE3_ADC_DEFAUT_FREQ) / 1000); // Á¬Ğø²É¼¯Ñ¹Á¦µÄ×Ü´ÎÊı
+/* æ§åˆ¶è¿ç»­é‡‡é›†å‹åŠ›çš„æ¬¡æ•°(è¿ç»­é‡‡é›†ä¹‹é—´ä¼šæ’å…¥æ¸©åº¦é‡‡é›†) */
+static uint32_t pressure_continuous_cnt = 0; // å½“å‰å·²è¿ç»­é‡‡é›†æ¬¡æ•°
+static uint32_t pressure_continuous_n = ((RSCDRRM020NDSE3_ADC_TEMP_INTERVAL * RSCDRRM020NDSE3_ADC_DEFAUT_FREQ) / 1000); // è¿ç»­é‡‡é›†å‹åŠ›çš„æ€»æ¬¡æ•°
 
-/* ¹¤×÷Ä£Ê½ÆµÂÊ±í(Í¨¹ıÏÂ±êË÷Òı) */
+/* å·¥ä½œæ¨¡å¼é¢‘ç‡è¡¨(é€šè¿‡ä¸‹æ ‡ç´¢å¼•) */
 typedef struct
 {
-	uint8_t mode; // ¹¤×÷Ä£Ê½
-	uint8_t freq_cfg; // ²ÉÑùÂÊ(ÅäÖÃÖµ)
-	uint16_t freq_val; // ²ÉÑùÂÊ(Êµ¼ÊÖµ)
+	uint8_t mode; // å·¥ä½œæ¨¡å¼
+	uint8_t freq_cfg; // é‡‡æ ·ç‡(é…ç½®å€¼)
+	uint16_t freq_val; // é‡‡æ ·ç‡(å®é™…å€¼)
 } WorkModeFreq_T;
 static WorkModeFreq_T s_tModeFreqTbl[] = {
 	{RSCDRRM020NDSE3_ADC_NORMAL, RSCDRRM020NDSE3_ADC_20HZ, 20}, 	// 0=20HZ
@@ -121,28 +121,28 @@ static WorkModeFreq_T s_tModeFreqTbl[] = {
 	{RSCDRRM020NDSE3_ADC_FAST, RSCDRRM020NDSE3_ADC_1000HZ, 2000}, 	// 12=2000HZ
 };
 
-/* ¿ªÆô´«¸ĞÆ÷µçÔ´ */
+/* å¼€å¯ä¼ æ„Ÿå™¨ç”µæº */
 static void rscdrrm020ndse3_power_on(rt_device_t dev)
 {
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_power_on()\r\n");
 	
-	/* ¿ªÆô´«¸ĞÆ÷µçÔ´ */
+	/* å¼€å¯ä¼ æ„Ÿå™¨ç”µæº */
 	rt_pin_write(RSCDRRM020NDSE3_PWER_EN_PIN, PIN_HIGH);
 	
-	/* µÈ´ı´«¸ĞÆ÷Æô¶¯Íê±Ï */
+	/* ç­‰å¾…ä¼ æ„Ÿå™¨å¯åŠ¨å®Œæ¯• */
 	rt_thread_mdelay(1);
 }
 
-/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 static void rscdrrm020ndse3_power_off(rt_device_t dev)
 {
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_power_off()\r\n");
 	
-	/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+	/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 	rt_pin_write(RSCDRRM020NDSE3_PWER_EN_PIN, PIN_LOW);
 }
 
-/* ¶ÁÈ¡EEPROMÖĞµÄÖ¸¶¨µØÖ·¡¢Ö¸¶¨³¤¶ÈµÄÊı¾İ */
+/* è¯»å–EEPROMä¸­çš„æŒ‡å®šåœ°å€ã€æŒ‡å®šé•¿åº¦çš„æ•°æ® */
 static rt_err_t rscdrrm020ndse3_spi_read_eeprom(uint16_t address, uint8_t* recv_buf, rt_size_t buf_len)
 {
 	struct rt_spi_device* spi_device = rscdrrm020ndse3_dev.spi_ee_device;
@@ -150,7 +150,7 @@ static rt_err_t rscdrrm020ndse3_spi_read_eeprom(uint16_t address, uint8_t* recv_
 	uint8_t send_buf[2] = {0};
 	/* 
 		To read from memory, the host sends an EAD_EEPROM instruction[0000 X011] followed by an 8-bit address. 
-		The ¡®X¡¯ bit in the read instruction is the ninth (MSB) address bit.
+		The â€˜Xâ€™ bit in the read instruction is the ninth (MSB) address bit.
 	*/
 	if (address & 0x0100)
 	{ // ninth (MSB) address bit is 1
@@ -165,7 +165,7 @@ static rt_err_t rscdrrm020ndse3_spi_read_eeprom(uint16_t address, uint8_t* recv_
     return rt_spi_send_then_recv(spi_device, send_buf, sizeof(send_buf), recv_buf, buf_len);
 }
 
-/* ·¢ËÍADCÃüÁî */
+/* å‘é€ADCå‘½ä»¤ */
 static rt_err_t rscdrrm020ndse3_spi_send_adc_cmd(uint8_t cmd)
 {
 	struct rt_spi_device* spi_device = rscdrrm020ndse3_dev.spi_adc_device;
@@ -179,14 +179,14 @@ static rt_err_t rscdrrm020ndse3_spi_send_adc_cmd(uint8_t cmd)
 	return RT_EOK;
 }
 
-/* Ğ´ÈëADC¼Ä´æÆ÷ */
+/* å†™å…¥ADCå¯„å­˜å™¨ */
 static rt_err_t rscdrrm020ndse3_spi_write_adc_reg(uint8_t reg, const uint8_t* send_data, rt_size_t data_len)
 {
 	struct rt_spi_device* spi_device = rscdrrm020ndse3_dev.spi_adc_device;
 	
 	/*
 		To program a configuration register, the host sends a WREG command [0100 RRNN], 
-		where ¡®RR¡¯ is the register number and ¡®NN¡¯ is the number of bytes to be written ¨C1.
+		where â€˜RRâ€™ is the register number and â€˜NNâ€™ is the number of bytes to be written â€“1.
 	*/
 	uint8_t send_buf[1] = {0};
 	send_buf[0] = 0x40 | ((reg & 0x03) << 2) | ((data_len - 1) & 0x03);
@@ -194,14 +194,14 @@ static rt_err_t rscdrrm020ndse3_spi_write_adc_reg(uint8_t reg, const uint8_t* se
     return rt_spi_send_then_send(spi_device, send_buf, sizeof(send_buf), send_data, data_len);
 }
 
-/* ¶ÁÈ¡ADC¼Ä´æÆ÷ */
+/* è¯»å–ADCå¯„å­˜å™¨ */
 static rt_err_t rscdrrm020ndse3_spi_read_adc_reg(uint8_t reg, uint8_t* recv_buf, rt_size_t buf_len)
 {
 	struct rt_spi_device* spi_device = rscdrrm020ndse3_dev.spi_adc_device;
 	
 	/*
 		RREG (0010 rrnn), 
-		where ¡®RR¡¯ is the register number and ¡®NN¡¯ is the number of bytes to be read ¨C1.
+		where â€˜RRâ€™ is the register number and â€˜NNâ€™ is the number of bytes to be read â€“1.
 	*/
 	uint8_t send_buf[1] = {0};
 	send_buf[0] = 0x20 | ((reg & 0x03) << 2) | ((buf_len - 1) & 0x03);
@@ -227,17 +227,17 @@ static void rscdrrm020ndse3_rdy_isr(void *args)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)args;
 	
-	/* ×´Ì¬¼ì²é */
+	/* çŠ¶æ€æ£€æŸ¥ */
 	if(!rscdrrm020ndse3->start)
 	{
 		return;
 	}
 	
-	/* Í¨Öª´«¸ĞÆ÷Ïß³Ì´¦ÀíÊı¾İ¶ÁÈ¡ */
+	/* é€šçŸ¥ä¼ æ„Ÿå™¨çº¿ç¨‹å¤„ç†æ•°æ®è¯»å– */
 	rt_event_send(rscdrrm020ndse3_event, RSCDRRM020NDSE3_EVENT_DATA_READY);
 }
 
-/* Æô¶¯´«¸ĞÆ÷Êı¾İ²É¼¯ */
+/* å¯åŠ¨ä¼ æ„Ÿå™¨æ•°æ®é‡‡é›† */
 static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
@@ -245,9 +245,9 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ×´Ì¬¼ì²é */
+	/* çŠ¶æ€æ£€æŸ¥ */
 	if (rscdrrm020ndse3->start)
-	{ // ÒÑÆô¶¯
+	{ // å·²å¯åŠ¨
 		rscdrrm020ndse3_unlock(dev);
 		return RT_EOK;
 	}
@@ -266,7 +266,7 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	
 	/*
 		Resets the device to the default values. 
-		Wait at least (50 ¦Ìs + 32 ¡¤ t(CLK)) after the RESET command is sent before sending any other command.
+		Wait at least (50 Î¼s + 32 Â· t(CLK)) after the RESET command is sent before sending any other command.
 	*/
 	//while (PIN_LOW != rt_pin_read(RSCDRRM020NDSE3_RDY_PIN))
 	{
@@ -274,8 +274,8 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	}
 	
 	/*
-		ÅäÖÃADC²ÎÊı
-		Initialize all four configuration registers to the default values in the EEPROM¡¯s Relative addresses 61, 63, 65 and 67 
+		é…ç½®ADCå‚æ•°
+		Initialize all four configuration registers to the default values in the EEPROMâ€™s Relative addresses 61, 63, 65 and 67 
 		by sending a WREG command to address 0
 	*/
 	ret = rscdrrm020ndse3_spi_write_adc_reg(0x00, rscdrrm020ndse3->adc_cfg_param, sizeof(rscdrrm020ndse3->adc_cfg_param));
@@ -285,8 +285,8 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 		goto _EXIT;
     }
 	
-	/* ¶ÁÈ¡ÅäÖÃ¼Ä´æÆ÷½øĞĞÑéÖ¤ */
-	{ // Ïû³ı±àÒë¾¯¸æ
+	/* è¯»å–é…ç½®å¯„å­˜å™¨è¿›è¡ŒéªŒè¯ */
+	{ // æ¶ˆé™¤ç¼–è¯‘è­¦å‘Š
 		uint8_t cfg_regs[4] = {0};
 		ret = rscdrrm020ndse3_spi_read_adc_reg(0x00, cfg_regs, sizeof(cfg_regs));
 		if (RT_EOK != ret)
@@ -297,15 +297,15 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	}
 	
 	/*
-		ÏÈÅäÖÃADCÎªÎÂ¶È²É¼¯Ä£Ê½²¢ÅäÖÃ²ÉÑùÂÊ
+		å…ˆé…ç½®ADCä¸ºæ¸©åº¦é‡‡é›†æ¨¡å¼å¹¶é…ç½®é‡‡æ ·ç‡
 		Configure the sensor to temperature mode and the desired data rate by setting configuration register 1 by sending a WREG
 		command to address 1, [0100 0100] followed by the single configuration byte. Bit 1 (TS) of the configuration register should
 		be set to 1.
 	*/
-	{ // Ïû³ı±àÒë¾¯¸æ
+	{ // æ¶ˆé™¤ç¼–è¯‘è­¦å‘Š
 		//const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
 		//uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | pctWorkModeFreq->freq_cfg | pctWorkModeFreq->mode;
-		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // ÓÃ×î¿ìËÙ¶È²É¼¯ÎÂ¶È,±ÜÃâ¹ı¶È¸ÉÈÅÑ¹Á¦²É¼¯Ê±Ğò
+		uint8_t mode = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // ç”¨æœ€å¿«é€Ÿåº¦é‡‡é›†æ¸©åº¦,é¿å…è¿‡åº¦å¹²æ‰°å‹åŠ›é‡‡é›†æ—¶åº
 		ret = rscdrrm020ndse3_spi_write_adc_reg(0x01, &mode, 1);
 		if (RT_EOK != ret)
 		{
@@ -330,7 +330,7 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 		digital filter and restarts continuous conversions
 	*/
 
-	/* Ê¹ÄÜ´«¸ĞÆ÷Êı¾İREADYÖĞ¶Ï¼ì²â */
+	/* ä½¿èƒ½ä¼ æ„Ÿå™¨æ•°æ®READYä¸­æ–­æ£€æµ‹ */
 	ret = rt_pin_irq_enable(RSCDRRM020NDSE3_RDY_PIN, PIN_IRQ_ENABLE);
 	if (RT_EOK != ret)
 	{
@@ -340,17 +340,17 @@ static rt_err_t rscdrrm020ndse3_start(rt_device_t dev)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* Çå³ı½á¹û */
+	/* æ¸…é™¤ç»“æœ */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
-	/* ¸´Î»Ñ¹Á¦Á¬Ğø²É¼¯´ÎÊı */
+	/* å¤ä½å‹åŠ›è¿ç»­é‡‡é›†æ¬¡æ•° */
 	pressure_continuous_cnt = 0;
 	
-	/* µ±Ç°ÎªÎÂ¶È²É¼¯Ä£Ê½ */
+	/* å½“å‰ä¸ºæ¸©åº¦é‡‡é›†æ¨¡å¼ */
 	rscdrrm020ndse3->mode = RSCDRRM020NDSE3_TEMPERATURE;
 	
-	/* ½øÈëÆô¶¯×´Ì¬ */
+	/* è¿›å…¥å¯åŠ¨çŠ¶æ€ */
 	rscdrrm020ndse3->start = true;
 	
 	rscdrrm020ndse3_unlock(dev);
@@ -359,7 +359,7 @@ _EXIT:
 	return ret;
 }
 
-/* Í£Ö¹´«¸ĞÆ÷Êı¾İ²É¼¯ */
+/* åœæ­¢ä¼ æ„Ÿå™¨æ•°æ®é‡‡é›† */
 static rt_err_t rscdrrm020ndse3_stop(rt_device_t dev)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
@@ -367,9 +367,9 @@ static rt_err_t rscdrrm020ndse3_stop(rt_device_t dev)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ×´Ì¬¼ì²é */
+	/* çŠ¶æ€æ£€æŸ¥ */
 	if (!rscdrrm020ndse3->start)
-	{ // ÒÑÍ£Ö¹
+	{ // å·²åœæ­¢
 		rscdrrm020ndse3_unlock(dev);
 		return RT_EOK;
 	}
@@ -386,7 +386,7 @@ static rt_err_t rscdrrm020ndse3_stop(rt_device_t dev)
 		goto _EXIT;
 	}
 	
-	/* Í£Ö¹´«¸ĞÆ÷Êı¾İREADYÖĞ¶Ï¼ì²â */
+	/* åœæ­¢ä¼ æ„Ÿå™¨æ•°æ®READYä¸­æ–­æ£€æµ‹ */
 	ret = rt_pin_irq_enable(RSCDRRM020NDSE3_RDY_PIN, PIN_IRQ_DISABLE);
 	if (RT_EOK != ret)
 	{
@@ -396,14 +396,14 @@ static rt_err_t rscdrrm020ndse3_stop(rt_device_t dev)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ½øÈëÍ£Ö¹×´Ì¬ */
+	/* è¿›å…¥åœæ­¢çŠ¶æ€ */
 	rscdrrm020ndse3->start = false;
 	
-	/* Çå³ı½á¹û */
+	/* æ¸…é™¤ç»“æœ */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
-	/* ¸´Î»Ñ¹Á¦Á¬Ğø²É¼¯´ÎÊı */
+	/* å¤ä½å‹åŠ›è¿ç»­é‡‡é›†æ¬¡æ•° */
 	pressure_continuous_cnt = 0;
 	
 	rscdrrm020ndse3_unlock(dev);
@@ -412,7 +412,7 @@ _EXIT:
 	return ret;
 }
 
-/* ×Ô¶¯¹éÁã */
+/* è‡ªåŠ¨å½’é›¶ */
 static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev, ATUO_ZERO_CPL_FUNC pfnAutoZeroCompleted)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
@@ -420,30 +420,30 @@ static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev, ATUO_ZERO_CPL_FUNC pf
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ×´Ì¬¼ì²é */
+	/* çŠ¶æ€æ£€æŸ¥ */
 	if (!rscdrrm020ndse3->start)
-	{ // Î´Æô¶¯
+	{ // æœªå¯åŠ¨
 		rscdrrm020ndse3_unlock(dev);
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_auto_zero() failed, not in start state!\r\n");
 		return -RT_ERROR;
 	}
 	if (rscdrrm020ndse3->auto_zero)
-	{ // ÕıÔÚÖ´ĞĞ×Ô¶¯¹éÁã
+	{ // æ­£åœ¨æ‰§è¡Œè‡ªåŠ¨å½’é›¶
 		rscdrrm020ndse3_unlock(dev);
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_auto_zero() failed, auto zero already in process!\r\n");
 		return -RT_ERROR;
 	}
 	
-	/* ³õÊ¼»¯ÂË²¨Æ÷±äÁ¿ */
+	/* åˆå§‹åŒ–æ»¤æ³¢å™¨å˜é‡ */
 	rscdrrm020ndse3_filter_sum = 0;
 	rscdrrm020ndse3_filter_sample_cnt = 0;
 	rscdrrm020ndse3_filter_min_val = 0xFFFFFFFF;
 	rscdrrm020ndse3_filter_max_val = 0;
 	
-	/* ÉèÖÃ×Ô¶¯¹éÁãÇëÇó±êÖ¾ */
+	/* è®¾ç½®è‡ªåŠ¨å½’é›¶è¯·æ±‚æ ‡å¿— */
 	rscdrrm020ndse3->auto_zero = true;
 	
-	/* °²×°Íê³É»Øµ÷º¯Êı */
+	/* å®‰è£…å®Œæˆå›è°ƒå‡½æ•° */
 	s_pfnAutoZeroCompleted = pfnAutoZeroCompleted;
 	
 	rscdrrm020ndse3_unlock(dev);
@@ -451,13 +451,13 @@ static rt_err_t rscdrrm020ndse3_auto_zero(rt_device_t dev, ATUO_ZERO_CPL_FUNC pf
 	return RT_EOK;
 }
 
-/* ÉèÖÃ²ÉÑùÂÊ */
+/* è®¾ç½®é‡‡æ ·ç‡ */
 static rt_err_t rscdrrm020ndse3_set_freq(rt_device_t dev, uint32_t u32FreqIndex)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_set_freq() u32FreqIndex=%u\r\n", u32FreqIndex);
 	
-	/* ²ÎÊı·¶Î§¼ì²é */
+	/* å‚æ•°èŒƒå›´æ£€æŸ¥ */
 	if (u32FreqIndex >= ARRAY_SIZE(s_tModeFreqTbl))
 	{
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_set_freq() failed, freq_index must < (%u)!\r\n", ARRAY_SIZE(s_tModeFreqTbl));
@@ -466,13 +466,13 @@ static rt_err_t rscdrrm020ndse3_set_freq(rt_device_t dev, uint32_t u32FreqIndex)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ¸üĞÂ²ÉÑùÂÊÅäÖÃ */
+	/* æ›´æ–°é‡‡æ ·ç‡é…ç½® */
 	rscdrrm020ndse3->freq_index = u32FreqIndex;
 	
-	/* ÓÉÓÚ²ÉÑùÂÊ±ä»¯,ĞèÒªÖØĞÂ¼ÆËãÂË²¨Æ÷×Ü¹²ĞèÒªµÄ²É¼¯´ÎÊı(ÓÃÓÚ×Ô¶¯¹éÁã) */
+	/* ç”±äºé‡‡æ ·ç‡å˜åŒ–,éœ€è¦é‡æ–°è®¡ç®—æ»¤æ³¢å™¨æ€»å…±éœ€è¦çš„é‡‡é›†æ¬¡æ•°(ç”¨äºè‡ªåŠ¨å½’é›¶) */
 	rscdrrm020ndse3_filter_n = (10 * u32FreqIndex + 10);
 	
-	/* ÓÉÓÚ²ÉÑùÂÊ±ä»¯,ĞèÒªÖØĞÂ¼ÆËãÑ¹Á¦ÖµÁ¬Ğø²É¼¯×Ü´ÎÊı(È·±£ÎÂ¶È²É¼¯Ô¼100ms½øĞĞÒ»´Î) */
+	/* ç”±äºé‡‡æ ·ç‡å˜åŒ–,éœ€è¦é‡æ–°è®¡ç®—å‹åŠ›å€¼è¿ç»­é‡‡é›†æ€»æ¬¡æ•°(ç¡®ä¿æ¸©åº¦é‡‡é›†çº¦100msè¿›è¡Œä¸€æ¬¡) */
 	const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[u32FreqIndex]);
 	pressure_continuous_n = ((RSCDRRM020NDSE3_ADC_TEMP_INTERVAL * pctWorkModeFreq->freq_val) / 1000); // (RSCDRRM020NDSE3_ADC_TEMP_INTERVAL / (1000 / pctWorkModeFreq->freq_val))
 	
@@ -481,7 +481,7 @@ static rt_err_t rscdrrm020ndse3_set_freq(rt_device_t dev, uint32_t u32FreqIndex)
 	return RT_EOK;
 }
 
-/* ¶ÁÈ¡²ÉÑùÂÊ */
+/* è¯»å–é‡‡æ ·ç‡ */
 static rt_err_t rscdrrm020ndse3_get_freq(rt_device_t dev, uint32_t* pu32FreqIndex)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
@@ -498,7 +498,7 @@ static rt_err_t rscdrrm020ndse3_get_freq(rt_device_t dev, uint32_t* pu32FreqInde
 	return RT_EOK;
 }
 
-/* ¶ÁÈ¡²ÉÑùÂÊ */
+/* è¯»å–é‡‡æ ·ç‡ */
 static rt_err_t rscdrrm020ndse3_get_temperature(rt_device_t dev, float* pfTemperature)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
@@ -509,8 +509,8 @@ static rt_err_t rscdrrm020ndse3_get_temperature(rt_device_t dev, float* pfTemper
 	{
 		/*
 			To convert the digital value to a Celsius temperature, first check if the MSB is 0 or 1. 
-			If the MSB = 0, simply multiply the decimal code by 0.03125¡ãC to obtain the result. 
-			If the MSB = 1, subtract 1 from the result and complement all bits, multiply the result by -0.03125¡ãC.
+			If the MSB = 0, simply multiply the decimal code by 0.03125Â°C to obtain the result. 
+			If the MSB = 1, subtract 1 from the result and complement all bits, multiply the result by -0.03125Â°C.
 		*/
 		int temperature = (int)((rscdrrm020ndse3->temperature & 0x00002000) ? (rscdrrm020ndse3->temperature | 0xFFFFC000) : rscdrrm020ndse3->temperature); // 14 bits
 		*pfTemperature = (float)temperature * 0.03125f;
@@ -521,47 +521,47 @@ static rt_err_t rscdrrm020ndse3_get_temperature(rt_device_t dev, float* pfTemper
 	return RT_EOK;
 }
 
-/* È¡µÃ¼´½«ÇĞ»»µ½µÄ²É¼¯Ä£Ê½(·â×°Ñ¹Á¦/ÎÂ¶È½»Ìæ²É¼¯²ßÂÔ) */
+/* å–å¾—å³å°†åˆ‡æ¢åˆ°çš„é‡‡é›†æ¨¡å¼(å°è£…å‹åŠ›/æ¸©åº¦äº¤æ›¿é‡‡é›†ç­–ç•¥) */
 static enum rscdrrm020ndse3_mode rscdrrm020ndse3_next_mode(struct rscdrrm020ndse3_device* rscdrrm020ndse3)
 {
 	enum rscdrrm020ndse3_mode next_mode = RSCDRRM020NDSE3_PRESSURE;
 	
 	if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode) // pressure
-	{ // µ±Ç°ÎªÑ¹Á¦²É¼¯Ä£Ê½
+	{ // å½“å‰ä¸ºå‹åŠ›é‡‡é›†æ¨¡å¼
 		if (pressure_continuous_cnt < pressure_continuous_n)
-		{ // »¹Ã»ÓĞ´ïµ½Á¬Ğø²É¼¯´ÎÊı
-			/* Á¬ĞøÑ¹Á¦²É¼¯ */
+		{ // è¿˜æ²¡æœ‰è¾¾åˆ°è¿ç»­é‡‡é›†æ¬¡æ•°
+			/* è¿ç»­å‹åŠ›é‡‡é›† */
 			next_mode = RSCDRRM020NDSE3_PRESSURE;
-			/* µİÔö¼ÆÊıÆ÷ */
+			/* é€’å¢è®¡æ•°å™¨ */
 			++pressure_continuous_cnt;
 		}
 		else
-		{ // ´ïµ½Á¬Ğø²É¼¯´ÎÊı
-			/* ÇĞ»»µ½ÎÂ¶È²É¼¯ */
+		{ // è¾¾åˆ°è¿ç»­é‡‡é›†æ¬¡æ•°
+			/* åˆ‡æ¢åˆ°æ¸©åº¦é‡‡é›† */
 			next_mode = RSCDRRM020NDSE3_TEMPERATURE;
 		}
 	}
 	else //if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode) // temperature
-	{ // µ±Ç°ÎªÎÂ¶È²É¼¯Ä£Ê½
-		/* ÇĞ»»µ½Ñ¹Á¦²É¼¯Ä£Ê½ */
+	{ // å½“å‰ä¸ºæ¸©åº¦é‡‡é›†æ¨¡å¼
+		/* åˆ‡æ¢åˆ°å‹åŠ›é‡‡é›†æ¨¡å¼ */
 		next_mode = RSCDRRM020NDSE3_PRESSURE;
-		/* ¸´Î»¼ÆÊıÆ÷ */
+		/* å¤ä½è®¡æ•°å™¨ */
 		pressure_continuous_cnt = 0;
 	}
 	
 	return next_mode;
 }
 
-/* ´«¸ĞÆ÷Ïß³Ì */
+/* ä¼ æ„Ÿå™¨çº¿ç¨‹ */
 static void rscdrrm020ndse3_thread_entry(void* param)
 {
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)param;
-	/* µ±Ç°²É¼¯µÄÑ¹Á¦Öµ(Î´²¹³¥) */
+	/* å½“å‰é‡‡é›†çš„å‹åŠ›å€¼(æœªè¡¥å¿) */
 	uint32_t pressure = 0;
-	/* µ±Ç°²É¼¯µÄÎÂ¶ÈÖµ */
+	/* å½“å‰é‡‡é›†çš„æ¸©åº¦å€¼ */
 	uint32_t temperature = 0;
 	
-	/* ½øÈëÊÂ¼şÑ­»· */
+	/* è¿›å…¥äº‹ä»¶å¾ªç¯ */
     while (1)
 	{
 		
@@ -577,7 +577,7 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 		
 		rscdrrm020ndse3_lock(rscdrrm020ndse3);
 		
-		/* ×´Ì¬¼ì²é */
+		/* çŠ¶æ€æ£€æŸ¥ */
 		if(!rscdrrm020ndse3->start)
 		{
 			rscdrrm020ndse3_unlock(rscdrrm020ndse3);
@@ -587,25 +587,25 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 		rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 		
 		if (event_recved & RSCDRRM020NDSE3_EVENT_DATA_READY)
-		{// Êı¾İÒÑ¾ÍĞ÷
+		{// æ•°æ®å·²å°±ç»ª
 			rscdrrm020ndse3_lock(rscdrrm020ndse3);
 			if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode) // pressure
 			{
-				rscdrrm020ndse3->mode = rscdrrm020ndse3_next_mode(rscdrrm020ndse3); // ÇĞ»»Ä£Ê½
+				rscdrrm020ndse3->mode = rscdrrm020ndse3_next_mode(rscdrrm020ndse3); // åˆ‡æ¢æ¨¡å¼
 				rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 				
-				/* ¶ÁÈ¡´«¸ĞÆ÷Ñ¹Á¦Êı¾İ²¢ÇĞ»»ÎªÎÂ¶È²É¼¯Ä£Ê½ */
+				/* è¯»å–ä¼ æ„Ÿå™¨å‹åŠ›æ•°æ®å¹¶åˆ‡æ¢ä¸ºæ¸©åº¦é‡‡é›†æ¨¡å¼ */
 				uint8_t send_buf[4] = {0};
 				uint8_t recv_buf[4] = {0};
 				send_buf[0] = 0xFF;
 				send_buf[1] = 0x40 | ((0x01 & 0x03) << 2) | ((1 - 1) & 0x03); // WREG command [0100 RRNN],
 				const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
 				if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode)
-				{ // ÏÂ´Î²É¼¯ÎÂ¶È
-					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // ÓÃ×î¿ìËÙ¶È²É¼¯ÎÂ¶È,±ÜÃâ¹ı¶È¸ÉÈÅÑ¹Á¦²É¼¯Ê±Ğò
+				{ // ä¸‹æ¬¡é‡‡é›†æ¸©åº¦
+					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // ç”¨æœ€å¿«é€Ÿåº¦é‡‡é›†æ¸©åº¦,é¿å…è¿‡åº¦å¹²æ‰°å‹åŠ›é‡‡é›†æ—¶åº
 				}
 				else // if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode)
-				{ // ÏÂ´Î²É¼¯Ñ¹Á¦
+				{ // ä¸‹æ¬¡é‡‡é›†å‹åŠ›
 					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq_cfg | pctWorkModeFreq->mode;
 				}
 				send_buf[3] = 0xFF;
@@ -613,8 +613,8 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				if (RT_EOK == ret)
 				{
 					/* 
-						´¦ÀíÑ¹Á¦Êı¾İ
-						Pressure data are output starting with MSB, in 24-bit 2¡¯s complement format.
+						å¤„ç†å‹åŠ›æ•°æ®
+						Pressure data are output starting with MSB, in 24-bit 2â€™s complement format.
 					*/
 					pressure = (((uint32_t)recv_buf[0] << 16) & 0x00FF0000) 
 						| (((uint32_t)recv_buf[1] << 8) & 0x0000FF00) 
@@ -623,10 +623,10 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 					/* LOCK */
 					rscdrrm020ndse3_lock(rscdrrm020ndse3);
 					
-					/* ´¦Àí×Ô¶¯¹éÁãÇëÇó */
+					/* å¤„ç†è‡ªåŠ¨å½’é›¶è¯·æ±‚ */
 					if (rscdrrm020ndse3->auto_zero)
 					{
-						/* Í³¼ÆÑù±¾µÄ×îĞ¡Öµ¡¢×î´óÖµ¡¢ÀÛ¼ÓºÍ¡¢¸öÊı */
+						/* ç»Ÿè®¡æ ·æœ¬çš„æœ€å°å€¼ã€æœ€å¤§å€¼ã€ç´¯åŠ å’Œã€ä¸ªæ•° */
 						if (pressure < rscdrrm020ndse3_filter_min_val)
 						{
 							rscdrrm020ndse3_filter_min_val = pressure;
@@ -639,18 +639,18 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 						rscdrrm020ndse3_filter_sample_cnt++;
 				
 						if (rscdrrm020ndse3_filter_sample_cnt >= rscdrrm020ndse3_filter_n)
-						{ // ²É¼¯µÄÑù±¾ÊıÒÑ´ïµ½ÒªÇó
-							/* È¥µô×î´óÖµºÍ×îĞ¡Öµ,¼ÆËã¾ùÖµ */
+						{ // é‡‡é›†çš„æ ·æœ¬æ•°å·²è¾¾åˆ°è¦æ±‚
+							/* å»æ‰æœ€å¤§å€¼å’Œæœ€å°å€¼,è®¡ç®—å‡å€¼ */
 							uint32_t avg_pressure = (rscdrrm020ndse3_filter_sum - rscdrrm020ndse3_filter_min_val - rscdrrm020ndse3_filter_max_val) / (rscdrrm020ndse3_filter_sample_cnt - 2);
 							pressure = avg_pressure;
 							
-							/* Çå³ı×Ô¶¯¹éÁãÇëÇó±êÖ¾ */
+							/* æ¸…é™¤è‡ªåŠ¨å½’é›¶è¯·æ±‚æ ‡å¿— */
 							rscdrrm020ndse3->auto_zero = false;
-							/* ÁÙÊ±±£´æ»Øµ÷º¯ÊıÖ¸Õë */
+							/* ä¸´æ—¶ä¿å­˜å›è°ƒå‡½æ•°æŒ‡é’ˆ */
 							ATUO_ZERO_CPL_FUNC pfnAutoZeroCompleted = s_pfnAutoZeroCompleted;
-							/* Çå¿Õ»Øµ÷º¯ÊıÖ¸Õë */
+							/* æ¸…ç©ºå›è°ƒå‡½æ•°æŒ‡é’ˆ */
 							s_pfnAutoZeroCompleted = NULL;
-							/* ÖØĞÂ³õÊ¼»¯ÂË²¨Æ÷±äÁ¿ */
+							/* é‡æ–°åˆå§‹åŒ–æ»¤æ³¢å™¨å˜é‡ */
 							rscdrrm020ndse3_filter_sum = 0;
 							rscdrrm020ndse3_filter_sample_cnt = 0;
 							rscdrrm020ndse3_filter_min_val = 0xFFFFFFFF;
@@ -659,13 +659,13 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 							/* UNLOCK */
 							rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 							
-							/* ÉèÖÃ¹éÁã²ÎÊı */
+							/* è®¾ç½®å½’é›¶å‚æ•° */
 							AutoZero_Pressure(avg_pressure, temperature);
 							
-							/* Èç¹ûÉèÖÃÁË»Øµ÷º¯Êı */
+							/* å¦‚æœè®¾ç½®äº†å›è°ƒå‡½æ•° */
 							if (pfnAutoZeroCompleted)
 							{
-								/* µ÷ÓÃ»Øµ÷º¯Êı */
+								/* è°ƒç”¨å›è°ƒå‡½æ•° */
 								pfnAutoZeroCompleted();
 							}
 						}
@@ -681,11 +681,11 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 						rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 					}
 					
-					/* Ö´ĞĞÎÂ¶È²¹³¥²¢Êä³ö½á¹û */
+					/* æ‰§è¡Œæ¸©åº¦è¡¥å¿å¹¶è¾“å‡ºç»“æœ */
 					CompReturn_Struct result = Compensate_Pressure(pressure, temperature);
 					if (PRESSURE_VALID == result.CompStatus)
-					{ // µÃµ½ÓĞĞ§²¹³¥½á¹û
-						/* ±£´æ²¹³¥½á¹ûÑ¹Á¦Öµ */
+					{ // å¾—åˆ°æœ‰æ•ˆè¡¥å¿ç»“æœ
+						/* ä¿å­˜è¡¥å¿ç»“æœå‹åŠ›å€¼ */
 						rscdrrm020ndse3->pressure_comp = result.f32PressureOutput;
 						
 						/* invoke callback */
@@ -698,21 +698,21 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 			}
 			else //if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode) // temperature
 			{
-				rscdrrm020ndse3->mode = rscdrrm020ndse3_next_mode(rscdrrm020ndse3); // ÇĞ»»Ä£Ê½
+				rscdrrm020ndse3->mode = rscdrrm020ndse3_next_mode(rscdrrm020ndse3); // åˆ‡æ¢æ¨¡å¼
 				rscdrrm020ndse3_unlock(rscdrrm020ndse3);
 				
-				/* ¶ÁÈ¡´«¸ĞÆ÷ÎÂ¶ÈÊı¾İ²¢ÇĞ»»ÎªÑ¹Á¦²É¼¯Ä£Ê½ */
+				/* è¯»å–ä¼ æ„Ÿå™¨æ¸©åº¦æ•°æ®å¹¶åˆ‡æ¢ä¸ºå‹åŠ›é‡‡é›†æ¨¡å¼ */
 				uint8_t send_buf[4] = {0};
 				uint8_t recv_buf[4] = {0};
 				send_buf[0] = 0xFF;
 				send_buf[1] = 0x40 | ((0x01 & 0x03) << 2) | ((1 - 1) & 0x03); // WREG command [0100 RRNN],
 				const WorkModeFreq_T* pctWorkModeFreq = &(s_tModeFreqTbl[rscdrrm020ndse3->freq_index]);
 				if (RSCDRRM020NDSE3_TEMPERATURE == rscdrrm020ndse3->mode)
-				{ // ÏÂ´Î²É¼¯ÎÂ¶È
-					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // ÓÃ×î¿ìËÙ¶È²É¼¯ÎÂ¶È,±ÜÃâ¹ı¶È¸ÉÈÅÑ¹Á¦²É¼¯Ê±Ğò
+				{ // ä¸‹æ¬¡é‡‡é›†æ¸©åº¦
+					send_buf[2] = RSCDRRM020NDSE3_ADC_TEMPERATURE | RSCDRRM020NDSE3_ADC_1000HZ | RSCDRRM020NDSE3_ADC_FAST; // ç”¨æœ€å¿«é€Ÿåº¦é‡‡é›†æ¸©åº¦,é¿å…è¿‡åº¦å¹²æ‰°å‹åŠ›é‡‡é›†æ—¶åº
 				}
 				else // if (RSCDRRM020NDSE3_PRESSURE == rscdrrm020ndse3->mode)
-				{ // ÏÂ´Î²É¼¯Ñ¹Á¦
+				{ // ä¸‹æ¬¡é‡‡é›†å‹åŠ›
 					send_buf[2] = RSCDRRM020NDSE3_ADC_PRESSURE | pctWorkModeFreq->freq_cfg | pctWorkModeFreq->mode;
 				}
 				send_buf[3] = 0xFF;
@@ -720,10 +720,10 @@ static void rscdrrm020ndse3_thread_entry(void* param)
 				if (RT_EOK == ret)
 				{
 					/* 
-						´¦ÀíÎÂ¶ÈÊı¾İ
+						å¤„ç†æ¸©åº¦æ•°æ®
 						Temperature data are output starting with MSB. When reading 24 bits, the first 14 bits are used
 						to indicate the temperature measurement result. The last 10 bits are random data and must be ignored. Negative temperature
-						is represented in 2¡¯s complement format. MSB = 0 indicates positive result, MSB = 1 indicates negative value.
+						is represented in 2â€™s complement format. MSB = 0 indicates positive result, MSB = 1 indicates negative value.
 					*/
 					temperature = ((((uint32_t)recv_buf[0] << 8) & 0x0000FF00)
 						| (((uint32_t)recv_buf[1]) & 0x000000FF)) >> 2;
@@ -740,7 +740,7 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
 	RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_init()\r\n");
 	
-	/* ´´½¨EVENT */
+	/* åˆ›å»ºEVENT */
 	rscdrrm020ndse3_event = rt_event_create("rscdrrm020ndse3", RT_IPC_FLAG_FIFO);
 	if (RT_NULL == rscdrrm020ndse3_event)
 	{
@@ -748,7 +748,7 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
         return -RT_ERROR;
 	}
 	
-	/* ´´½¨ºÍÆô¶¯´«¸ĞÆ÷Ïß³Ì */ 
+	/* åˆ›å»ºå’Œå¯åŠ¨ä¼ æ„Ÿå™¨çº¿ç¨‹ */ 
     rscdrrm020ndse3_thread = rt_thread_create("rscdrrm020ndse3", rscdrrm020ndse3_thread_entry, (void*)rscdrrm020ndse3, 1024, 5, 10); 
     if(RT_NULL == rscdrrm020ndse3_thread)
     {
@@ -757,28 +757,28 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
     }
     rt_thread_startup(rscdrrm020ndse3_thread);
 	
-	/* ¿ªÆô´«¸ĞÆ÷µçÔ´ */
+	/* å¼€å¯ä¼ æ„Ÿå™¨ç”µæº */
 	rscdrrm020ndse3_power_on(dev);
 	
-	/* ·ÖÅä»º³åÇøÓÃÓÚ´æ´¢EEPROMÖĞµÄËùÓĞ²ÎÊı */
+	/* åˆ†é…ç¼“å†²åŒºç”¨äºå­˜å‚¨EEPROMä¸­çš„æ‰€æœ‰å‚æ•° */
 	uint8_t* eeprom_buf = (uint8_t*)rt_malloc(RSCDRRM020NDSE3_EEPROM_SIZE);
 	if (RT_NULL == eeprom_buf)
 	{
-		/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+		/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 		rscdrrm020ndse3_power_off(dev);
 	
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_init() call rt_malloc(RSCDRRM020NDSE3_EEPROM_SIZE) failed!\r\n");
 		return -RT_ENOMEM;
 	}
 	
-	/* ¶ÁÈ¡EEPROMµ½»º³åÇø */
+	/* è¯»å–EEPROMåˆ°ç¼“å†²åŒº */
 	rt_err_t ret = rscdrrm020ndse3_spi_read_eeprom(0x00, eeprom_buf, RSCDRRM020NDSE3_EEPROM_SIZE);
 	if (RT_EOK != ret)
     {
-		/* ÊÍ·Å×ÊÔ´ */
+		/* é‡Šæ”¾èµ„æº */
 		rt_free(eeprom_buf);
 	
-		/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+		/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 		rscdrrm020ndse3_power_off(dev);
 		
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_init() call rscdrrm020ndse3_spi_read_eeprom(0,%d) failed, error(%d)!\r\n", 
@@ -786,14 +786,14 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
 		return ret;
     }
 	
-	/* Ê¹ÓÃEEPROMÖĞµÄ²ÎÊı³õÊ¼»¯²¹³¥º¯Êı¿â */
+	/* ä½¿ç”¨EEPROMä¸­çš„å‚æ•°åˆå§‹åŒ–è¡¥å¿å‡½æ•°åº“ */
 	CompStatus_Enum comp_ret = Compensate_Pressure_Init(eeprom_buf);
 	if (COMPINIT_OK != comp_ret)
 	{
-		/* ÊÍ·Å×ÊÔ´ */
+		/* é‡Šæ”¾èµ„æº */
 		rt_free(eeprom_buf);
 	
-		/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+		/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 		rscdrrm020ndse3_power_off(dev);
 		
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_init() call Compensate_Pressure_Init(eeprom_buf) failed, error(%d)!\r\n", comp_ret);
@@ -801,28 +801,28 @@ static rt_err_t rscdrrm020ndse3_init(rt_device_t dev)
 	}
 	
 	/* 
-		±£´æADC²ÎÊı
-		Initialize all four configuration registers to the default values in the EEPROM¡¯s Relative addresses 61, 63, 65 and 67
+		ä¿å­˜ADCå‚æ•°
+		Initialize all four configuration registers to the default values in the EEPROMâ€™s Relative addresses 61, 63, 65 and 67
 	*/
 	rscdrrm020ndse3->adc_cfg_param[0] = eeprom_buf[61];
 	rscdrrm020ndse3->adc_cfg_param[1] = eeprom_buf[63];
 	rscdrrm020ndse3->adc_cfg_param[2] = eeprom_buf[65];
 	rscdrrm020ndse3->adc_cfg_param[3] = eeprom_buf[67];
 	
-	/* ÊÍ·Å×ÊÔ´ */
+	/* é‡Šæ”¾èµ„æº */
 	rt_free(eeprom_buf);
 	
-	/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+	/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 	rscdrrm020ndse3_power_off(dev);
 	
-	/* Çå³ıÆô¶¯×´Ì¬ */
+	/* æ¸…é™¤å¯åŠ¨çŠ¶æ€ */
 	rscdrrm020ndse3->start = false;
 	
-	/* Çå³ı½á¹û */
+	/* æ¸…é™¤ç»“æœ */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
-	/* ¸´Î»Ñ¹Á¦Á¬Ğø²É¼¯´ÎÊı */
+	/* å¤ä½å‹åŠ›è¿ç»­é‡‡é›†æ¬¡æ•° */
 	pressure_continuous_cnt = 0;
 	
     return RT_EOK;
@@ -839,41 +839,41 @@ static rt_err_t rscdrrm020ndse3_control(rt_device_t dev, int cmd, void *args)
     {
 		case RSCDRRM020NDSE3_START:
 		{
-			/* Æô¶¯´«¸ĞÆ÷Êı¾İ²É¼¯ */
+			/* å¯åŠ¨ä¼ æ„Ÿå™¨æ•°æ®é‡‡é›† */
 			ret = rscdrrm020ndse3_start(dev);
 			break;
 		}
 		case RSCDRRM020NDSE3_STOP:
 		{
-			/* Í£Ö¹´«¸ĞÆ÷Êı¾İ²É¼¯ */
+			/* åœæ­¢ä¼ æ„Ÿå™¨æ•°æ®é‡‡é›† */
 			ret = rscdrrm020ndse3_stop(dev);
 			break;
 		}
 		case RSCDRRM020NDSE3_AUTO_ZERO:
 		{
 			ATUO_ZERO_CPL_FUNC pfnAutoZeroCompleted = (ATUO_ZERO_CPL_FUNC)args;
-			/* ÇëÇó×Ô¶¯¹éÁã */
+			/* è¯·æ±‚è‡ªåŠ¨å½’é›¶ */
 			ret = rscdrrm020ndse3_auto_zero(dev, pfnAutoZeroCompleted);
 			break;
 		}
 		case RSCDRRM020NDSE3_SET_FREQ:
 		{
 			uint32_t u32FreqIndex = (uint32_t)args;
-			/* ÉèÖÃ²ÉÑùÂÊ */
+			/* è®¾ç½®é‡‡æ ·ç‡ */
 			ret = rscdrrm020ndse3_set_freq(dev, u32FreqIndex);
 			break;
 		}
 		case RSCDRRM020NDSE3_GET_FREQ:
 		{
 			uint32_t* pu32FreqIndex = (uint32_t*)args;
-			/* ¶ÁÈ¡²ÉÑùÂÊ */
+			/* è¯»å–é‡‡æ ·ç‡ */
 			ret = rscdrrm020ndse3_get_freq(dev, pu32FreqIndex);
 			break;
 		}
 		case RSCDRRM020NDSE3_GET_TEMP:
 		{
 			float* pfTemperature = (float*)args;
-			/* ¶ÁÈ¡ÎÂ¶ÈÖµ(µ¥Î»: ÉãÊÏ¶È) */
+			/* è¯»å–æ¸©åº¦å€¼(å•ä½: æ‘„æ°åº¦) */
 			ret = rscdrrm020ndse3_get_temperature(dev, pfTemperature);
 			break;
 		}
@@ -895,10 +895,10 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 	
 	struct rscdrrm020ndse3_device* rscdrrm020ndse3 = (struct rscdrrm020ndse3_device*)dev;
 	
-	/* ¿ªÆô´«¸ĞÆ÷µçÔ´ */
+	/* å¼€å¯ä¼ æ„Ÿå™¨ç”µæº */
 	rscdrrm020ndse3_power_on(dev);
 	
-	/* ÅäÖÃ´«¸ĞÆ÷Êı¾İREADYÖĞ¶Ï¼ì²â */
+	/* é…ç½®ä¼ æ„Ÿå™¨æ•°æ®READYä¸­æ–­æ£€æµ‹ */
 	rt_err_t ret = rt_pin_attach_irq(RSCDRRM020NDSE3_RDY_PIN, PIN_IRQ_MODE_FALLING, rscdrrm020ndse3_rdy_isr, rscdrrm020ndse3);
 	if (RT_EOK != ret)
 	{
@@ -906,7 +906,7 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 		return ret;
 	}
 	
-	/* È·±£´«¸ĞÆ÷Êı¾İREADYÖĞ¶Ï¼ì²â´¦ÓÚDISABLE×´Ì¬ */
+	/* ç¡®ä¿ä¼ æ„Ÿå™¨æ•°æ®READYä¸­æ–­æ£€æµ‹å¤„äºDISABLEçŠ¶æ€ */
 	ret = rt_pin_irq_enable(RSCDRRM020NDSE3_RDY_PIN, PIN_IRQ_DISABLE);
 	if (RT_EOK != ret)
 	{
@@ -916,17 +916,17 @@ static rt_err_t rscdrrm020ndse3_open(rt_device_t dev, uint16_t oflag)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ³õÊ¼Ê±ÎªÍ£Ö¹×´Ì¬ */
+	/* åˆå§‹æ—¶ä¸ºåœæ­¢çŠ¶æ€ */
 	rscdrrm020ndse3->start = false;
 	
-	/* Çå³ı½á¹û */
+	/* æ¸…é™¤ç»“æœ */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
-	/* ¸´Î»Ñ¹Á¦Á¬Ğø²É¼¯´ÎÊı */
+	/* å¤ä½å‹åŠ›è¿ç»­é‡‡é›†æ¬¡æ•° */
 	pressure_continuous_cnt = 0;
 	
-	/* ²ÉÑùÂÊ(Ë÷Òı) */
+	/* é‡‡æ ·ç‡(ç´¢å¼•) */
 	rscdrrm020ndse3->freq_index = RSCDRRM020NDSE3_ADC_DEFAUT_FREQ_INDEX;
 	
 	rscdrrm020ndse3_unlock(dev);
@@ -943,25 +943,25 @@ static rt_err_t rscdrrm020ndse3_close(rt_device_t dev)
 	
 	rscdrrm020ndse3_lock(dev);
 	
-	/* ½øÈëÍ£Ö¹×´Ì¬ */
+	/* è¿›å…¥åœæ­¢çŠ¶æ€ */
 	rscdrrm020ndse3->start = false;
 	
-	/* Çå³ı½á¹û */
+	/* æ¸…é™¤ç»“æœ */
 	rscdrrm020ndse3->pressure_comp = 0.0;
 	rscdrrm020ndse3->temperature = 0;
 	
-	/* ¸´Î»Ñ¹Á¦Á¬Ğø²É¼¯´ÎÊı */
+	/* å¤ä½å‹åŠ›è¿ç»­é‡‡é›†æ¬¡æ•° */
 	pressure_continuous_cnt = 0;
 	
 	rscdrrm020ndse3_unlock(dev);
 	
-	/* Í£Ö¹´«¸ĞÆ÷Êı¾İREADYÖĞ¶Ï¼ì²â */
+	/* åœæ­¢ä¼ æ„Ÿå™¨æ•°æ®READYä¸­æ–­æ£€æµ‹ */
 	rt_pin_irq_enable(RSCDRRM020NDSE3_RDY_PIN, PIN_IRQ_DISABLE);
 	
-	/* Ğ¶ÔØ´«¸ĞÆ÷Êı¾İREADYÖĞ¶Ï¼ì²â */
+	/* å¸è½½ä¼ æ„Ÿå™¨æ•°æ®READYä¸­æ–­æ£€æµ‹ */
 	rt_pin_detach_irq(RSCDRRM020NDSE3_RDY_PIN);
 	
-	/* ¹Ø±Õ´«¸ĞÆ÷µçÔ´ */
+	/* å…³é—­ä¼ æ„Ÿå™¨ç”µæº */
 	rscdrrm020ndse3_power_off(dev);
 	
     return RT_EOK;
@@ -999,7 +999,7 @@ int rscdrrm020ndse3_hw_init(void)
 {
     RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_hw_init()\r\n");
 	
-	/* ´´½¨ºÍ³õÊ¼»¯SPI EEPROMÉè±¸(CS_EE pin: PC3) */
+	/* åˆ›å»ºå’Œåˆå§‹åŒ–SPI EEPROMè®¾å¤‡(CS_EE pin: PC3) */
 	rt_err_t ret = rt_hw_spi_device_attach(RSCDRRM020NDSE3_SPI_BUS_NAME, 
 		RSCDRRM020NDSE3_SPI_EE_DEVICE_NAME, GPIOC, GPIO_PIN_3);
     if (RT_EOK != ret)
@@ -1035,7 +1035,7 @@ int rscdrrm020ndse3_hw_init(void)
 	/* save eeprom spi device */
 	rscdrrm020ndse3_dev.spi_ee_device = spi_ee_device;
 	
-	/* ´´½¨ºÍ³õÊ¼»¯SPI ADCÉè±¸(CS_ADC pin: PC2) */
+	/* åˆ›å»ºå’Œåˆå§‹åŒ–SPI ADCè®¾å¤‡(CS_ADC pin: PC2) */
 	ret = rt_hw_spi_device_attach(RSCDRRM020NDSE3_SPI_BUS_NAME, 
 		RSCDRRM020NDSE3_SPI_ADC_DEVICE_NAME, GPIOC, GPIO_PIN_2);
     if (RT_EOK != ret)
@@ -1085,23 +1085,23 @@ int rscdrrm020ndse3_hw_init(void)
 #endif
 	
 	/* set POWER_EN pin mode to output */
-	rt_pin_write(RSCDRRM020NDSE3_PWER_EN_PIN, PIN_LOW); // ³õÊ¼»¯Ê±¹Ø±Õ´«¸ĞÆ÷µçÔ´
+	rt_pin_write(RSCDRRM020NDSE3_PWER_EN_PIN, PIN_LOW); // åˆå§‹åŒ–æ—¶å…³é—­ä¼ æ„Ÿå™¨ç”µæº
     rt_pin_mode(RSCDRRM020NDSE3_PWER_EN_PIN, PIN_MODE_OUTPUT);
 	
 	/* set RDY pin mode to input */
     rt_pin_mode(RSCDRRM020NDSE3_RDY_PIN, PIN_MODE_INPUT_PULLUP);
 	
-	/* ADC²ÎÊıÇåÁã */
+	/* ADCå‚æ•°æ¸…é›¶ */
 	rt_memset(rscdrrm020ndse3_dev.adc_cfg_param, 0, sizeof(rscdrrm020ndse3_dev.adc_cfg_param));
 	
-	/* Çå³ıÆô¶¯×´Ì¬ */
+	/* æ¸…é™¤å¯åŠ¨çŠ¶æ€ */
 	rscdrrm020ndse3_dev.start = false;
 	
-	/* Çå³ı½á¹û */
+	/* æ¸…é™¤ç»“æœ */
 	rscdrrm020ndse3_dev.pressure_comp = 0.0;
 	rscdrrm020ndse3_dev.temperature = 0;
 	
-	/* ¸´Î»Ñ¹Á¦Á¬Ğø²É¼¯´ÎÊı */
+	/* å¤ä½å‹åŠ›è¿ç»­é‡‡é›†æ¬¡æ•° */
 	pressure_continuous_cnt = 0;
 	
 	/* init lock */

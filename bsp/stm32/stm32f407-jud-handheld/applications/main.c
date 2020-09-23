@@ -29,7 +29,6 @@
 #include "cmd.h"
 #include "cyclequeue.h"
 #include "at.h"
-#include "sht20.h"
 #include "sensor.h"
 
 /**---------------------------------------------------------------------------*
@@ -69,22 +68,27 @@ extern   "C"
 /* Vcom设备名 */
 #define VCOM_DEVICE_NAME "vcom"
 /* BT串口设备名 */
-#define BT_UART_NAME "uart2"
-/* SHT20传感器I2C总线名 */
-#define SHT20_I2C_BUS_NAME "i2c1"
+#define BT_UART_NAME "uart3"
 
-/* defined the TS_LED pin: PE1 */
-#define TS_LED_PIN GET_PIN(E, 1)
-/* defined the BT_POWER pin: PC5 */
-#define BT_POWER_PIN GET_PIN(C, 5)
-/* defined the BT_TRANS pin: PA4 */
-#define BT_TRANS_PIN GET_PIN(A, 4)
-/* defined the BT_DISCON pin: PA5 */
-#define BT_DISCON_PIN GET_PIN(A, 5)
-/* defined the BT_RESET pin: PA6 */
-#define BT_RESET_PIN GET_PIN(A, 6)
-/* defined the BT_STATUS pin: PA7 */
-#define BT_STATUS_PIN GET_PIN(A, 7)
+/* defined the LIGHT_B pin: PE9 */
+#define LIGHT_B_PIN GET_PIN(E, 9)
+/* defined the LIGHT_G pin: PE11 */
+#define LIGHT_G_PIN GET_PIN(E, 11)
+/* defined the LIGHT_R pin: PE13 */
+#define LIGHT_R_PIN GET_PIN(E, 13)
+
+/* defined the BT_TRANS pin: PD10 */
+#define BT_TRANS_PIN GET_PIN(D, 10)
+/* defined the BT_DISCON pin: PD11 */
+#define BT_DISCON_PIN GET_PIN(D, 11)
+/* defined the BT_RESET pin: PD12 */
+#define BT_RESET_PIN GET_PIN(D, 12)
+/* defined the BT_STATUS pin: PD13 */
+#define BT_STATUS_PIN GET_PIN(D, 13)
+/* defined the BT_LIGHT pin: PD14 */
+#define BT_LIGHT_PIN GET_PIN(D, 14)
+/* defined the BT_POWER pin: PD15 */
+#define BT_POWER_PIN GET_PIN(D, 15)
 	
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
@@ -95,9 +99,6 @@ extern   "C"
 **----------------------------------------------------------------------------*/
 /* event for application */
 static rt_event_t app_event = RT_NULL;
-
-/* SHT20传感器设备 */
-static sht20_device_t sht20_dev = RT_NULL;
 
 /* BME280传感器设备 */
 static rt_device_t temp_bme280_dev = RT_NULL;
@@ -776,9 +777,8 @@ bool adc_start(int adc_channel)
 		return false;
 	}
 #endif
-	
-	/* 开启TS_LED */
-	rt_pin_write(TS_LED_PIN, PIN_HIGH);
+
+    rt_pin_write(LIGHT_G_PIN, PIN_HIGH);
 	
 	/* 设置ADC采集已启动标志 */
 	adc_started = true;
@@ -816,9 +816,8 @@ bool adc_stop(void)
 	}
 #endif
 	
-	/* 关闭TS_LED */
-	rt_pin_write(TS_LED_PIN, PIN_LOW);
-	
+    rt_pin_write(LIGHT_G_PIN, PIN_LOW);
+    
 	/* 清除ADC采集已启动标志 */
 	adc_started = false;
 	
@@ -886,34 +885,6 @@ float bme280_get_baro(void)
 }
 
 /*************************************************
-* Function: sht20_get_temp
-* Description: 通过sht20读取温度
-* Author: wangk
-* Returns: 温度单位,摄氏度
-* Parameter:
-* History:
-*************************************************/
-float sht20_get_temp(void)
-{
-    float temperature = sht20_read_temperature(sht20_dev);
-	return temperature;
-}
-
-/*************************************************
-* Function: sht20_get_humi
-* Description: 通过sht20读取相对湿度
-* Author: wangk
-* Returns: 相对湿度单位,百分比
-* Parameter:
-* History:
-*************************************************/
-float sht20_get_humi(void)
-{
-	float humidity = sht20_read_humidity(sht20_dev);
-	return humidity;
-}
-
-/*************************************************
 * Function: main
 * Description: main入口函数
 * Author: wangk
@@ -935,10 +906,14 @@ int main(void)
 	
 	/* 初始化CMD模块 */
 	CMD_Init();
-	
-	/* set TS_LED pin mode to output */
-    rt_pin_mode(TS_LED_PIN, PIN_MODE_OUTPUT);
-	rt_pin_write(TS_LED_PIN, PIN_LOW);
+    
+    /* set LIGHT_B/G/R pin mode to output */
+    rt_pin_mode(LIGHT_B_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LIGHT_B_PIN, PIN_LOW);
+    rt_pin_mode(LIGHT_G_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LIGHT_G_PIN, PIN_LOW);
+    rt_pin_mode(LIGHT_R_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LIGHT_R_PIN, PIN_LOW);
 	
 	/* set BT_POWER pin mode to output */
     rt_pin_mode(BT_POWER_PIN, PIN_MODE_OUTPUT);
@@ -956,15 +931,6 @@ int main(void)
 	if (RT_NULL == app_event)
 	{
 		APP_TRACE("create app event failed!\r\n");
-		main_ret = -RT_ERROR;
-		goto _END;
-	}
-	
-	/* 初始化SHT20传感器 */
-	sht20_dev = sht20_init(SHT20_I2C_BUS_NAME);
-	if (RT_NULL == sht20_dev)
-	{
-		APP_TRACE("call sht20_init() failed!\r\n");
 		main_ret = -RT_ERROR;
 		goto _END;
 	}
@@ -1213,11 +1179,6 @@ _END:
 	{
 		rt_event_delete(app_event);
 		app_event = RT_NULL;
-	}
-	if (RT_NULL != sht20_dev)
-	{
-		sht20_deinit(sht20_dev);
-		sht20_dev = RT_NULL;
 	}
 	bme280_deinit();
 	if (RT_NULL != sensor_dev)

@@ -101,8 +101,6 @@ static void _CMD_HandlerADC_TEMP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_TEMP(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_HUMI(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam);
-static void _CMD_HandlerSHT20_TEMP(const StrConstRef_T* pctStrRefParam);
-static void _CMD_HandlerSHT20_HUMI(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerOTA_DOWNLOAD(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerOTA_REBOOT(const StrConstRef_T* pctStrRefParam);
 const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
@@ -117,8 +115,6 @@ const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("BME280_TEMP"), _CMD_HandlerBME280_TEMP },
 	{ STR_ITEM("BME280_HUMI"), _CMD_HandlerBME280_HUMI },
 	{ STR_ITEM("BME280_BARO"), _CMD_HandlerBME280_BARO },
-	{ STR_ITEM("SHT20_TEMP"), _CMD_HandlerSHT20_TEMP },
-	{ STR_ITEM("SHT20_HUMI"), _CMD_HandlerSHT20_HUMI },
 	{ STR_ITEM("OTA_DOWNLOAD"), _CMD_HandlerOTA_DOWNLOAD },
 	{ STR_ITEM("OTA_REBOOT"), _CMD_HandlerOTA_REBOOT },
 };
@@ -674,28 +670,6 @@ static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam)
 }
 
 /*************************************************
-* Function: _CMD_HandlerSHT20_TEMP
-* Description: SHT20_TEMP命令处理函数
-* Author: wangk
-* Returns:
-* Parameter:
-* History:
-*************************************************/
-static void _CMD_HandlerSHT20_TEMP(const StrConstRef_T* pctStrRefParam)
-{
-	if (NULL == pctStrRefParam)
-	{ // 读取
-		float temperature = sht20_get_temp();
-		_CMD_Response("[SHT20_TEMP=%d.%d]", (int)temperature, (int)(temperature * 10) % 10);
-	}
-	else
-	{ // 设置
-		// 只读属性,不允许设置
-		_CMD_Response("[ERR]");
-	}
-}
-
-/*************************************************
 * Function: _CMD_HandlerOTA_DOWNLOAD
 * Description: OTA_DOWNLOAD命令处理函数
 * Author: wangk
@@ -719,28 +693,6 @@ static void _CMD_HandlerOTA_DOWNLOAD(const StrConstRef_T* pctStrRefParam)
 	else
 	{ // 设置
 		// 不允许设置
-		_CMD_Response("[ERR]");
-	}
-}
-
-/*************************************************
-* Function: _CMD_HandlerSHT20_HUMI
-* Description: SHT20_HUMI命令处理函数
-* Author: wangk
-* Returns:
-* Parameter:
-* History:
-*************************************************/
-static void _CMD_HandlerSHT20_HUMI(const StrConstRef_T* pctStrRefParam)
-{
-	if (NULL == pctStrRefParam)
-	{ // 读取
-		float humidity = sht20_get_humi();
-		_CMD_Response("[SHT20_HUMI=%d.%d]", (int)humidity, (int)(humidity * 10) % 10);
-	}
-	else
-	{ // 设置
-		// 只读属性,不允许设置
 		_CMD_Response("[ERR]");
 	}
 }

@@ -30,10 +30,13 @@ menu "Onboard Peripheral Drivers"
 			endchoice
 		endif
 		
-	config BSP_USING_SHT20_SENSOR
-		bool "Enable SHT20 Sensor"
-		select BSP_USING_I2C1
-		default y
+	config BSP_USING_SPI_FLASH
+		bool "Enable SPI FLASH (W25Q128 spi3)"
+		select BSP_USING_SPI
+		select BSP_USING_SPI3
+		select RT_USING_SFUD
+		select RT_SFUD_USING_SFDP
+		default n
 		
 	config BSP_USING_BME280_SENSOR
 		bool "Enable BME280 Sensor"
@@ -68,18 +71,18 @@ menu "On-chip Peripheral Drivers"
                 depends on BSP_USING_UART1 && RT_SERIAL_USING_DMA
                 default n
 				
-			config BSP_USING_UART2
-                bool "Enable UART2"
+			config BSP_USING_UART3
+                bool "Enable UART3"
                 default y
 
-            config BSP_UART2_RX_USING_DMA
-                bool "Enable UART2 RX DMA"
-                depends on BSP_USING_UART2 && RT_SERIAL_USING_DMA
+            config BSP_UART3_RX_USING_DMA
+                bool "Enable UART3 RX DMA"
+                depends on BSP_USING_UART3 && RT_SERIAL_USING_DMA
                 default n
 				
-			config BSP_UART2_TX_USING_DMA
-                bool "Enable UART2 TX DMA"
-                depends on BSP_USING_UART2 && RT_SERIAL_USING_DMA
+			config BSP_UART3_TX_USING_DMA
+                bool "Enable UART3 TX DMA"
+                depends on BSP_USING_UART3 && RT_SERIAL_USING_DMA
                 default n
         endif
 
@@ -92,6 +95,21 @@ menu "On-chip Peripheral Drivers"
         default n
         select RT_USING_SPI
         if BSP_USING_SPI
+			config BSP_USING_SPI1
+                bool "Enable SPI1 BUS"
+                default n
+
+            config BSP_SPI1_TX_USING_DMA
+                bool "Enable SPI1 TX DMA"
+                depends on BSP_USING_SPI1
+                default n
+                
+            config BSP_SPI1_RX_USING_DMA
+                bool "Enable SPI1 RX DMA"
+                depends on BSP_USING_SPI1
+                select BSP_SPI1_TX_USING_DMA
+                default n
+				
             config BSP_USING_SPI2
                 bool "Enable SPI2 BUS"
                 default n
@@ -106,23 +124,21 @@ menu "On-chip Peripheral Drivers"
                 depends on BSP_USING_SPI2
                 select BSP_SPI2_TX_USING_DMA
                 default n
-        endif
-	
-	menuconfig BSP_USING_I2C1
-        bool "Enable I2C1 BUS (software simulation)"
-        default y
-        select RT_USING_I2C
-        select RT_USING_I2C_BITOPS
-        select RT_USING_PIN
-        if BSP_USING_I2C1
-            config BSP_I2C1_SCL_PIN
-                int "I2C1 scl pin number"
-                range 0 143
-                default 26
-            config BSP_I2C1_SDA_PIN
-                int "I2C1 sda pin number"
-                range 0 143
-                default 27
+				
+			config BSP_USING_SPI3
+                bool "Enable SPI3 BUS"
+                default n
+
+            config BSP_SPI3_TX_USING_DMA
+                bool "Enable SPI3 TX DMA"
+                depends on BSP_USING_SPI3
+                default n
+                
+            config BSP_SPI3_RX_USING_DMA
+                bool "Enable SPI3 RX DMA"
+                depends on BSP_USING_SPI3
+                select BSP_SPI3_TX_USING_DMA
+                default n
         endif
 	
 	menuconfig BSP_USING_I2C2
