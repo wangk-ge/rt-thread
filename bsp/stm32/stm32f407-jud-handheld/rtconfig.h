@@ -185,9 +185,6 @@
 #define PKG_USING_SENSORS_DRIVERS
 #define PKG_USING_BME280
 #define PKG_USING_BME280_LATEST_VERSION
-#define BSP_USING_SPI1
-#define BSP_USING_SPI2
-#define BSP_USING_SPI3
 
 /* miscellaneous packages */
 
@@ -220,6 +217,9 @@
 #define BSP_UART3_TX_USING_DMA
 #define BSP_USING_ON_CHIP_FLASH
 #define BSP_USING_SPI
+#define BSP_USING_SPI1
+#define BSP_USING_SPI2
+#define BSP_USING_SPI3
 #define BSP_USING_I2C2
 #define BSP_I2C2_SCL_PIN 24
 #define BSP_I2C2_SDA_PIN 25
