@@ -88,6 +88,9 @@ extern   "C"
 /* defined the ADC_VIN_LI pin: PA1 */
 #define ADC_VIN_LI_PIN GET_PIN(A, 1)
 
+/* defined the OLED_POWER pin: PA2 */
+#define OLED_POWER_PIN GET_PIN(A, 2)
+
 /* defined the BME280_SDO pin: PB5 */
 #define BME280_SDO_PIN GET_PIN(B, 5)
 
@@ -1131,6 +1134,10 @@ int main(void)
 		//goto _END;
 	}
     
+    /* 开启OLED电源 */
+    rt_pin_mode(OLED_POWER_PIN, PIN_MODE_OUTPUT);
+    rt_pin_write(OLED_POWER_PIN, PIN_HIGH);
+    
     /* set CHARGE_S pin mode to input(检测充电状态) */
     rt_pin_mode(CHARGE_S_PIN, PIN_MODE_INPUT_PULLUP);
     /* set CHARGE_D pin mode to input(检测充电电源状态) */
@@ -1506,4 +1513,4 @@ INIT_BOARD_EXPORT(ota_app_vtor_reconfig);
 #ifdef   __cplusplus
 }
 #endif
-// End of main.c
+// End of main.cpp
