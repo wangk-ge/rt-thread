@@ -1,7 +1,7 @@
 /****************************************************************************
  *
  * File Name
- *  main.c
+ *  main.cpp
  * Author
  *  wangk
  * Date
@@ -18,7 +18,6 @@
 #include <board.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "fal.h"
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 #include "rscdrrm020ndse3.h"
 #elif defined(BSP_USING_AD7730)
@@ -30,6 +29,11 @@
 #include "cyclequeue.h"
 #include "at.h"
 #include "sensor.h"
+extern "C"
+{
+    #include "fal.h"
+}
+#include "U8g2lib.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -107,6 +111,18 @@ extern   "C"
 /* defined the BT_POWER pin: PD15 */
 #define BT_POWER_PIN GET_PIN(D, 15)
 	
+#define OLED_SPI_PIN_RES       GET_PIN(A, 4)  // PA4
+#define OLED_SPI_PIN_DC        GET_PIN(A, 6)  // PA6
+#define OLED_SPI_PIN_CS        GET_PIN(A, 3)  // PA3
+
+// In u8x8.h #define U8X8_USE_PINS 
+#define U8G2_PIN_UP            GET_PIN(E, 2)      // PE2(KEY3)
+#define U8G2_PIN_DOWN          GET_PIN(E, 3)      // PE3(KEY2)
+#define U8G2_PIN_LEFT          U8X8_PIN_NONE
+#define U8G2_PIN_RIGHT         GET_PIN(E, 4)      // PE4(KEY1)
+#define U8G2_PIN_SELECT        GET_PIN(E, 5)      // PE5(KEY0)
+#define U8G2_PIN_HOME          U8X8_PIN_NONE
+
 /*----------------------------------------------------------------------------*
 **                             Data Structures                                *
 **----------------------------------------------------------------------------*/
@@ -169,6 +185,8 @@ static bool adc_started = false;
 
 /* 通信模式 */
 static COM_MODE_E com_mode = COM_MODE_VCOM; // 默认VCOM优先
+
+static U8G2_SH1107_PIMORONI_128X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ OLED_SPI_PIN_CS, /* dc=*/ OLED_SPI_PIN_DC, /* reset=*/ OLED_SPI_PIN_RES);
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -426,6 +444,76 @@ static void on_auto_zero_completed(void)
 	rt_event_send(app_event, SENSOR_AUTO_ZERO_DONE);
 }
 #endif
+
+static void drawLogo(void)
+{
+    u8g2.setFontMode(1);    // Transparent
+#ifdef MINI_LOGO
+
+    u8g2.setFontDirection(0);
+    u8g2.setFont(u8g2_font_inb16_mf);
+    u8g2.drawStr(0, 22, "U");
+
+    u8g2.setFontDirection(1);
+    u8g2.setFont(u8g2_font_inb19_mn);
+    u8g2.drawStr(14,8,"8");
+
+    u8g2.setFontDirection(0);
+    u8g2.setFont(u8g2_font_inb16_mf);
+    u8g2.drawStr(36,22,"g");
+    u8g2.drawStr(48,22,"\xb2");
+
+    u8g2.drawHLine(2, 25, 34);
+    u8g2.drawHLine(3, 26, 34);
+    u8g2.drawVLine(32, 22, 12);
+    u8g2.drawVLine(33, 23, 12);
+#else
+
+    u8g2.setFontDirection(0);
+    u8g2.setFont(u8g2_font_inb24_mf);
+    u8g2.drawStr(0, 30, "U");
+
+    u8g2.setFontDirection(1);
+    u8g2.setFont(u8g2_font_inb30_mn);
+    u8g2.drawStr(21,8,"8");
+
+    u8g2.setFontDirection(0);
+    u8g2.setFont(u8g2_font_inb24_mf);
+    u8g2.drawStr(51,30,"g");
+    u8g2.drawStr(67,30,"\xb2");
+
+    u8g2.drawHLine(2, 35, 47);
+    u8g2.drawHLine(3, 36, 47);
+    u8g2.drawVLine(45, 32, 12);
+    u8g2.drawVLine(46, 33, 12);
+
+#endif
+}
+
+static void drawURL(void)
+{
+#ifndef MINI_LOGO
+  u8g2.setFont(u8g2_font_4x6_tr);
+  if ( u8g2.getDisplayHeight() < 59 )
+  {
+    u8g2.drawStr(89,20,"github.com");
+    u8g2.drawStr(73,29,"/olikraus/u8g2");
+  }
+  else
+  {
+    u8g2.drawStr(1,54,"github.com/olikraus/u8g2");
+  }
+#endif
+}
+
+static void u8g2_full_buffer_u8g2_logo(void)
+{
+  u8g2.begin(/*Select=*/ U8G2_PIN_SELECT, /*Right/Next=*/ U8G2_PIN_RIGHT, /*Left/Prev=*/ U8G2_PIN_LEFT, /*Up=*/ U8G2_PIN_UP, /*Down=*/ U8G2_PIN_DOWN, /*Home/Cancel=*/ U8G2_PIN_HOME);
+  u8g2.clearBuffer();
+  drawLogo();
+  drawURL();
+  u8g2.sendBuffer();
+}
 
 /*----------------------------------------------------------------------------*
 **                             Public Function                                *
@@ -697,7 +785,7 @@ bool adc_calibration(int adc_channel, CAL_CPL_FUNC pfnCalCompleted)
 	
 	s_pfnCalCompleted = pfnCalCompleted;
 	
-	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_AUTO_ZERO, on_auto_zero_completed);
+	rt_err_t ret = rt_device_control(sensor_dev, RSCDRRM020NDSE3_AUTO_ZERO, (void *)on_auto_zero_completed);
 	if (RT_EOK != ret)
 	{
 		APP_TRACE("adc_calibration() failed, rt_device_control(RSCDRRM020NDSE3_AUTO_ZERO) error(%d)!\r\n", ret);
@@ -1216,6 +1304,10 @@ int main(void)
             }
         }
     }
+    
+    // Test OLED
+    u8g2_full_buffer_u8g2_logo();
+    
 	/* 进入事件循环 */
     while (1)
 	{
