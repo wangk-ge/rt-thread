@@ -22,10 +22,10 @@
     #define BME280_TRACE(...)
 #endif /* BME280_DEBUG */
 
-/* I2C×ÜÏßÃû */
+/* I2Cæ€»çº¿å */
 #define BME280_I2C_BUS_NAME "i2c2"
 
-/* ³õÊ¼»¯BME280´«¸ĞÆ÷Çı¶¯ */
+/* åˆå§‹åŒ–BME280ä¼ æ„Ÿå™¨é©±åŠ¨ */
 static int bme280_port(void)
 {
     struct rt_sensor_config cfg;

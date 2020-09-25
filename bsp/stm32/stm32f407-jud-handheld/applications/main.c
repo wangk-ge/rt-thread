@@ -84,6 +84,9 @@ extern   "C"
 /* defined the ADC_VIN_LI pin: PA1 */
 #define ADC_VIN_LI_PIN GET_PIN(A, 1)
 
+/* defined the BME280_SDO pin: PB5 */
+#define BME280_SDO_PIN GET_PIN(B, 5)
+
 /* defined the LIGHT_B pin: PE9 */
 #define LIGHT_B_PIN GET_PIN(E, 9)
 /* defined the LIGHT_G pin: PE11 */
@@ -192,6 +195,13 @@ static void switch_int_isr(void *args)
 static bool bme280_init(void)
 {
 	APP_TRACE("bme280_init()\r\n");
+    
+    /* 
+        Connecting SDO to GND results in slave address 1110110 (0x76); 
+        connection it to VDDIO results in slave address 1110111 (0x77)
+    */
+    rt_pin_mode(BME280_SDO_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(BME280_SDO_PIN, PIN_LOW);
 	
 	/* Temperature */
 	temp_bme280_dev = rt_device_find("temp_bme280");
