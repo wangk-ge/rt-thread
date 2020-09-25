@@ -671,6 +671,12 @@ uint32_t bt_send_data(const uint8_t* data, uint32_t len)
 bool adc_calibration(int adc_channel, CAL_CPL_FUNC pfnCalCompleted)
 {
 	APP_TRACE("adc_calibration() adc_channel=%d\r\n", adc_channel);
+    
+    if (sensor_dev == RT_NULL)
+    {
+        APP_TRACE("adc_calibration() failed, sensor_dev is null!\r\n");
+        return false;
+    }
 
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 	if (0 != adc_channel)
@@ -722,6 +728,12 @@ bool adc_calibration(int adc_channel, CAL_CPL_FUNC pfnCalCompleted)
 uint32_t adc_get_freq(void)
 {
 	APP_TRACE("adc_get_freq()\r\n");
+    
+    if (sensor_dev == RT_NULL)
+    {
+        APP_TRACE("adc_get_freq() failed, sensor_dev is null!\r\n");
+        return 0xFFFFFFFF;
+    }
 
 	uint32_t u32FreqIndex = 0xFFFFFFFF;
 	
@@ -748,6 +760,12 @@ uint32_t adc_get_freq(void)
 bool adc_set_freq(uint32_t u32FreqIndex)
 {
 	APP_TRACE("adc_set_freq() u32FreqIndex=%u\r\n", u32FreqIndex);
+    
+    if (sensor_dev == RT_NULL)
+    {
+        APP_TRACE("adc_set_freq() failed, sensor_dev is null!\r\n");
+        return false;
+    }
 
 	bool bRet = false;
 	
@@ -775,6 +793,12 @@ bool adc_set_freq(uint32_t u32FreqIndex)
 float adc_get_temperature(void)
 {
 	APP_TRACE("adc_get_temperature()\r\n");
+    
+    if (sensor_dev == RT_NULL)
+    {
+        APP_TRACE("adc_get_temperature() failed, sensor_dev is null!\r\n");
+        return 0.0f;
+    }
 
 	float fTemperature = 0.0f;
 	
@@ -801,6 +825,12 @@ float adc_get_temperature(void)
 bool adc_start(int adc_channel)
 {
 	APP_TRACE("adc_start() adc_channel=%d\r\n", adc_channel);
+    
+    if (sensor_dev == RT_NULL)
+    {
+        APP_TRACE("adc_start() failed, sensor_dev is null!\r\n");
+        return false;
+    }
 	
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 	if (0 != adc_channel)
@@ -864,6 +894,12 @@ bool adc_start(int adc_channel)
 bool adc_stop(void)
 {
 	APP_TRACE("adc_stop()\r\n");
+    
+    if (sensor_dev == RT_NULL)
+    {
+        APP_TRACE("adc_stop() failed, sensor_dev is null!\r\n");
+        return false;
+    }
 	
 #if defined(BSP_USING_RSCDRRM020NDSE3)
 	/* 停止RSCDRRM020NDSE3 */
@@ -901,6 +937,12 @@ bool adc_stop(void)
 *************************************************/
 float bme280_get_temp(void)
 {
+    if (temp_bme280_dev == RT_NULL)
+    {
+        APP_TRACE("bme280_get_temp() failed, temp_bme280_dev is null!\r\n");
+        return 0.0f;
+    }
+    
 	struct rt_sensor_data sensor_data = {0};
 	rt_size_t read_len = rt_device_read(temp_bme280_dev, 0, &sensor_data, 1);
 	if (1 != read_len)
@@ -921,6 +963,12 @@ float bme280_get_temp(void)
 *************************************************/
 float bme280_get_humi(void)
 {
+    if (humi_bme280_dev == RT_NULL)
+    {
+        APP_TRACE("bme280_get_humi() failed, humi_bme280_dev is null!\r\n");
+        return 0.0f;
+    }
+    
 	struct rt_sensor_data sensor_data = {0};
 	rt_size_t read_len = rt_device_read(humi_bme280_dev, 0, &sensor_data, 1);
 	if (1 != read_len)
@@ -941,6 +989,12 @@ float bme280_get_humi(void)
 *************************************************/
 float bme280_get_baro(void)
 {
+    if (baro_bme280_dev == RT_NULL)
+    {
+        APP_TRACE("bme280_get_baro() failed, baro_bme280_dev is null!\r\n");
+        return 0.0f;
+    }
+    
 	struct rt_sensor_data sensor_data = {0};
 	rt_size_t read_len = rt_device_read(baro_bme280_dev, 0, &sensor_data, 1);
 	if (1 != read_len)
@@ -975,8 +1029,8 @@ int main(void)
 	if (RT_EOK != ret)
 	{
         APP_TRACE("call rt_pin_attach_irq(SWITCH_INT_PIN) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
+		//main_ret = ret;
+		//goto _END;
 	}
     
     /* set CHARGE_S pin mode to input(检测充电状态) */
@@ -1029,8 +1083,9 @@ int main(void)
 		if (!init_ret)
 		{
 			APP_TRACE("call bme280_init() failed!\r\n");
-			main_ret = -RT_ERROR;
-			goto _END;
+            bme280_deinit();
+			//main_ret = -RT_ERROR;
+			//goto _END;
 		}
 	}
 	
@@ -1040,8 +1095,8 @@ int main(void)
 	if (RT_NULL == sensor_dev)
 	{
 		APP_TRACE("device %s not found!\r\n", RSCDRRM020NDSE3_DEVICE_NAME);
-		main_ret = -RT_ERROR;
-		goto _END;
+		//main_ret = -RT_ERROR;
+		//goto _END;
 	}
 #elif defined(BSP_USING_AD7730)
 	/* 打开AD7730设备 */
@@ -1049,8 +1104,8 @@ int main(void)
 	if (RT_NULL == sensor_dev)
 	{
 		APP_TRACE("device %s not found!\r\n", AD7730_DEVICE_NAME);
-		main_ret = -RT_ERROR;
-		goto _END;
+		//main_ret = -RT_ERROR;
+		//goto _END;
 	}
 #endif
 	
@@ -1060,17 +1115,19 @@ int main(void)
 		if (RT_EOK != ret)
 		{
 			APP_TRACE("open device sensor failed(%d)!\r\n", ret);
-			main_ret = ret;
-			goto _END;
+			//main_ret = ret;
+			//goto _END;
 		}
-		
-		ret = rt_device_set_rx_indicate(sensor_dev, sensor_rx_ind);
-		if (RT_EOK != ret)
-		{
-			APP_TRACE("set vcom rx indicate failed(%d)!\r\n", ret);
-			main_ret = ret;
-			goto _END;
-		}
+		else
+        {
+            ret = rt_device_set_rx_indicate(sensor_dev, sensor_rx_ind);
+            if (RT_EOK != ret)
+            {
+                APP_TRACE("set vcom rx indicate failed(%d)!\r\n", ret);
+                //main_ret = ret;
+                //goto _END;
+            }
+        }
 	}
 	
 	/* 打开VCOM设备 */
@@ -1078,70 +1135,77 @@ int main(void)
 	if (RT_NULL == vcom_dev)
 	{
 		APP_TRACE("main() call rt_device_find(%s) failed!\r\n", VCOM_DEVICE_NAME);
-		main_ret = -RT_ERROR;
-		goto _END;
+		//main_ret = -RT_ERROR;
+		//goto _END;
 	}
-	
-	ret = rt_device_open(vcom_dev, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_DMA_TX);
-	if (RT_EOK != ret)
-	{
-		APP_TRACE("main() call rt_device_open(vcom_dev) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
-	}
-	
-	ret = rt_device_set_rx_indicate(vcom_dev, vcom_rx_ind);
-	if (RT_EOK != ret)
-	{
-		APP_TRACE("main() call rt_device_set_rx_indicate(vcom_dev) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
-	}
-	
-	ret = rt_device_set_tx_complete(vcom_dev, vcom_tx_done);
-	if (RT_EOK != ret)
-	{
-		APP_TRACE("main() call rt_device_set_tx_complete(vcom_dev) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
-	}
+	else
+    {
+        ret = rt_device_open(vcom_dev, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_DMA_TX);
+        if (RT_EOK != ret)
+        {
+            APP_TRACE("main() call rt_device_open(vcom_dev) failed, error(%d)!\r\n", ret);
+            //main_ret = ret;
+            //goto _END;
+        }
+        else
+        {
+            ret = rt_device_set_rx_indicate(vcom_dev, vcom_rx_ind);
+            if (RT_EOK != ret)
+            {
+                APP_TRACE("main() call rt_device_set_rx_indicate(vcom_dev) failed, error(%d)!\r\n", ret);
+                //main_ret = ret;
+                //goto _END;
+            }
+            
+            ret = rt_device_set_tx_complete(vcom_dev, vcom_tx_done);
+            if (RT_EOK != ret)
+            {
+                APP_TRACE("main() call rt_device_set_tx_complete(vcom_dev) failed, error(%d)!\r\n", ret);
+                //main_ret = ret;
+                //goto _END;
+            }
+        }
+    }
 	
 	/* 开启蓝牙模块电源 */
 	rt_pin_write(BT_POWER_PIN, PIN_HIGH);
 	
 	/* 打开BT串口设备 */
 	bt_dev = rt_device_find(BT_UART_NAME);
-	if (RT_NULL == vcom_dev)
+	if (RT_NULL == bt_dev)
 	{
 		APP_TRACE("main() call rt_device_find(%s) failed!\r\n", BT_UART_NAME);
-		main_ret = -RT_ERROR;
-		goto _END;
+		//main_ret = -RT_ERROR;
+		//goto _END;
 	}
-	
-	ret = rt_device_open(bt_dev, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_DMA_TX);
-	if (RT_EOK != ret)
-	{
-		APP_TRACE("main() call rt_device_open(bt_dev) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
-	}
-	
-	ret = rt_device_set_rx_indicate(bt_dev, bt_rx_ind);
-	if (RT_EOK != ret)
-	{
-		APP_TRACE("main() call rt_device_set_rx_indicate(bt_dev) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
-	}
-	
-	ret = rt_device_set_tx_complete(bt_dev, bt_tx_done);
-	if (RT_EOK != ret)
-	{
-		APP_TRACE("main() call rt_device_set_tx_complete(bt_dev) failed, error(%d)!\r\n", ret);
-		main_ret = ret;
-		goto _END;
-	}
-
+	else
+    {
+        ret = rt_device_open(bt_dev, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_DMA_TX);
+        if (RT_EOK != ret)
+        {
+            APP_TRACE("main() call rt_device_open(bt_dev) failed, error(%d)!\r\n", ret);
+            //main_ret = ret;
+            //goto _END;
+        }
+        else
+        {
+            ret = rt_device_set_rx_indicate(bt_dev, bt_rx_ind);
+            if (RT_EOK != ret)
+            {
+                APP_TRACE("main() call rt_device_set_rx_indicate(bt_dev) failed, error(%d)!\r\n", ret);
+                //main_ret = ret;
+                //goto _END;
+            }
+            
+            ret = rt_device_set_tx_complete(bt_dev, bt_tx_done);
+            if (RT_EOK != ret)
+            {
+                APP_TRACE("main() call rt_device_set_tx_complete(bt_dev) failed, error(%d)!\r\n", ret);
+                //main_ret = ret;
+                //goto _END;
+            }
+        }
+    }
 	/* 进入事件循环 */
     while (1)
 	{
@@ -1167,6 +1231,11 @@ int main(void)
         
 		if (event_recved & SENSOR_EVENT_RX_IND)
 		{ // 收到SENSOR数据
+            if (sensor_dev == RT_NULL)
+            {
+                continue;
+            }
+            
 			if (adc_started)
 			{ // ADC采集已启动
 			#if defined(BSP_USING_RSCDRRM020NDSE3)
@@ -1187,6 +1256,11 @@ int main(void)
 		
 		if (event_recved & VCOM_EVENT_RX_IND)
 		{ // 收到VCOM数据
+            if (vcom_dev == RT_NULL)
+            {
+                continue;
+            }
+            
 			/* 收取所有数据 */
 			while (1)
 			{
@@ -1212,6 +1286,10 @@ int main(void)
 			uint32_t u32DataLen = CycleQueue_Delete(&s_tVcomSendQ, pu8SendBuf, VCOM_SEND_BUF_SIZE, NULL);
 			if (u32DataLen > 0)
 			{ // 有数据需要发送
+                if (vcom_dev == RT_NULL)
+                {
+                    continue;
+                }
 				/* 请求发送缓冲区中的数据 */
 				rt_device_write(vcom_dev, 0, pu8SendBuf, (rt_size_t)u32DataLen);
 			}
@@ -1224,6 +1302,11 @@ int main(void)
 		
 		if (event_recved & BT_EVENT_RX_IND)
 		{ // 收到BT数据
+            if (bt_dev == RT_NULL)
+            {
+                continue;
+            }
+            
 			/* 收取所有数据 */
 			while (1)
 			{
@@ -1249,6 +1332,11 @@ int main(void)
 			uint32_t u32DataLen = CycleQueue_Delete(&s_tBTSendQ, pu8SendBuf, BT_SEND_BUF_SIZE, NULL);
 			if (u32DataLen > 0)
 			{ // 有数据需要发送
+                if (bt_dev == RT_NULL)
+                {
+                    continue;
+                }
+            
 				/* 请求发送缓冲区中的数据 */
 				rt_device_write(bt_dev, 0, pu8SendBuf, (rt_size_t)u32DataLen);
 			}
