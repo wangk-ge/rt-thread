@@ -185,6 +185,32 @@
 #define PKG_USING_SENSORS_DRIVERS
 #define PKG_USING_BME280
 #define PKG_USING_BME280_LATEST_VERSION
+#define PKG_USING_U8G2
+#define U8G2_USE_HW_SPI
+#define U8G2_SPI_BUS_NAME "spi1"
+#define U8G2_SPI_DEVICE_NAME "spi10"
+
+/* U8G2 Examples */
+
+
+/* full buffer examples    (fast, large RAM consumption) */
+
+
+/* page buffer examples    (slow, small RAM consumption) */
+
+
+/* u8x8 text only examples (fonts with fixed size)       */
+
+
+/* game examples */
+
+#define PKG_USING_U8G2_CPP_LATEST_VERSION
+
+/* C   version: v1.x.x */
+
+/* C++ version: v2.x.x */
+
+#define PKG_U8G2_VER_NUM 0x29999
 
 /* miscellaneous packages */
 
