@@ -103,6 +103,9 @@ static void _CMD_HandlerBME280_HUMI(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerBME280_BARO(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerOTA_DOWNLOAD(const StrConstRef_T* pctStrRefParam);
 static void _CMD_HandlerOTA_REBOOT(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerPOWER_OFF(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerIS_CHARGING(const StrConstRef_T* pctStrRefParam);
+static void _CMD_HandlerIS_CHARGER_CONNECT(const StrConstRef_T* pctStrRefParam);
 const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("VER"), _CMD_HandlerVER },
 	{ STR_ITEM("BUILD"), _CMD_HandlerBUILD },
@@ -117,6 +120,9 @@ const static CmdHandlerFunc_T s_tCmdHandlerTbl[] = {
 	{ STR_ITEM("BME280_BARO"), _CMD_HandlerBME280_BARO },
 	{ STR_ITEM("OTA_DOWNLOAD"), _CMD_HandlerOTA_DOWNLOAD },
 	{ STR_ITEM("OTA_REBOOT"), _CMD_HandlerOTA_REBOOT },
+    { STR_ITEM("POWER_OFF"), _CMD_HandlerPOWER_OFF },
+    { STR_ITEM("IS_CHARGING"), _CMD_HandlerIS_CHARGING },
+    { STR_ITEM("IS_CHARGER_CONNECT"), _CMD_HandlerIS_CHARGER_CONNECT },
 };
 
 /*----------------------------------------------------------------------------*
@@ -349,6 +355,71 @@ static void _CMD_HandlerOTA_REBOOT(const StrConstRef_T* pctStrRefParam)
         rt_thread_delay(rt_tick_from_millisecond(2000));
 		
 		OTA_Reboot();
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerPOWER_OFF
+* Description: POWER_OFF命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerPOWER_OFF(const StrConstRef_T* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+	{ // 执行
+		_CMD_Response("[OK]");
+
+		app_power_off();
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerIS_CHARGING
+* Description: IS_CHARGING命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerIS_CHARGING(const StrConstRef_T* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+	{ // 读取
+		_CMD_Response("[IS_CHARGING=%d]", is_in_changing());
+	}
+	else
+	{ // 设置
+		// 只读属性,不允许设置
+		_CMD_Response("[ERR]");
+	}
+}
+
+/*************************************************
+* Function: _CMD_HandlerIS_CHARGER_CONNECT
+* Description: IS_CHARGER_CONNECT命令处理函数
+* Author: wangk
+* Returns:
+* Parameter:
+* History:
+*************************************************/
+static void _CMD_HandlerIS_CHARGER_CONNECT(const StrConstRef_T* pctStrRefParam)
+{
+    if (NULL == pctStrRefParam)
+	{ // 读取
+		_CMD_Response("[IS_CHARGER_CONNECT=%d]", is_changer_connect());
 	}
 	else
 	{ // 设置

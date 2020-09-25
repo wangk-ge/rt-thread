@@ -59,6 +59,7 @@ extern   "C"
 #define BT_EVENT_RX_IND 0x00000008
 #define BT_EVENT_TX_DONE 0x00000010
 #define SENSOR_AUTO_ZERO_DONE 0x00000020
+#define SWITCH_INT_EVENT 0x00000040
 
 /* Vcom发送缓冲区长度 */
 #define VCOM_SEND_BUF_SIZE (1024)
@@ -69,6 +70,19 @@ extern   "C"
 #define VCOM_DEVICE_NAME "vcom"
 /* BT串口设备名 */
 #define BT_UART_NAME "uart3"
+
+/* defined the CHARGE_S pin: PC8 */
+#define CHARGE_S_PIN GET_PIN(C, 8)
+/* defined the CHARGE_D pin: PC7 */
+#define CHARGE_D_PIN GET_PIN(C, 7)
+
+/* defined the SWITCH_INT pin: PA8 */
+#define SWITCH_INT_PIN GET_PIN(A, 8)
+/* defined the SWITCH_KILL pin: PC9 */
+#define SWITCH_KILL_PIN GET_PIN(C, 9)
+
+/* defined the ADC_VIN_LI pin: PA1 */
+#define ADC_VIN_LI_PIN GET_PIN(A, 1)
 
 /* defined the LIGHT_B pin: PE9 */
 #define LIGHT_B_PIN GET_PIN(E, 9)
@@ -160,6 +174,13 @@ static COM_MODE_E com_mode = COM_MODE_VCOM; // 默认VCOM优先
 /*----------------------------------------------------------------------------*
 **                             Local Function                                 *
 **----------------------------------------------------------------------------*/
+/* SWITCH_INT interupt service */
+static void switch_int_isr(void *args)
+{
+	/* 通知主线程收到SWITCH_INT_EVENT信号 */
+	rt_event_send(app_event, SWITCH_INT_EVENT);
+}
+
 /*************************************************
 * Function: bme280_init
 * Description: 初始化bme280
@@ -399,6 +420,52 @@ static void on_auto_zero_completed(void)
 /*----------------------------------------------------------------------------*
 **                             Public Function                                *
 **----------------------------------------------------------------------------*/
+/*************************************************
+* Function: app_power_off
+* Description: 关机
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+void app_power_off(void)
+{
+    APP_TRACE("app_power_off()\r\n");
+    
+    /* 拉低SWITCH_KILL关机 */
+    rt_pin_write(SWITCH_KILL_PIN, PIN_LOW);
+}
+
+/*************************************************
+* Function: is_in_changing
+* Description: 当前是否正在充电状态
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool is_in_changing(void)
+{
+    //APP_TRACE("is_in_changing()\r\n");
+    
+    return (PIN_LOW == rt_pin_read(CHARGE_S_PIN));
+}
+
+/*************************************************
+* Function: is_changer_connect
+* Description: 当前是否外接了充电电源
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool is_changer_connect(void)
+{
+    //APP_TRACE("is_changer_connect()\r\n");
+    
+    return (PIN_LOW == rt_pin_read(CHARGE_D_PIN));
+}
+
 /*************************************************
 * Function: com_send_data
 * Description: 通过配置选择的通道(BT/VCOM)尝试输出数据
@@ -896,7 +963,36 @@ int main(void)
 {
 	int main_ret = 0;
 	rt_err_t ret = RT_EOK;
+    
+    /* 开机拉高SWITCH_KILL */
+    rt_pin_mode(SWITCH_KILL_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(SWITCH_KILL_PIN, PIN_HIGH);
+    
+    /* set SWITCH_INT pin mode to input(检测关机信号) */
+    rt_pin_mode(SWITCH_INT_PIN, PIN_MODE_INPUT_PULLUP);
+    /* 配置关机信中断检测 */
+	ret = rt_pin_attach_irq(SWITCH_INT_PIN, PIN_IRQ_MODE_FALLING, switch_int_isr, RT_NULL);
+	if (RT_EOK != ret)
+	{
+        APP_TRACE("call rt_pin_attach_irq(SWITCH_INT_PIN) failed, error(%d)!\r\n", ret);
+		main_ret = ret;
+		goto _END;
+	}
+    
+    /* set CHARGE_S pin mode to input(检测充电状态) */
+    rt_pin_mode(CHARGE_S_PIN, PIN_MODE_INPUT_PULLUP);
+    /* set CHARGE_D pin mode to input(检测充电电源状态) */
+    rt_pin_mode(CHARGE_D_PIN, PIN_MODE_INPUT_PULLUP);
+    
+    /* set LIGHT_B/G/R pin mode to output */
+    rt_pin_mode(LIGHT_B_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LIGHT_B_PIN, PIN_LOW);
+    rt_pin_mode(LIGHT_G_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LIGHT_G_PIN, PIN_LOW);
+    rt_pin_mode(LIGHT_R_PIN, PIN_MODE_OUTPUT);
+	rt_pin_write(LIGHT_R_PIN, PIN_LOW);
 	
+    /* 初始化FAL库 */
 	fal_init();
 	
 	/* 创建Vcom发送循环队列 */
@@ -907,14 +1003,6 @@ int main(void)
 	/* 初始化CMD模块 */
 	CMD_Init();
     
-    /* set LIGHT_B/G/R pin mode to output */
-    rt_pin_mode(LIGHT_B_PIN, PIN_MODE_OUTPUT);
-	rt_pin_write(LIGHT_B_PIN, PIN_LOW);
-    rt_pin_mode(LIGHT_G_PIN, PIN_MODE_OUTPUT);
-	rt_pin_write(LIGHT_G_PIN, PIN_LOW);
-    rt_pin_mode(LIGHT_R_PIN, PIN_MODE_OUTPUT);
-	rt_pin_write(LIGHT_R_PIN, PIN_LOW);
-	
 	/* set BT_POWER pin mode to output */
     rt_pin_mode(BT_POWER_PIN, PIN_MODE_OUTPUT);
 	rt_pin_write(BT_POWER_PIN, PIN_LOW);
@@ -1059,7 +1147,8 @@ int main(void)
 	{
 		
 		rt_uint32_t event_recved = 0;
-		ret = rt_event_recv(app_event, (SENSOR_EVENT_RX_IND | VCOM_EVENT_RX_IND | VCOM_EVENT_TX_DONE | BT_EVENT_RX_IND | BT_EVENT_TX_DONE | SENSOR_AUTO_ZERO_DONE),
+		ret = rt_event_recv(app_event, (SENSOR_EVENT_RX_IND | VCOM_EVENT_RX_IND | VCOM_EVENT_TX_DONE | 
+                          BT_EVENT_RX_IND | BT_EVENT_TX_DONE | SENSOR_AUTO_ZERO_DONE | SWITCH_INT_EVENT),
 						  (RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR),
 						  RT_WAITING_FOREVER, &event_recved);
 		if (RT_EOK != ret)
@@ -1069,6 +1158,13 @@ int main(void)
 			break;
 		}
 		
+        if (event_recved & SWITCH_INT_EVENT)
+        {
+            // TODO 保存数据
+            /* 关机 */
+            app_power_off();
+        }
+        
 		if (event_recved & SENSOR_EVENT_RX_IND)
 		{ // 收到SENSOR数据
 			if (adc_started)

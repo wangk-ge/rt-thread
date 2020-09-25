@@ -999,9 +999,9 @@ int rscdrrm020ndse3_hw_init(void)
 {
     RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_hw_init()\r\n");
 	
-	/* 创建和初始化SPI EEPROM设备(CS_EE pin: PC3) */
+	/* 创建和初始化SPI EEPROM设备(CS_EE pin: PE15) */
 	rt_err_t ret = rt_hw_spi_device_attach(RSCDRRM020NDSE3_SPI_BUS_NAME, 
-		RSCDRRM020NDSE3_SPI_EE_DEVICE_NAME, GPIOC, GPIO_PIN_3);
+		RSCDRRM020NDSE3_SPI_EE_DEVICE_NAME, GPIOE, GPIO_PIN_15);
     if (RT_EOK != ret)
     {
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_hw_init() call rt_hw_spi_device_attach(%s, %s) failed, error(%d)!\r\n", 
@@ -1035,9 +1035,9 @@ int rscdrrm020ndse3_hw_init(void)
 	/* save eeprom spi device */
 	rscdrrm020ndse3_dev.spi_ee_device = spi_ee_device;
 	
-	/* 创建和初始化SPI ADC设备(CS_ADC pin: PC2) */
+	/* 创建和初始化SPI ADC设备(CS_ADC pin: PB10) */
 	ret = rt_hw_spi_device_attach(RSCDRRM020NDSE3_SPI_BUS_NAME, 
-		RSCDRRM020NDSE3_SPI_ADC_DEVICE_NAME, GPIOC, GPIO_PIN_2);
+		RSCDRRM020NDSE3_SPI_ADC_DEVICE_NAME, GPIOB, GPIO_PIN_10);
     if (RT_EOK != ret)
     {
 		RSCDRRM020NDSE3_TRACE("rscdrrm020ndse3_hw_init() call rt_hw_spi_device_attach(%s, %s) failed, error(%d)!\r\n", 

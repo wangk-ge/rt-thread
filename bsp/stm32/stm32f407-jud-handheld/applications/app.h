@@ -47,6 +47,36 @@ typedef enum
 **                             Function Define                                *
 **----------------------------------------------------------------------------*/
 /*************************************************
+* Function: app_power_off
+* Description: 关机
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+void app_power_off(void);
+
+/*************************************************
+* Function: is_in_changing
+* Description: 当前是否正在充电状态
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool is_in_changing(void);
+
+/*************************************************
+* Function: is_changer_connect
+* Description: 当前是否外接了充电电源
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool is_changer_connect(void);
+
+/*************************************************
 * Function: com_send_data
 * Description: 通过配置选择的通道(BT/VCOM)尝试输出数据
 * Author: wangk
