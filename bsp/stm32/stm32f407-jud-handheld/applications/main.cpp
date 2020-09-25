@@ -189,7 +189,9 @@ static bool adc_started = false;
 /* 通信模式 */
 static COM_MODE_E com_mode = COM_MODE_VCOM; // 默认VCOM优先
 
+#ifdef TEST_OLED
 static U8G2_SH1107_PIMORONI_128X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ OLED_SPI_PIN_CS, /* dc=*/ OLED_SPI_PIN_DC, /* reset=*/ OLED_SPI_PIN_RES);
+#endif
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -448,6 +450,7 @@ static void on_auto_zero_completed(void)
 }
 #endif
 
+#ifdef TEST_OLED
 static void drawLogo(void)
 {
     u8g2.setFontMode(1);    // Transparent
@@ -517,6 +520,7 @@ static void u8g2_full_buffer_u8g2_logo(void)
   drawURL();
   u8g2.sendBuffer();
 }
+#endif
 
 /*----------------------------------------------------------------------------*
 **                             Public Function                                *
@@ -1312,8 +1316,10 @@ int main(void)
         }
     }
     
+#ifdef TEST_OLED
     // Test OLED
     u8g2_full_buffer_u8g2_logo();
+#endif
     
 	/* 进入事件循环 */
     while (1)
