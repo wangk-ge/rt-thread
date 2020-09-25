@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER, STM32F407xx</Define>
               <Undefine></Undefine>
-              <IncludePath>applications;.;..\..\..\components\net\at\include;packages\bme280-latest;packages\bme280-latest\libraries;..\..\..\libcpu\arm\common;..\..\..\libcpu\arm\cortex-m4;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\spi;..\..\..\components\drivers\include;..\..\..\components\drivers\spi\sfud\inc;..\..\..\components\drivers\include;board;board\CubeMX_Config\Inc;board\ports;..\libraries\HAL_Drivers;..\libraries\HAL_Drivers\config;..\libraries\HAL_Drivers\drv_flash;packages\fal-v0.4.0\inc;..\..\..\components\finsh;.;..\..\..\include;..\..\..\components\libc\compilers\common;packages\ota_downloader-latest;..\..\..\components\drivers\usb\usbdevice;..\..\..\components\drivers\sensors;..\..\..\components\drivers\include;..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Inc;..\libraries\STM32F4xx_HAL\CMSIS\Device\ST\STM32F4xx\Include;..\libraries\STM32F4xx_HAL\CMSIS\Include;packages\u8g2-cpp-latest;packages\u8g2-cpp-latest\port;..\..\..\components\utilities\ymodem</IncludePath>
+              <IncludePath>applications;.;..\..\..\components\net\at\include;packages\bme280-latest;packages\bme280-latest\libraries;..\..\..\components\cplusplus;..\..\..\libcpu\arm\common;..\..\..\libcpu\arm\cortex-m4;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\include;..\..\..\components\drivers\spi;..\..\..\components\drivers\include;..\..\..\components\drivers\spi\sfud\inc;..\..\..\components\drivers\include;board;board\CubeMX_Config\Inc;board\ports;..\libraries\HAL_Drivers;..\libraries\HAL_Drivers\config;..\libraries\HAL_Drivers\drv_flash;packages\fal-v0.4.0\inc;..\..\..\components\finsh;.;..\..\..\include;..\..\..\components\libc\compilers\common;packages\ota_downloader-latest;..\..\..\components\drivers\usb\usbdevice;..\..\..\components\drivers\sensors;..\..\..\components\drivers\include;..\libraries\STM32F4xx_HAL\STM32F4xx_HAL_Driver\Inc;..\libraries\STM32F4xx_HAL\CMSIS\Device\ST\STM32F4xx\Include;..\libraries\STM32F4xx_HAL\CMSIS\Include;packages\u8g2-cpp-latest;packages\u8g2-cpp-latest\port;..\..\..\components\utilities\ymodem</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -455,6 +455,36 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>CPlusPlus</GroupName>
+          <Files>
+            <File>
+              <FileName>cxx_Mutex.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\..\..\components\cplusplus\cxx_Mutex.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>cxx_Semaphore.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\..\..\components\cplusplus\cxx_Semaphore.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>cxx_Thread.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\..\..\components\cplusplus\cxx_Thread.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>cxx_crt.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\..\..\components\cplusplus\cxx_crt.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>crt_init.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\cplusplus\crt_init.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>cpu</GroupName>
           <Files>
             <File>
@@ -532,7 +562,7 @@
                   <MiscControls> --c99</MiscControls>
                   <Define> </Define>
                   <Undefine> </Undefine>
-                  <IncludePath></IncludePath>
+                  <IncludePath> </IncludePath>
                 </VariousControls>
               </Cads>
               <Aads>
@@ -776,7 +806,7 @@
                   <MiscControls> --c99</MiscControls>
                   <Define> </Define>
                   <Undefine> </Undefine>
-                  <IncludePath></IncludePath>
+                  <IncludePath> </IncludePath>
                 </VariousControls>
               </Cads>
               <Aads>
@@ -1185,7 +1215,7 @@
                   <MiscControls></MiscControls>
                   <Define> </Define>
                   <Undefine> </Undefine>
-                  <IncludePath></IncludePath>
+                  <IncludePath> </IncludePath>
                 </VariousControls>
               </Cads>
               <Aads>
