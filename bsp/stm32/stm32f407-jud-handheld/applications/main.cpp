@@ -1139,6 +1139,17 @@ int main(void)
 		//main_ret = ret;
 		//goto _END;
 	}
+    else
+    {
+        /* 使能关机中断检测 */
+        ret = rt_pin_irq_enable(SWITCH_INT_PIN, PIN_IRQ_ENABLE);
+        if (RT_EOK != ret)
+        {
+            APP_TRACE("call rt_pin_irq_enable(SWITCH_INT_PIN) failed, error(%d)!\r\n", ret);
+            //main_ret = ret;
+            //goto _END;
+        }
+    }
     
     /* 开启OLED电源 */
     rt_pin_mode(OLED_POWER_PIN, PIN_MODE_OUTPUT);
