@@ -5,6 +5,7 @@ cwd     = GetCurrentDir()
 CPPPATH = [cwd, str(Dir('#'))]
 src     = Split("""
 main.cpp
+oled_gui.cpp
 cmd.c
 strref.c
 util.c

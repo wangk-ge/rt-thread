@@ -388,6 +388,11 @@
               <FilePath>applications\main.cpp</FilePath>
             </File>
             <File>
+              <FileName>oled_gui.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>applications\oled_gui.cpp</FilePath>
+            </File>
+            <File>
               <FileName>cmd.c</FileName>
               <FileType>1</FileType>
               <FilePath>applications\cmd.c</FilePath>
@@ -517,7 +522,7 @@
                   <MiscControls></MiscControls>
                   <Define> </Define>
                   <Undefine> </Undefine>
-                  <IncludePath></IncludePath>
+                  <IncludePath> </IncludePath>
                 </VariousControls>
               </Cads>
               <Aads>
@@ -966,7 +971,7 @@
                   <MiscControls></MiscControls>
                   <Define> </Define>
                   <Undefine> </Undefine>
-                  <IncludePath></IncludePath>
+                  <IncludePath> </IncludePath>
                 </VariousControls>
               </Cads>
               <Aads>

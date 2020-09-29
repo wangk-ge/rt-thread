@@ -21,6 +21,7 @@
 #include "app.h"
 #include "cmd.h"
 #include "cyclequeue.h"
+#include "oled_gui.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -35,10 +36,10 @@
 /**---------------------------------------------------------------------------*
 **                             Compiler Flag                                  *
 **----------------------------------------------------------------------------*/
-#ifdef __cplusplus
-extern   "C"
-{
-#endif
+//#ifdef __cplusplus
+//extern   "C"
+//{
+//#endif
 
 /*----------------------------------------------------------------------------*
 **                             Mcaro Definitions                              *
@@ -212,6 +213,9 @@ int main(void)
 {
 	int main_ret = 0;
 	rt_err_t ret = RT_EOK;
+    
+    oled_gui_init();
+    oled_gui_start();
 	
 	/* 创建Vcom发送循环队列 */
 	CycleQueue_Create(&s_tVcomSendQ, s_pu8VcomSendQueBuf, sizeof(s_pu8VcomSendQueBuf));
@@ -343,7 +347,7 @@ _END:
 /**---------------------------------------------------------------------------*
  **                         Compiler Flag                                     *
  **---------------------------------------------------------------------------*/
-#ifdef   __cplusplus
-}
-#endif
+//#ifdef   __cplusplus
+//}
+//#endif
 // End of main.c
