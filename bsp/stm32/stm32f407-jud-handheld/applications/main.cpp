@@ -33,7 +33,7 @@ extern "C"
 {
     #include "fal.h"
 }
-#include "U8g2lib.h"
+#include "oled_gui.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -56,8 +56,6 @@ extern "C"
 /*----------------------------------------------------------------------------*
 **                             Mcaro Definitions                              *
 **----------------------------------------------------------------------------*/
-#define TEST_OLED
-    
 /* EVENT定义 */
 #define SENSOR_EVENT_RX_IND 0x00000001
 #define VCOM_EVENT_RX_IND 0x00000002
@@ -89,9 +87,6 @@ extern "C"
 
 /* defined the ADC_VIN_LI pin: PA1 */
 #define ADC_VIN_LI_PIN GET_PIN(A, 1)
-
-/* defined the OLED_POWER pin: PA2 */
-#define OLED_POWER_PIN GET_PIN(A, 2)
 
 /* defined the BME280_SDO pin: PB5 */
 #define BME280_SDO_PIN GET_PIN(B, 5)
@@ -190,10 +185,6 @@ static bool adc_started = false;
 
 /* 通信模式 */
 static COM_MODE_E com_mode = COM_MODE_VCOM; // 默认VCOM优先
-
-#ifdef TEST_OLED
-static U8G2_SH1107_PIMORONI_128X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ OLED_SPI_PIN_CS, /* dc=*/ OLED_SPI_PIN_DC, /* reset=*/ OLED_SPI_PIN_RES);
-#endif
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -449,78 +440,6 @@ static rt_size_t send_wave(int32_t val)
 static void on_auto_zero_completed(void)
 {
 	rt_event_send(app_event, SENSOR_AUTO_ZERO_DONE);
-}
-#endif
-
-#ifdef TEST_OLED
-static void drawLogo(void)
-{
-    u8g2.setFontMode(1);    // Transparent
-#ifdef MINI_LOGO
-
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_inb16_mf);
-    u8g2.drawStr(0, 22, "U");
-
-    u8g2.setFontDirection(1);
-    u8g2.setFont(u8g2_font_inb19_mn);
-    u8g2.drawStr(14,8,"8");
-
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_inb16_mf);
-    u8g2.drawStr(36,22,"g");
-    u8g2.drawStr(48,22,"\xb2");
-
-    u8g2.drawHLine(2, 25, 34);
-    u8g2.drawHLine(3, 26, 34);
-    u8g2.drawVLine(32, 22, 12);
-    u8g2.drawVLine(33, 23, 12);
-#else
-
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_inb24_mf);
-    u8g2.drawStr(0, 30, "U");
-
-    u8g2.setFontDirection(1);
-    u8g2.setFont(u8g2_font_inb30_mn);
-    u8g2.drawStr(21,8,"8");
-
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_inb24_mf);
-    u8g2.drawStr(51,30,"g");
-    u8g2.drawStr(67,30,"\xb2");
-
-    u8g2.drawHLine(2, 35, 47);
-    u8g2.drawHLine(3, 36, 47);
-    u8g2.drawVLine(45, 32, 12);
-    u8g2.drawVLine(46, 33, 12);
-
-#endif
-}
-
-static void drawURL(void)
-{
-#ifndef MINI_LOGO
-  u8g2.setFont(u8g2_font_4x6_tr);
-  if ( u8g2.getDisplayHeight() < 59 )
-  {
-    u8g2.drawStr(89,20,"github.com");
-    u8g2.drawStr(73,29,"/olikraus/u8g2");
-  }
-  else
-  {
-    u8g2.drawStr(1,54,"github.com/olikraus/u8g2");
-  }
-#endif
-}
-
-static void u8g2_full_buffer_u8g2_logo(void)
-{
-  u8g2.begin(/*Select=*/ U8G2_PIN_SELECT, /*Right/Next=*/ U8G2_PIN_RIGHT, /*Left/Prev=*/ U8G2_PIN_LEFT, /*Up=*/ U8G2_PIN_UP, /*Down=*/ U8G2_PIN_DOWN, /*Home/Cancel=*/ U8G2_PIN_HOME);
-  u8g2.clearBuffer();
-  drawLogo();
-  drawURL();
-  u8g2.sendBuffer();
 }
 #endif
 
@@ -1151,9 +1070,9 @@ int main(void)
         }
     }
     
-    /* 开启OLED电源 */
-    rt_pin_mode(OLED_POWER_PIN, PIN_MODE_OUTPUT);
-    rt_pin_write(OLED_POWER_PIN, PIN_HIGH);
+    /* 初始化并启动OLED GUI模块 */
+    oled_gui_init();
+    oled_gui_start();
     
     /* set CHARGE_S pin mode to input(检测充电状态) */
     rt_pin_mode(CHARGE_S_PIN, PIN_MODE_INPUT_PULLUP);
@@ -1328,11 +1247,6 @@ int main(void)
             }
         }
     }
-    
-#ifdef TEST_OLED
-    // Test OLED
-    u8g2_full_buffer_u8g2_logo();
-#endif
     
 	/* 进入事件循环 */
     while (1)
