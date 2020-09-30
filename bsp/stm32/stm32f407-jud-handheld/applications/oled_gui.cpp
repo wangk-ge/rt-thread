@@ -21,6 +21,7 @@
 
 #include "app.h"
 #include "U8g2lib.h"
+#include "myfont.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -50,12 +51,12 @@ extern   "C"
 #define OLED_SPI_PIN_CS        GET_PIN(A, 3)  // PA3
 
 // In u8x8.h #define U8X8_USE_PINS
-#define U8G2_PIN_UP            GET_PIN(E, 2)      // PE2(KEY3)
-#define U8G2_PIN_DOWN          GET_PIN(E, 3)      // PE3(KEY2)
-#define U8G2_PIN_LEFT          U8X8_PIN_NONE
-#define U8G2_PIN_RIGHT         GET_PIN(E, 4)      // PE4(KEY1)
-#define U8G2_PIN_SELECT        GET_PIN(E, 5)      // PE5(KEY0)
-#define U8G2_PIN_HOME          U8X8_PIN_NONE
+#define U8G2_PIN_UP            U8X8_PIN_NONE
+#define U8G2_PIN_DOWN          U8X8_PIN_NONE
+#define U8G2_PIN_PREV          GET_PIN(E, 5)      // PE5(KEY0)
+#define U8G2_PIN_NEXT          GET_PIN(E, 4)      // PE4(KEY1)
+#define U8G2_PIN_SELECT        GET_PIN(E, 3)      // PE3(KEY2)
+#define U8G2_PIN_HOME          GET_PIN(E, 2)      // PE2(KEY3)
 
 #define OLED_GUI_THREAD_PRIORITY        25
 #define OLED_GUI_THREAD_STACK_SIZE      512
@@ -69,7 +70,16 @@ typedef struct
     uint32_t width;
     uint32_t height;
     const uint8_t* bits;
+    const char* tips;
 } icon_info_t;
+
+typedef enum
+{
+    GUI_STATE_ENV_MENU = 0,
+    GUI_STATE_ENV_INFO,
+    GUI_STATE_VER_MENU,
+    GUI_STATE_VER_INFO,
+} oled_gui_state_e;
 
 /*----------------------------------------------------------------------------*
 **                             Local Vars                                     *
@@ -150,6 +160,8 @@ static const uint8_t info_icon_bits[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
+static oled_gui_state_e gui_state = GUI_STATE_ENV_MENU;
+    
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
 **----------------------------------------------------------------------------*/
@@ -175,9 +187,9 @@ static void oled_gui_draw_status_bar(void)
     
     /* 画连接状态图标 */
     icon_info_t icon_infos[] = {
-        {DISCON_ICON_WIDTH, DISCON_ICON_HEIGHT, discon_icon_bits},
-        {BLE_ICON_WIDTH, BLE_ICON_HEIGHT, ble_icon_bits},
-        {USB_ICON_WIDTH, USB_ICON_HEIGHT, usb_icon_bits},
+        {DISCON_ICON_WIDTH, DISCON_ICON_HEIGHT, discon_icon_bits, ""},
+        {BLE_ICON_WIDTH, BLE_ICON_HEIGHT, ble_icon_bits, ""},
+        {USB_ICON_WIDTH, USB_ICON_HEIGHT, usb_icon_bits, ""},
     };
     icon_info_t* icon = &(icon_infos[2]);
     u8g2.drawXBMP(114 - (icon->width / 2), 14 - (icon->height / 2), 
@@ -185,27 +197,94 @@ static void oled_gui_draw_status_bar(void)
 }
 
 /*************************************************
-* Function: oled_gui_draw_icon_menu
-* Description: 画图标菜单
+* Function: oled_gui_draw_icon_menu_item
+* Description: 画图标菜单项
 * Author: wangk
 * Returns: 
 * Parameter:
 * History:
 *************************************************/
-static void oled_gui_draw_icon_menu(void)
+static void oled_gui_draw_icon_menu_item(int menu_index)
 {
     /* 画图标 */
     icon_info_t icon_infos[] = {
-        {ENV_ICON_WIDTH, ENV_ICON_HEIGHT, env_icon_bits},
-        {INFO_ICON_WIDTH, INFO_ICON_HEIGHT, info_icon_bits},
+        {ENV_ICON_WIDTH, ENV_ICON_HEIGHT, env_icon_bits, "环境参数"},
+        {INFO_ICON_WIDTH, INFO_ICON_HEIGHT, info_icon_bits, "版本信息"},
     };
-    icon_info_t* icon = &(icon_infos[1]);
+    icon_info_t* icon = &(icon_infos[menu_index]);
     u8g2.drawXBMP((128 / 2) - (icon->width / 2), ((128 - 28) / 2) - (icon->height / 2) + 28, 
         icon->width, icon->height, icon->bits);
     
-    /* 画文字 */
-    u8g2.setFont(u8g2_font_10x20_tn);
-    u8g2.drawStr(42, 128 - 10, "12345");
+    /* 画提示文本 */
+    u8g2.setFont(u8g2_font_simsun_u16_myfont);
+    u8g2.drawUTF8(32, 120, icon->tips);
+}
+
+/*************************************************
+* Function: oled_gui_draw_env_menu_info
+* Description: 画环境参数子菜单内容
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static void oled_gui_draw_env_menu_info()
+{
+    u8g2.setFont(u8g2_font_simsun_u16_myfont);
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 - 8, "温度");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 8, "湿度");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 24, "气压");
+    u8g2.setFont(u8g2_font_inr16_mf);
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 - 8, "21.2C");
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 8, "18%");
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 24, "11Pa");
+}
+
+/*************************************************
+* Function: oled_gui_draw_ver_menu_info
+* Description: 画版本信息子菜单内容
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static void oled_gui_draw_ver_menu_info()
+{
+    u8g2.setFont(u8g2_font_simsun_u16_myfont);
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 16, "当前版本");
+    u8g2.setFont(u8g2_font_inr16_mf);
+    u8g2.drawStr(90, ((128 - 28) / 2) - (16 / 2) + 28 + 16, "V1.0");
+}
+
+/*************************************************
+* Function: oled_gui_draw
+* Description: 画GUI界面
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+static void oled_gui_draw(void)
+{
+    /* 画状态栏 */
+    oled_gui_draw_status_bar();
+    
+    /* 画菜单界面 */
+    switch (gui_state)
+    {
+        case GUI_STATE_ENV_MENU:
+            oled_gui_draw_icon_menu_item(0);
+            break;
+        case GUI_STATE_ENV_INFO:
+            oled_gui_draw_env_menu_info();
+            break;
+        case GUI_STATE_VER_MENU:
+            oled_gui_draw_icon_menu_item(1);
+            break;
+        case GUI_STATE_VER_INFO:
+            oled_gui_draw_ver_menu_info();
+            break;
+    }
 }
 
 /*************************************************
@@ -219,7 +298,7 @@ static void oled_gui_draw_icon_menu(void)
 static void oled_gui_thread_entry(void *parameter)
 {
     u8g2.begin(/*Select=*/ U8G2_PIN_SELECT, 
-        /*Right/Next=*/ U8G2_PIN_RIGHT, /*Left/Prev=*/ U8G2_PIN_LEFT, 
+        /*Right/Next=*/ U8G2_PIN_NEXT, /*Left/Prev=*/ U8G2_PIN_PREV, 
         /*Up=*/ U8G2_PIN_UP, /*Down=*/ U8G2_PIN_DOWN, 
         /*Home/Cancel=*/ U8G2_PIN_HOME);
     u8g2.setContrast(128);
@@ -227,27 +306,74 @@ static void oled_gui_thread_entry(void *parameter)
     while(1)
     {
         u8g2.clearBuffer();
-        oled_gui_draw_status_bar();
-        oled_gui_draw_icon_menu();
+        oled_gui_draw();
         u8g2.sendBuffer();
         
         rt_thread_mdelay(10);
         
         int8_t event = u8g2.getMenuEvent();
         
-        if ( event == U8X8_MSG_GPIO_MENU_NEXT )
+        if (event == U8X8_MSG_GPIO_MENU_NEXT)
         {
-            
+            switch (gui_state)
+            {
+                case GUI_STATE_ENV_MENU:
+                    gui_state = GUI_STATE_VER_MENU;
+                    break;
+                case GUI_STATE_ENV_INFO:
+                    break;
+                case GUI_STATE_VER_MENU:
+                    break;
+                case GUI_STATE_VER_INFO:
+                    break;
+            }
         }
-        
-        if ( event == U8X8_MSG_GPIO_MENU_PREV )
+        else if (event == U8X8_MSG_GPIO_MENU_PREV)
         {
-            
+            switch (gui_state)
+            {
+                case GUI_STATE_ENV_MENU:
+                    break;
+                case GUI_STATE_ENV_INFO:
+                    break;
+                case GUI_STATE_VER_MENU:
+                    gui_state = GUI_STATE_ENV_MENU;
+                    break;
+                case GUI_STATE_VER_INFO:
+                    break;
+            }
         }
-        
-        if ( event == U8X8_MSG_GPIO_MENU_SELECT )
+        else if (event == U8X8_MSG_GPIO_MENU_SELECT)
         {
-            
+            switch (gui_state)
+            {
+                case GUI_STATE_ENV_MENU:
+                    gui_state = GUI_STATE_ENV_INFO;
+                    break;
+                case GUI_STATE_ENV_INFO:
+                    break;
+                case GUI_STATE_VER_MENU:
+                    gui_state = GUI_STATE_VER_INFO;
+                    break;
+                case GUI_STATE_VER_INFO:
+                    break;
+            }
+        }
+        else if (event == U8X8_MSG_GPIO_MENU_HOME)
+        {
+            switch (gui_state)
+            {
+                case GUI_STATE_ENV_MENU:
+                    break;
+                case GUI_STATE_ENV_INFO:
+                    gui_state = GUI_STATE_ENV_MENU;
+                    break;
+                case GUI_STATE_VER_MENU:
+                    break;
+                case GUI_STATE_VER_INFO:
+                    gui_state = GUI_STATE_VER_MENU;
+                    break;
+            }
         }
     }
 }
