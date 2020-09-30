@@ -493,6 +493,20 @@ bool is_changer_connect(void)
 }
 
 /*************************************************
+* Function: get_battery_level
+* Description: 取得电池电量(百分比)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+uint8_t get_battery_level(void)
+{
+    // TODO
+    return 85;
+}
+
+/*************************************************
 * Function: com_send_data
 * Description: 通过配置选择的通道(BT/VCOM)尝试输出数据
 * Author: wangk
@@ -643,6 +657,19 @@ uint32_t vcom_send_data(const uint8_t* data, uint32_t len)
 }
 
 /*************************************************
+* Function: is_ble_connect
+* Description: BLE是否已建立连接
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool is_ble_connect(void)
+{
+    return (PIN_HIGH == rt_pin_read(BT_STATUS_PIN));
+}
+
+/*************************************************
 * Function: bt_send_data
 * Description: 通过BT输出数据
 * Author: wangk
@@ -652,7 +679,7 @@ uint32_t vcom_send_data(const uint8_t* data, uint32_t len)
 *************************************************/
 uint32_t bt_send_data(const uint8_t* data, uint32_t len)
 {
-	if (PIN_LOW == rt_pin_read(BT_STATUS_PIN))
+	if (!is_ble_connect())
 	{ // BT Disconnected
 		return 0;
 	}

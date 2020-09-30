@@ -22,6 +22,7 @@
 #include "app.h"
 #include "U8g2lib.h"
 #include "myfont.h"
+#include "common.h"
 
 /**---------------------------------------------------------------------------*
  **                            Debugging Flag                                 *
@@ -179,11 +180,14 @@ static oled_gui_state_e gui_state = GUI_STATE_ENV_MENU;
 *************************************************/
 static void oled_gui_draw_status_bar(void)
 {
+    char buf[32] = "";
+    
     /* 画电池图标 */
     u8g2.drawFrame(8, 8, 24, 13);
     u8g2.drawVLine(33, 12, 5);
     u8g2.setFont(u8g2_font_7x14_tn);
-    u8g2.drawStr(12, (8 + 12), "85");
+    rt_snprintf(buf, sizeof(buf), "%u", get_battery_level());
+    u8g2.drawStr(12, (8 + 12), buf);
     
     /* 画连接状态图标 */
     icon_info_t icon_infos[] = {
@@ -191,7 +195,19 @@ static void oled_gui_draw_status_bar(void)
         {BLE_ICON_WIDTH, BLE_ICON_HEIGHT, ble_icon_bits, ""},
         {USB_ICON_WIDTH, USB_ICON_HEIGHT, usb_icon_bits, ""},
     };
-    icon_info_t* icon = &(icon_infos[2]);
+    
+    /* 当前连接状态 */
+    int icon_index = 0;
+    if (is_changer_connect())
+    {
+        icon_index = 1;
+    }
+    else if (is_ble_connect())
+    {
+        icon_index = 2;
+    }
+    
+    icon_info_t* icon = &(icon_infos[icon_index]);
     u8g2.drawXBMP(114 - (icon->width / 2), 14 - (icon->height / 2), 
         icon->width, icon->height, icon->bits);
 }
@@ -231,13 +247,23 @@ static void oled_gui_draw_icon_menu_item(int menu_index)
 static void oled_gui_draw_env_menu_info()
 {
     u8g2.setFont(u8g2_font_simsun_u16_myfont);
-    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 - 8, "温度");
-    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 8, "湿度");
-    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 24, "气压");
-    u8g2.setFont(u8g2_font_inr16_mf);
-    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 - 8, "21.2C");
-    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 8, "18%");
-    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 24, "11Pa");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 - 12, "温度");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 12, "湿度");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 36, "气压");
+    
+    char buf[32] = "";
+    
+    u8g2.setFont(u8g2_font_crox3h_tf);
+    
+    float temperature = bme280_get_temp();
+    rt_snprintf(buf, sizeof(buf), "%d.%d\xb0\x43", (int)temperature, (int)(temperature * 10) % 10);
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 - 12, buf);
+    float humidity = bme280_get_humi();
+    rt_snprintf(buf, sizeof(buf), "%d.%d%%", (int)humidity, (int)(humidity * 10) % 10);
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 12, buf);
+    float baro = bme280_get_baro();
+    rt_snprintf(buf, sizeof(buf), "%d.%dPa", (int)baro, (int)(baro * 10) % 10);
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 36, buf);
 }
 
 /*************************************************
@@ -252,8 +278,8 @@ static void oled_gui_draw_ver_menu_info()
 {
     u8g2.setFont(u8g2_font_simsun_u16_myfont);
     u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 16, "当前版本");
-    u8g2.setFont(u8g2_font_inr16_mf);
-    u8g2.drawStr(90, ((128 - 28) / 2) - (16 / 2) + 28 + 16, "V1.0");
+    u8g2.setFont(u8g2_font_crox3h_tf);
+    u8g2.drawStr(90, ((128 - 28) / 2) - (16 / 2) + 28 + 16, VERSION);
 }
 
 /*************************************************

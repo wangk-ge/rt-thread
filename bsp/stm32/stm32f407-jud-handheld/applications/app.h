@@ -77,6 +77,26 @@ bool is_in_changing(void);
 bool is_changer_connect(void);
 
 /*************************************************
+* Function: is_ble_connect
+* Description: BLE是否已建立连接
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+bool is_ble_connect(void);
+
+/*************************************************
+* Function: get_battery_level
+* Description: 取得电池电量(百分比)
+* Author: wangk
+* Returns: 
+* Parameter:
+* History:
+*************************************************/
+uint8_t get_battery_level(void);
+
+/*************************************************
 * Function: com_send_data
 * Description: 通过配置选择的通道(BT/VCOM)尝试输出数据
 * Author: wangk
