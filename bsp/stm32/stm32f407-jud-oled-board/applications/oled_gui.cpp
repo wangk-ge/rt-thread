@@ -228,13 +228,13 @@ static void oled_gui_draw_icon_menu_item(int menu_index)
 static void oled_gui_draw_env_menu_info()
 {
     u8g2.setFont(u8g2_font_simsun_u16_myfont);
-    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 - 8, "温度");
-    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 8, "湿度");
-    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 24, "气压");
-    u8g2.setFont(u8g2_font_inr16_mf);
-    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 - 8, "21.2C");
-    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 8, "18%");
-    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 24, "11Pa");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 - 12, "温度");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 12, "湿度");
+    u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 36, "气压");
+    u8g2.setFont(u8g2_font_crox3h_tf);
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 - 12, "21.2\xb0\x43");
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 12, "18%");
+    u8g2.drawStr(58, ((128 - 28) / 2) - (16 / 2) + 28 + 36, "11Pa");
 }
 
 /*************************************************
@@ -249,7 +249,7 @@ static void oled_gui_draw_ver_menu_info()
 {
     u8g2.setFont(u8g2_font_simsun_u16_myfont);
     u8g2.drawUTF8(16, ((128 - 28) / 2) - (16 / 2) + 28 + 16, "当前版本");
-    u8g2.setFont(u8g2_font_inr16_mf);
+    u8g2.setFont(u8g2_font_crox3h_tf);
     u8g2.drawStr(90, ((128 - 28) / 2) - (16 / 2) + 28 + 16, "V1.0");
 }
 
