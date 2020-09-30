@@ -140,7 +140,16 @@ menu "On-chip Peripheral Drivers"
                 select BSP_SPI3_TX_USING_DMA
                 default n
         endif
-	
+	menuconfig BSP_USING_ADC
+        bool "Enable ADC"
+        default n
+        select RT_USING_ADC
+        if BSP_USING_ADC
+            config BSP_USING_ADC1
+                bool "Enable ADC1"
+                default n
+        endif
+		
 	menuconfig BSP_USING_I2C2
         bool "Enable I2C2 BUS (software simulation)"
         default y

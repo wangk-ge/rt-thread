@@ -75,6 +75,10 @@ extern "C"
 /* BT串口设备名 */
 #define BT_UART_NAME "uart3"
 
+/* 电量测量ADC */
+#define BAT_LEVEL_ADC_NAME "adc1"
+#define BAT_LEVEL_ADC_CHANNEL 1
+
 /* defined the CHARGE_S pin: PC8 */
 #define CHARGE_S_PIN GET_PIN(C, 8)
 /* defined the CHARGE_D pin: PC7 */
@@ -185,6 +189,9 @@ static bool adc_started = false;
 
 /* 通信模式 */
 static COM_MODE_E com_mode = COM_MODE_VCOM; // 默认VCOM优先
+
+/* 电量测量ADC设备 */
+static rt_adc_device_t bat_level_adc_dev = RT_NULL;
 
 /*----------------------------------------------------------------------------*
 **                             Extern Function                                *
@@ -502,8 +509,190 @@ bool is_changer_connect(void)
 *************************************************/
 uint8_t get_battery_level(void)
 {
-    // TODO
-    return 85;
+    rt_uint32_t adc_value = rt_adc_read(bat_level_adc_dev, BAT_LEVEL_ADC_CHANNEL);
+    /*
+		VCHANNELx = VREF * ADC_DATAx / FULL_SCALE
+		对于12bit采样,FULL_SCALE=2^12-1=4095
+	*/
+
+    /* 
+        分压系数: (1M + 1M) / 1M = 2
+        可测电压范围: 0 ~ 6600 (mv)
+    */
+    // (2 * 3300 * u32AdcValue) / 4095; 公约数15
+    rt_uint32_t vol_mv = (uint32_t)(((2 * 220 * 1000 * (uint64_t)adc_value) / 273) / 1000);
+#if 0
+    if (vol_mv >= 4160) // >= 4.16V
+    {
+        return 100;
+    }
+    else if (vol_mv >= 4150) // >= 4.15V
+    {
+        return 99;
+    }
+    else if (vol_mv >= 4140) // >= 4.14V
+    {
+        return 97;
+    }
+    else if (vol_mv >= 4120) // >= 4.12V
+    {
+        return 95;
+    }
+    else if (vol_mv >= 4100) // >= 4.10V
+    {
+        return 92;
+    }
+    else if (vol_mv >= 4080) // >= 4.08V
+    {
+        return 90;
+    }
+    else if (vol_mv >= 4050) // >= 4.05V
+    {
+        return 87;
+    }
+    else if (vol_mv >= 4030) // >= 4.03V
+    {
+        return 85;
+    }
+    else if (vol_mv >= 3970) // >= 3.97V
+    {
+        return 80;
+    }
+    else if (vol_mv >= 3930) // >= 3.93V
+    {
+        return 75;
+    }
+    else if (vol_mv >= 3900) // >= 3.90V
+    {
+        return 70;
+    }
+    else if (vol_mv >= 3870) // >= 3.87V
+    {
+        return 65;
+    }
+    else if (vol_mv >= 3840) // >= 3.84V
+    {
+        return 60;
+    }
+    else if (vol_mv >= 3810) // >= 3.81V
+    {
+        return 55;
+    }
+    else if (vol_mv >= 3790) // >= 3.79V
+    {
+        return 50;
+    }
+    else if (vol_mv >= 3770) // >= 3.77V
+    {
+        return 45;
+    }
+    else if (vol_mv >= 3760) // >= 3.76V
+    {
+        return 40;
+    }
+    else if (vol_mv >= 3740) // >= 3.74V
+    {
+        return 35;
+    }
+    else if (vol_mv >= 3730) // >= 3.73V
+    {
+        return 30;
+    }
+    else if (vol_mv >= 3720) // >= 3.72V
+    {
+        return 25;
+    }
+    else if (vol_mv >= 3710) // >= 3.71V
+    {
+        return 20;
+    }
+    else if (vol_mv >= 3690) // >= 3.69V
+    {
+        return 15;
+    }
+    else if (vol_mv >= 3660) // >= 3.66V
+    {
+        return 12;
+    }
+    else if (vol_mv >= 3650) // >= 3.65V
+    {
+        return 10;
+    }
+    else if (vol_mv >= 3640) // >= 3.64V
+    {
+        return 8;
+    }
+    else if (vol_mv >= 3630) // >= 3.63V
+    {
+        return 5;
+    }
+    else if (vol_mv >= 3610) // >= 3.61V
+    {
+        return 3;
+    }
+    else if (vol_mv >= 3590) // >= 3.59V
+    {
+        return 1;
+    }
+    else if (vol_mv >= 3580) // >= 3.58V
+    {
+        return 0;
+    }
+#else
+    if (vol_mv >= 4200) // >= 4.20V
+    {
+        return 100;
+    }
+    else if (vol_mv >= 4080) // >= 4.08V
+    {
+        return 90;
+    }
+    else if (vol_mv >= 4000) // >= 4.00V
+    {
+        return 80;
+    }
+    else if (vol_mv >= 3930) // >= 3.93V
+    {
+        return 70;
+    }
+    else if (vol_mv >= 3870) // >= 3.87V
+    {
+        return 60;
+    }
+    else if (vol_mv >= 3820) // >= 3.82V
+    {
+        return 50;
+    }
+    else if (vol_mv >= 3790) // >= 3.79V
+    {
+        return 40;
+    }
+    else if (vol_mv >= 3770) // >= 3.77V
+    {
+        return 30;
+    }
+    else if (vol_mv >= 3730) // >= 3.73V
+    {
+        return 20;
+    }
+    else if (vol_mv >= 3700) // >= 3.70V
+    {
+        return 15;
+    }
+    else if (vol_mv >= 3680) // >= 3.68V
+    {
+        return 10;
+    }
+    else if (vol_mv >= 3500) // >= 3.50V
+    {
+        return 5;
+    }
+    else if (vol_mv >= 2500) // >= 2.5V
+    {
+        return 0;
+    }
+#endif
+    return 0;
 }
 
 /*************************************************
@@ -1097,10 +1286,6 @@ int main(void)
         }
     }
     
-    /* 初始化并启动OLED GUI模块 */
-    oled_gui_init();
-    oled_gui_start();
-    
     /* set CHARGE_S pin mode to input(检测充电状态) */
     rt_pin_mode(CHARGE_S_PIN, PIN_MODE_INPUT_PULLUP);
     /* set CHARGE_D pin mode to input(检测充电电源状态) */
@@ -1274,6 +1459,29 @@ int main(void)
             }
         }
     }
+    
+    /* 初始化电量测量ADC设备 */
+    bat_level_adc_dev = (rt_adc_device_t)rt_device_find(BAT_LEVEL_ADC_NAME);
+    if (RT_NULL == bt_dev)
+	{
+		APP_TRACE("main() call rt_device_find(%s) failed!\r\n", BAT_LEVEL_ADC_NAME);
+		//main_ret = -RT_ERROR;
+		//goto _END;
+	}
+	else
+    {
+        ret = rt_adc_enable(bat_level_adc_dev, BAT_LEVEL_ADC_CHANNEL);
+        if (RT_EOK != ret)
+        {
+            APP_TRACE("main() call rt_adc_enable(bat_level_adc_dev) failed, error(%d)!\r\n", ret);
+            //main_ret = ret;
+            //goto _END;
+        }
+    }
+        
+    /* 初始化并启动OLED GUI模块 */
+    oled_gui_init();
+    oled_gui_start();
     
 	/* 进入事件循环 */
     while (1)

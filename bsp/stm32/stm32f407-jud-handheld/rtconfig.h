@@ -85,6 +85,7 @@
 #define RT_USING_I2C
 #define RT_USING_I2C_BITOPS
 #define RT_USING_PIN
+#define RT_USING_ADC
 #define RT_USING_PWM
 #define RT_USING_SPI
 #define RT_USING_SFUD
@@ -247,6 +248,8 @@
 #define BSP_USING_SPI1
 #define BSP_USING_SPI2
 #define BSP_USING_SPI3
+#define BSP_USING_ADC
+#define BSP_USING_ADC1
 #define BSP_USING_I2C2
 #define BSP_I2C2_SCL_PIN 24
 #define BSP_I2C2_SDA_PIN 25
