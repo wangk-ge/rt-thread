@@ -192,8 +192,8 @@ static void oled_gui_draw_status_bar(void)
     /* 画连接状态图标 */
     icon_info_t icon_infos[] = {
         {DISCON_ICON_WIDTH, DISCON_ICON_HEIGHT, discon_icon_bits, ""},
-        {BLE_ICON_WIDTH, BLE_ICON_HEIGHT, ble_icon_bits, ""},
         {USB_ICON_WIDTH, USB_ICON_HEIGHT, usb_icon_bits, ""},
+        {BLE_ICON_WIDTH, BLE_ICON_HEIGHT, ble_icon_bits, ""},
     };
     
     /* 当前连接状态 */
